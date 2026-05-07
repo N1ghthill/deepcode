@@ -133,6 +133,42 @@ describe("deepcode CLI e2e", () => {
     expect(doctor.stderr).toBe("");
   });
 
+  it("works from a Python project fixture inside a git repository", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-cli-"));
+    await createPythonFixture(tempDir);
+
+    const configPath = await runCli(["--cwd", tempDir, "config", "path"]);
+    expect(configPath.exitCode).toBe(0);
+    expect(configPath.stdout.trim()).toBe(path.join(tempDir, ".deepcode", "config.json"));
+
+    const init = await runCli(["--cwd", tempDir, "init"]);
+    expect(init.exitCode).toBe(0);
+
+    const showConfig = await runCli(["--cwd", tempDir, "config", "show"]);
+    expect(showConfig.exitCode).toBe(0);
+    expect(showConfig.stdout).toContain("openrouter");
+
+    const setProvider = await runCli([
+      "--cwd",
+      tempDir,
+      "config",
+      "set",
+      "defaultProvider",
+      "anthropic",
+    ]);
+    expect(setProvider.exitCode).toBe(0);
+
+    const getProvider = await runCli(["--cwd", tempDir, "config", "get", "defaultProvider"]);
+    expect(getProvider.exitCode).toBe(0);
+    expect(getProvider.stdout.trim()).toBe("anthropic");
+
+    const doctor = await runCli(["--cwd", tempDir, "doctor"]);
+    expect(doctor.exitCode).toBe(1);
+    expect(doctor.stdout).toContain("ok git:");
+    expect(doctor.stdout).toContain("provider");
+    expect(doctor.stderr).toBe("");
+  });
+
   it("runs GitHub CLI commands against a configured local enterprise API", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-cli-"));
     await createTypeScriptFixture(tempDir);
@@ -296,6 +332,64 @@ async function createTypeScriptFixture(root: string): Promise<void> {
   );
   await runCommand("git", ["init"], root);
   await runCommand("git", ["remote", "add", "origin", "https://github.com/acme/fixture.git"], root);
+}
+
+async function createPythonFixture(root: string): Promise<void> {
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(
+    path.join(root, "pyproject.toml"),
+    `[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "fixture"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+`,
+    "utf8",
+  );
+  await writeFile(
+    path.join(root, "src", "__init__.py"),
+    "",
+    "utf8",
+  );
+  await writeFile(
+    path.join(root, "src", "calculator.py"),
+    `def add(left: float, right: float) -> float:
+    return left + right
+
+
+def subtract(left: float, right: float) -> float:
+    return left - right
+`,
+    "utf8",
+  );
+  await mkdir(path.join(root, "tests"), { recursive: true });
+  await writeFile(
+    path.join(root, "tests", "__init__.py"),
+    "",
+    "utf8",
+  );
+  await writeFile(
+    path.join(root, "tests", "test_calculator.py"),
+    `from src.calculator import add, subtract
+
+
+def test_add():
+    assert add(2, 3) == 5
+
+
+def test_subtract():
+    assert subtract(5, 3) == 2
+`,
+    "utf8",
+  );
+  await runCommand("git", ["init"], root);
+  await runCommand("git", ["remote", "add", "origin", "https://github.com/acme/python-fixture.git"], root);
 }
 
 function runCommand(command: string, args: string[], cwd: string): Promise<void> {
