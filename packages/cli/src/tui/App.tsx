@@ -22,6 +22,35 @@ const messageColors: Record<Message["role"], string> = {
 };
 
 type ViewMode = "chat" | "sessions" | "config" | "help";
+type ConfigEditField =
+  | "defaultProvider"
+  | "defaultModel"
+  | "cache.enabled"
+  | "cache.ttlSeconds"
+  | "permissions.read"
+  | "permissions.write"
+  | "permissions.shell"
+  | "permissions.dangerous"
+  | "permissions.gitLocal";
+
+interface ConfigFieldDef {
+  key: ConfigEditField;
+  label: string;
+  type: "select" | "number" | "toggle";
+  options?: string[];
+}
+
+const CONFIG_FIELDS: ConfigFieldDef[] = [
+  { key: "defaultProvider", label: "Provider", type: "select", options: ["openrouter", "anthropic", "openai", "deepseek", "opencode"] },
+  { key: "defaultModel", label: "Model", type: "select" },
+  { key: "cache.enabled", label: "Cache", type: "toggle" },
+  { key: "cache.ttlSeconds", label: "Cache TTL (s)", type: "number" },
+  { key: "permissions.read", label: "Read perm", type: "select", options: ["allow", "ask", "deny"] },
+  { key: "permissions.write", label: "Write perm", type: "select", options: ["allow", "ask", "deny"] },
+  { key: "permissions.shell", label: "Shell perm", type: "select", options: ["allow", "ask", "deny"] },
+  { key: "permissions.dangerous", label: "Dangerous perm", type: "select", options: ["allow", "ask", "deny"] },
+  { key: "permissions.gitLocal", label: "Git local perm", type: "select", options: ["allow", "ask", "deny"] },
+];
 
 export function App(props: AppProps) {
   const { exit } = useApp();
@@ -40,6 +69,11 @@ export function App(props: AppProps) {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("chat");
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
+  const [configEditIndex, setConfigEditIndex] = useState(0);
+  const [configEditValue, setConfigEditValue] = useState("");
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [configSaveStatus, setConfigSaveStatus] = useState<string | null>(null);
+  const [toolCalls, setToolCalls] = useState<Array<{ id: string; name: string; args: string; result?: string }>>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -57,6 +91,17 @@ export function App(props: AppProps) {
 
         created.events.on("activity", (activity) => {
           setActivities((current) => [...current.slice(-10), activity]);
+          const meta = activity.metadata;
+          if (meta && meta.tool) {
+            setToolCalls((current) => [
+              ...current.slice(-8),
+              {
+                id: activity.id,
+                name: String(meta.tool),
+                args: meta.args ? JSON.stringify(meta.args) : "",
+              },
+            ]);
+          }
         });
         created.events.on("approval:request", (request) => {
           setApprovals((current) => [...current, request]);
@@ -164,7 +209,64 @@ export function App(props: AppProps) {
       return;
     }
 
-    if (viewMode === "config" || viewMode === "help") {
+    if (viewMode === "config") {
+      if (editingConfig) {
+        const field = CONFIG_FIELDS[configEditIndex];
+        if (key.escape) {
+          setEditingConfig(false);
+          setConfigEditValue("");
+          return;
+        }
+        if (key.return) {
+          const field = CONFIG_FIELDS[configEditIndex];
+          if (field) {
+            void saveConfigEdit(runtime, field, configEditValue);
+          }
+          return;
+        }
+        if (field?.type === "toggle") {
+          if (inputChar?.toLowerCase() === "y" || inputChar?.toLowerCase() === "t" || inputChar?.toLowerCase() === "1") {
+            setConfigEditValue("true");
+          } else if (inputChar?.toLowerCase() === "n" || inputChar?.toLowerCase() === "f" || inputChar?.toLowerCase() === "0") {
+            setConfigEditValue("false");
+          }
+          return;
+        }
+        if (inputChar && !key.ctrl && !key.meta) {
+          setConfigEditValue((current) => current + inputChar);
+          return;
+        }
+        return;
+      }
+
+      if (key.upArrow) {
+        setConfigEditIndex((current) => Math.max(0, current - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setConfigEditIndex((current) =>
+          Math.min(CONFIG_FIELDS.length - 1, current + 1),
+        );
+        return;
+      }
+      if (key.return) {
+        const field = CONFIG_FIELDS[configEditIndex];
+        if (field) {
+          const currentValue = getConfigValue(runtime.config, field.key);
+          setConfigEditValue(String(currentValue ?? ""));
+          setEditingConfig(true);
+        }
+        return;
+      }
+      if (key.escape) {
+        setViewMode("chat");
+        setNotice("Chat ativo.");
+        return;
+      }
+      return;
+    }
+
+    if (viewMode === "help") {
       if (key.escape || key.return) {
         setViewMode("chat");
         setNotice("Chat ativo.");
@@ -210,6 +312,52 @@ export function App(props: AppProps) {
     }
   });
 
+  async function saveConfigEdit(
+    activeRuntime: DeepCodeRuntime,
+    field: ConfigFieldDef,
+    value: string,
+  ): Promise<void> {
+    try {
+      let parsed: string | number | boolean = value;
+      if (field.type === "number") {
+        parsed = Number(value);
+        if (!Number.isFinite(parsed)) {
+          setConfigSaveStatus("Valor inválido");
+          setEditingConfig(false);
+          return;
+        }
+      } else if (field.type === "toggle") {
+        parsed = ["true", "1", "yes", "on"].includes(value.toLowerCase());
+      }
+
+      const keys = field.key.split(".");
+      const currentConfig = JSON.parse(JSON.stringify(activeRuntime.config)) as Record<string, unknown>;
+      let obj: Record<string, unknown> = currentConfig;
+      for (let i = 0; i < keys.length - 1; i += 1) {
+        const key = keys[i];
+        if (key && typeof obj[key] === "object" && obj[key] !== null) {
+          obj = obj[key] as Record<string, unknown>;
+        }
+      }
+      const lastKey = keys[keys.length - 1];
+      if (lastKey) {
+        obj[lastKey] = parsed;
+      }
+
+      const { ConfigLoader } = await import("@deepcode/core");
+      const loader = new ConfigLoader();
+      await loader.save({ cwd: props.cwd, configPath: props.config }, currentConfig as any);
+
+      setConfigSaveStatus(`${field.label} atualizado`);
+      setEditingConfig(false);
+      setConfigEditValue("");
+      setTimeout(() => setConfigSaveStatus(null), 3000);
+    } catch (err) {
+      setConfigSaveStatus(`Erro: ${err instanceof Error ? err.message : String(err)}`);
+      setEditingConfig(false);
+    }
+  }
+
   async function submitInput(
     prompt: string,
     activeRuntime: DeepCodeRuntime,
@@ -230,6 +378,7 @@ export function App(props: AppProps) {
     setAssistantDraft("");
     setStatus("executing");
     setNotice("Executando tarefa...");
+    setToolCalls([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -290,8 +439,12 @@ export function App(props: AppProps) {
       return;
     }
     if (name === "/config") {
+      setConfigEditIndex(0);
+      setEditingConfig(false);
+      setConfigEditValue("");
+      setConfigSaveStatus(null);
       setViewMode("config");
-      setNotice("Configuração aberta.");
+      setNotice("Configuração: ↑/↓ navega, Enter edita, Esc volta.");
       return;
     }
     setNotice(`Comando desconhecido: ${command}`);
@@ -306,6 +459,7 @@ export function App(props: AppProps) {
     setMessages([]);
     setActivities([]);
     setApprovals([]);
+    setToolCalls([]);
     setStatus(next.status);
     setViewMode("chat");
     setNotice(`Nova sessão: ${next.id}`);
@@ -316,6 +470,7 @@ export function App(props: AppProps) {
     setMessages(next.messages);
     setActivities(next.activities.slice(-10));
     setApprovals([]);
+    setToolCalls([]);
     setStatus(next.status);
     setAssistantDraft("");
     setViewMode("chat");
@@ -385,7 +540,13 @@ export function App(props: AppProps) {
             activeId={session.id}
           />
         ) : viewMode === "config" ? (
-          <ConfigView runtime={runtime} />
+          <ConfigEditor
+            runtime={runtime}
+            selectedIndex={configEditIndex}
+            editing={editingConfig}
+            editValue={configEditValue}
+            saveStatus={configSaveStatus}
+          />
         ) : viewMode === "help" ? (
           <HelpView />
         ) : (
@@ -406,14 +567,31 @@ export function App(props: AppProps) {
         )}
 
         <Box width="35%" flexDirection="column" borderStyle="single" paddingX={1}>
-          <Text bold>Status: {streaming ? "executing" : status}</Text>
+          <Box>
+            <Text bold>Status: </Text>
+            <Text color={streaming ? "yellow" : status === "error" ? "red" : "green"} bold>
+              {streaming ? "executing" : status}
+            </Text>
+          </Box>
           <Text color="gray">Sessão: {session.id}</Text>
-          <Text>Atividades</Text>
+          <Text> </Text>
+          <Text bold>Atividades</Text>
           {activities.length === 0 && <Text color="gray">Sem atividade ainda.</Text>}
           {activities.map((activity) => (
-            <Text key={activity.id}>- {truncate(activity.message, 70)}</Text>
+            <ActivityRow key={activity.id} activity={activity} />
           ))}
           <Text> </Text>
+          {toolCalls.length > 0 && (
+            <>
+              <Text bold>Tool calls</Text>
+              {toolCalls.map((tc) => (
+                <Text key={tc.id} color="magenta">
+                  → {tc.name} {tc.args ? truncate(tc.args, 50) : ""}
+                </Text>
+              ))}
+              <Text> </Text>
+            </>
+          )}
           <Text>Aprovações: {approvals.length}</Text>
           {activeApproval && (
             <Box flexDirection="column" borderStyle="round" paddingX={1}>
@@ -433,12 +611,35 @@ export function App(props: AppProps) {
             ? streaming
               ? "Executando..."
               : `> ${input}_`
-            : "Enter seleciona | Esc volta"}
+            : editingConfig
+              ? `Editando: ${configEditValue}_`
+              : "Enter edita | ↑/↓ navega | Esc volta"}
         </Text>
       </Box>
       <Text color="gray">{notice}</Text>
     </Box>
   );
+}
+
+function ActivityRow({ activity }: { activity: Activity }) {
+  const icon = activityTypeIcon(activity.type);
+  return (
+    <Text color="gray">
+      {icon} {truncate(activity.message, 60)}
+    </Text>
+  );
+}
+
+function activityTypeIcon(type: string): string {
+  if (type.includes("read") || type.includes("file_read")) return "📖";
+  if (type.includes("write") || type.includes("file_written")) return "✏️";
+  if (type.includes("edit") || type.includes("file_edited")) return "📝";
+  if (type.includes("bash") || type.includes("shell")) return "⚡";
+  if (type.includes("git")) return "🔀";
+  if (type.includes("search")) return "🔍";
+  if (type.includes("test")) return "🧪";
+  if (type.includes("lint")) return "✨";
+  return "•";
 }
 
 function ApprovalPanel({
@@ -526,27 +727,78 @@ function SessionSwitcher({
   );
 }
 
-function ConfigView({ runtime }: { runtime: DeepCodeRuntime }) {
+function getConfigValue(config: Record<string, unknown>, key: string): unknown {
+  const parts = key.split(".");
+  let current: unknown = config;
+  for (const part of parts) {
+    if (current && typeof current === "object" && part in current) {
+      current = (current as Record<string, unknown>)[part];
+    } else {
+      return undefined;
+    }
+  }
+  return current;
+}
+
+function ConfigEditor({
+  runtime,
+  selectedIndex,
+  editing,
+  editValue,
+  saveStatus,
+}: {
+  runtime: DeepCodeRuntime;
+  selectedIndex: number;
+  editing: boolean;
+  editValue: string;
+  saveStatus: string | null;
+}) {
   const config = redactSecrets(runtime.config, {
     secretPlaceholder: "[set]",
     emptySecretPlaceholder: "[empty]",
   }) as Record<string, unknown>;
   const providers = runtime.config.providers;
+
   return (
     <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1}>
-      <Text bold>Configuração</Text>
-      <Text>Provider: {String(config.defaultProvider)}</Text>
-      <Text>Model: {String(config.defaultModel ?? "não configurado")}</Text>
-      <Text>
-        Cache: {runtime.config.cache.enabled ? "enabled" : "disabled"} | TTL{" "}
-        {runtime.config.cache.ttlSeconds}s
+      <Text bold>Configuração (editável)</Text>
+      <Text color="gray">Provider: {String(config.defaultProvider)}</Text>
+      <Text color="gray">Model: {String(config.defaultModel ?? "não configurado")}</Text>
+      <Text> </Text>
+      <Text bold>Campos editáveis</Text>
+      {CONFIG_FIELDS.map((field, index) => {
+        const selected = index === selectedIndex;
+        const currentValue = getConfigValue(runtime.config, field.key);
+        const displayValue =
+          field.type === "toggle"
+            ? currentValue
+              ? "enabled"
+              : "disabled"
+            : String(currentValue ?? "—");
+
+        return (
+          <Box key={field.key}>
+            <Text color={selected ? "cyan" : undefined}>
+              {selected ? "> " : "  "}
+              {field.label}:{" "}
+            </Text>
+            {editing && selected ? (
+              <Text color="yellow">{editValue}_</Text>
+            ) : (
+              <Text color={selected ? "yellow" : "green"}>{displayValue}</Text>
+            )}
+          </Box>
+        );
+      })}
+      <Text> </Text>
+      {saveStatus && (
+        <Text color={saveStatus.startsWith("Erro") ? "red" : "green"}>{saveStatus}</Text>
+      )}
+      <Text color="gray">
+        {editing ? "Enter salva | Esc cancela" : "Enter edita | ↑/↓ navega | Esc volta"}
       </Text>
-      <Text>Permissões</Text>
-      <Text>
-        read={runtime.config.permissions.read} write={runtime.config.permissions.write} shell=
-        {runtime.config.permissions.shell} dangerous={runtime.config.permissions.dangerous}
-      </Text>
-      <Text>Providers</Text>
+      <Text> </Text>
+      <Text bold>Providers</Text>
       {Object.entries(providers).map(([name, provider]) => (
         <Text key={name} color={provider.apiKey ? "green" : "gray"}>
           {name}: {provider.apiKey ? "apiKey [set]" : "apiKey missing"}
@@ -562,13 +814,23 @@ function HelpView() {
   return (
     <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1}>
       <Text bold>Ajuda</Text>
+      <Text> </Text>
+      <Text bold>Comandos</Text>
       <Text>/help abre ajuda</Text>
       <Text>/clear limpa a tela sem apagar sessão</Text>
       <Text>/new cria uma sessão real</Text>
       <Text>/sessions abre seletor de sessões</Text>
-      <Text>/config mostra configuração efetiva mascarada</Text>
-      <Text>Ctrl+O abre sessões | Ctrl+N nova sessão | Ctrl+C cancela | Ctrl+Q sai</Text>
+      <Text>/config abre editor de configuração</Text>
+      <Text> </Text>
+      <Text bold>Atalhos</Text>
+      <Text>Ctrl+O abre sessões | Ctrl+N nova sessão</Text>
+      <Text>Ctrl+H ajuda | Ctrl+C cancela | Ctrl+Q sai</Text>
+      <Text> </Text>
+      <Text bold>Aprovações</Text>
       <Text>A aprova | D nega | Esc volta/nega aprovação pendente</Text>
+      <Text> </Text>
+      <Text bold>Configuração</Text>
+      <Text>Enter edita campo | ↑/↓ navega | Enter salva | Esc cancela</Text>
     </Box>
   );
 }
