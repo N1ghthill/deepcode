@@ -3,6 +3,7 @@ import type { z } from "zod";
 import type { Activity, DeepCodeConfig } from "@deepcode/shared";
 import type { PermissionGateway } from "../security/permission-gateway.js";
 import type { PathSecurity } from "../security/path-security.js";
+import type { ToolCache } from "../cache/tool-cache.js";
 
 export interface ToolContext {
   sessionId: string;
@@ -11,6 +12,7 @@ export interface ToolContext {
   directory: string;
   abortSignal: AbortSignal;
   config: DeepCodeConfig;
+  cache: ToolCache;
   permissions: PermissionGateway;
   pathSecurity: PathSecurity;
   logActivity(activity: Omit<Activity, "id" | "createdAt">): void;

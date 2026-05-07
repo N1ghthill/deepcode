@@ -3,6 +3,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { createId, nowIso, type Activity, type DeepCodeConfig, type ProviderId, type Session, type ToolCall } from "@deepcode/shared";
 import type { EventBus } from "../events/event-bus.js";
 import { ProviderManager } from "../providers/provider-manager.js";
+import type { ToolCache } from "../cache/tool-cache.js";
 import type { PermissionGateway } from "../security/permission-gateway.js";
 import type { PathSecurity } from "../security/path-security.js";
 import type { SessionManager } from "../sessions/session-manager.js";
@@ -25,6 +26,7 @@ export class Agent {
     private readonly tools: ToolRegistry,
     private readonly sessions: SessionManager,
     private readonly config: DeepCodeConfig,
+    private readonly cache: ToolCache,
     private readonly permissions: PermissionGateway,
     private readonly pathSecurity: PathSecurity,
     private readonly eventBus: EventBus,
@@ -113,6 +115,7 @@ export class Agent {
       directory: session.worktree,
       abortSignal: signal ?? new AbortController().signal,
       config: this.config,
+      cache: this.cache,
       permissions: this.permissions,
       pathSecurity: this.pathSecurity,
       logActivity: (activity) => {

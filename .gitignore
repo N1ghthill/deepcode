@@ -5,6 +5,7 @@ coverage
 .tools
 .deepcode/sessions
 .deepcode/audit.log
+.deepcode/cache
 .env
 .env.*
 !.env.example

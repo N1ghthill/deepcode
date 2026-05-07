@@ -1,6 +1,7 @@
 export * from "./agent/agent.js";
 export * from "./agent/subagent-manager.js";
 export * from "./agent/task-planner.js";
+export * from "./cache/tool-cache.js";
 export * from "./config/config-loader.js";
 export * from "./errors.js";
 export * from "./events/event-bus.js";

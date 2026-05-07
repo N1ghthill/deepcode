@@ -18,6 +18,17 @@ export const readFileTool = defineTool({
       try: async () => {
         const filePath = await context.pathSecurity.normalize(args.path);
         await context.permissions.ensure({ operation: "read_file", kind: "read", path: filePath });
+        const fileInfo = await stat(filePath);
+        const cacheParts = [filePath, fileInfo.mtimeMs, fileInfo.size, args.offset ?? 0, args.limit ?? null];
+        const cached = await context.cache.get<string>("read_file", cacheParts);
+        if (cached.hit && cached.value !== undefined) {
+          context.logActivity({
+            type: "cache_hit",
+            message: `Cache hit read_file ${path.relative(context.worktree, filePath)}`,
+            metadata: { path: filePath },
+          });
+          return cached.value;
+        }
         const content = await readFile(filePath, "utf8");
         const lines = content.split(/\r?\n/);
         const start = args.offset ?? 0;
@@ -27,10 +38,12 @@ export const readFileTool = defineTool({
           message: `Read ${path.relative(context.worktree, filePath)}`,
           metadata: { path: filePath, lines: end - start },
         });
-        return lines
+        const output = lines
           .slice(start, end)
           .map((line, index) => `${String(start + index + 1).padStart(5, " ")} | ${line}`)
           .join("\n");
+        await context.cache.set("read_file", cacheParts, output);
+        return output;
       },
       catch: (error) => new ToolExecutionError("Failed to read file", error),
     }),

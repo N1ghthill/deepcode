@@ -26,6 +26,16 @@ export const searchTextTool = defineTool({
         if (!args.caseSensitive) rgArgs.push("--ignore-case");
         if (args.include) rgArgs.push("--glob", args.include);
         rgArgs.push(args.pattern, searchPath);
+        const cacheParts = [searchPath, args.pattern, args.include ?? null, args.context, args.caseSensitive];
+        const cached = await context.cache.get<string>("search_text", cacheParts);
+        if (cached.hit && cached.value !== undefined) {
+          context.logActivity({
+            type: "cache_hit",
+            message: `Cache hit search_text ${path.relative(context.worktree, searchPath) || "."}`,
+            metadata: { pattern: args.pattern },
+          });
+          return cached.value;
+        }
         const result = await execFileAsync("rg", rgArgs, {
           cwd: context.worktree,
           timeoutMs: 30_000,
@@ -51,7 +61,9 @@ export const searchTextTool = defineTool({
           message: `Searched ${path.relative(context.worktree, searchPath) || "."}`,
           metadata: { pattern: args.pattern, matches: matches.length },
         });
-        return JSON.stringify(matches, null, 2);
+        const output = JSON.stringify(matches, null, 2);
+        await context.cache.set("search_text", cacheParts, output);
+        return output;
       },
       catch: (error) => new ToolExecutionError("Failed to search text", error),
     }),
@@ -69,6 +81,16 @@ export const searchFilesTool = defineTool({
       try: async () => {
         const searchPath = await context.pathSecurity.normalize(args.path);
         await context.permissions.ensure({ operation: "search_files", kind: "read", path: searchPath });
+        const cacheParts = [searchPath, args.query];
+        const cached = await context.cache.get<string>("search_files", cacheParts);
+        if (cached.hit && cached.value !== undefined) {
+          context.logActivity({
+            type: "cache_hit",
+            message: `Cache hit search_files ${args.query}`,
+            metadata: { query: args.query },
+          });
+          return cached.value;
+        }
         const result = await execFileAsync("rg", ["--files", searchPath], {
           cwd: context.worktree,
           timeoutMs: 30_000,
@@ -88,7 +110,9 @@ export const searchFilesTool = defineTool({
           message: `Found ${files.length} file(s)`,
           metadata: { query: args.query },
         });
-        return files.join("\n");
+        const output = files.join("\n");
+        await context.cache.set("search_files", cacheParts, output);
+        return output;
       },
       catch: (error) => new ToolExecutionError("Failed to search files", error),
     }),
@@ -110,6 +134,16 @@ export const searchSymbolsTool = defineTool({
         if (!server) {
           throw new Error("No LSP server configured. Add lsp.servers to .deepcode/config.json.");
         }
+        const cacheParts = [searchPath, args.query, server.command, server.args];
+        const cached = await context.cache.get<string>("search_symbols", cacheParts);
+        if (cached.hit && cached.value !== undefined) {
+          context.logActivity({
+            type: "cache_hit",
+            message: `Cache hit search_symbols ${args.query}`,
+            metadata: { query: args.query },
+          });
+          return cached.value;
+        }
         const client = new LspClient(server, context.worktree);
         await client.start();
         try {
@@ -119,7 +153,9 @@ export const searchSymbolsTool = defineTool({
             message: `Searched symbols with ${server.command}`,
             metadata: { query: args.query, matches: symbols.length },
           });
-          return JSON.stringify(symbols, null, 2);
+          const output = JSON.stringify(symbols, null, 2);
+          await context.cache.set("search_symbols", cacheParts, output);
+          return output;
         } finally {
           await client.stop();
         }

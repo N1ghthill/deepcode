@@ -1,9 +1,12 @@
 import { render } from "ink";
 import React from "react";
 import { Command } from "commander";
+import { cacheClearCommand } from "./commands/cache.js";
+import { doctorCommand } from "./commands/doctor.js";
 import { initCommand } from "./commands/init.js";
 import { createPrCommand, listIssuesCommand, solveIssueCommand } from "./commands/github.js";
 import { runCommand } from "./commands/run.js";
+import { subagentsRunCommand } from "./commands/subagents.js";
 import { App } from "./tui/App.js";
 
 export function createProgram(): Command {
@@ -35,6 +38,21 @@ export function createProgram(): Command {
       });
     });
 
+  program
+    .command("doctor")
+    .description("validate local tools, provider config, GitHub token, and LSP servers")
+    .action(async () => {
+      await doctorCommand({ cwd: program.opts().cwd, config: program.opts().config });
+    });
+
+  const cache = program.command("cache").description("manage persistent tool cache");
+  cache
+    .command("clear")
+    .description("clear .deepcode/cache")
+    .action(async () => {
+      await cacheClearCommand({ cwd: program.opts().cwd, config: program.opts().config });
+    });
+
   const github = program.command("github").description("GitHub operations");
   github
     .command("issues")
@@ -45,6 +63,23 @@ export function createProgram(): Command {
         cwd: program.opts().cwd,
         config: program.opts().config,
         state: options.state,
+      });
+    });
+
+  const subagents = program.command("subagents").description("run real child agent sessions");
+  subagents
+    .command("run")
+    .description("run multiple tasks in parallel subagent sessions")
+    .requiredOption("--task <prompt>", "task prompt; repeat for multiple tasks", collectOption, [])
+    .option("--concurrency <number>", "parallelism", parsePositiveInt)
+    .option("-y, --yes", "approve permission requests for this run")
+    .action(async (options: { task: string[]; concurrency?: number; yes?: boolean }) => {
+      await subagentsRunCommand({
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+        tasks: options.task,
+        concurrency: options.concurrency,
+        yes: options.yes,
       });
     });
   github
@@ -88,4 +123,16 @@ export function createProgram(): Command {
 
 export async function main(argv = process.argv): Promise<void> {
   await createProgram().parseAsync(argv);
+}
+
+function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+function parsePositiveInt(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Expected positive integer, got ${value}`);
+  }
+  return parsed;
 }

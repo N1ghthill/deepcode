@@ -105,6 +105,12 @@ export const DeepCodeConfigSchema = z.object({
   providerRetries: z.number().int().min(0).max(5).default(2),
   temperature: z.number().min(0).max(2).default(0.2),
   maxTokens: z.number().int().positive().default(4096),
+  cache: z
+    .object({
+      enabled: z.boolean().default(true),
+      ttlSeconds: z.number().int().positive().max(86400).default(300),
+    })
+    .default({}),
   providers: z
     .object({
       openrouter: z.object({ apiKey: z.string().optional(), baseUrl: z.string().url().optional() }).default({}),
