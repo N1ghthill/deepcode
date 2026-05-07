@@ -2,6 +2,7 @@ import path from "node:path";
 import { Effect } from "effect";
 import { z } from "zod";
 import { ToolExecutionError } from "../errors.js";
+import { LspClient, pickLanguageServer } from "../lsp/lsp-client.js";
 import { readJsonLines } from "../utils/json.js";
 import { execFileAsync } from "./process.js";
 import { defineTool } from "./tool.js";
@@ -95,7 +96,7 @@ export const searchFilesTool = defineTool({
 
 export const searchSymbolsTool = defineTool({
   name: "search_symbols",
-  description: "Search symbol-like declarations in source files using ripgrep patterns.",
+  description: "Search workspace symbols using a real Language Server Protocol server.",
   parameters: z.object({
     query: z.string().min(1),
     path: z.string().default("."),
@@ -105,24 +106,23 @@ export const searchSymbolsTool = defineTool({
       try: async () => {
         const searchPath = await context.pathSecurity.normalize(args.path);
         await context.permissions.ensure({ operation: "search_symbols", kind: "read", path: searchPath });
-        const pattern = `(class|interface|type|function|const|let|var|def|func)\\s+${args.query}`;
-        const result = await execFileAsync("rg", ["--json", "--glob", "!node_modules", pattern, searchPath], {
-          cwd: context.worktree,
-          timeoutMs: 30_000,
-          signal: context.abortSignal,
-        });
-        if (result.exitCode !== 0 && result.exitCode !== 1) {
-          throw new Error(result.stderr || `ripgrep exited with ${result.exitCode}`);
+        const server = pickLanguageServer(context.config.lsp.servers, context.worktree, searchPath);
+        if (!server) {
+          throw new Error("No LSP server configured. Add lsp.servers to .deepcode/config.json.");
         }
-        const symbols = readJsonLines(result.stdout)
-          .filter((row: any) => row.type === "match")
-          .map((row: any) => ({
-            file: row.data.path.text,
-            line: row.data.line_number,
-            declaration: row.data.lines.text.trim(),
-          }))
-          .slice(0, 100);
-        return JSON.stringify(symbols, null, 2);
+        const client = new LspClient(server, context.worktree);
+        await client.start();
+        try {
+          const symbols = (await client.searchSymbols(args.query)).slice(0, 100);
+          context.logActivity({
+            type: "symbol_search",
+            message: `Searched symbols with ${server.command}`,
+            metadata: { query: args.query, matches: symbols.length },
+          });
+          return JSON.stringify(symbols, null, 2);
+        } finally {
+          await client.stop();
+        }
       },
       catch: (error) => new ToolExecutionError("Failed to search symbols", error),
     }),

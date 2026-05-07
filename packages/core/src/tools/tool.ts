@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type { z } from "zod";
-import type { Activity } from "@deepcode/shared";
+import type { Activity, DeepCodeConfig } from "@deepcode/shared";
 import type { PermissionGateway } from "../security/permission-gateway.js";
 import type { PathSecurity } from "../security/path-security.js";
 
@@ -10,6 +10,7 @@ export interface ToolContext {
   worktree: string;
   directory: string;
   abortSignal: AbortSignal;
+  config: DeepCodeConfig;
   permissions: PermissionGateway;
   pathSecurity: PathSecurity;
   logActivity(activity: Omit<Activity, "id" | "createdAt">): void;

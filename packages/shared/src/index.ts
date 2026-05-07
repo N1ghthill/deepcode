@@ -131,6 +131,45 @@ export const DeepCodeConfigSchema = z.object({
         .default(["**/.env", "**/.env.*", "**/.ssh/**", "**/.aws/**", "**/node_modules/**", "/etc/**", "/usr/bin/**", "${HOME}/.config/**"]),
     })
     .default({}),
+  lsp: z
+    .object({
+      servers: z
+        .array(
+          z.object({
+            languages: z.array(z.string().min(1)),
+            command: z.string().min(1),
+            args: z.array(z.string()).default([]),
+            fileExtensions: z.array(z.string().min(1)).default([]),
+          }),
+        )
+        .default([
+          {
+            languages: ["typescript", "javascript"],
+            command: "typescript-language-server",
+            args: ["--stdio"],
+            fileExtensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+          },
+          {
+            languages: ["python"],
+            command: "pylsp",
+            args: [],
+            fileExtensions: [".py"],
+          },
+          {
+            languages: ["rust"],
+            command: "rust-analyzer",
+            args: [],
+            fileExtensions: [".rs"],
+          },
+          {
+            languages: ["go"],
+            command: "gopls",
+            args: [],
+            fileExtensions: [".go"],
+          },
+        ]),
+    })
+    .default({}),
   github: z
     .object({
       token: z.string().optional(),

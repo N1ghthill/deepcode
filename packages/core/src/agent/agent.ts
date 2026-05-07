@@ -112,6 +112,7 @@ export class Agent {
       worktree: session.worktree,
       directory: session.worktree,
       abortSignal: signal ?? new AbortController().signal,
+      config: this.config,
       permissions: this.permissions,
       pathSecurity: this.pathSecurity,
       logActivity: (activity) => {

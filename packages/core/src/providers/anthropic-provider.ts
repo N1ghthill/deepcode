@@ -44,27 +44,40 @@ export class AnthropicProvider implements LLMProvider {
             role: message.role === "assistant" ? "assistant" : "user",
             content: message.content,
           })),
-        tools: options.tools?.map((tool: any) => ({
-          name: tool.name,
-          description: tool.description,
-          input_schema: tool.parameters ?? tool.input_schema,
-        })),
+        tools: options.tools?.map(toAnthropicTool),
         stream: true,
       }),
     });
     await this.assertOk(response);
 
+    const toolBlocks = new Map<number, { id: string; name: string; inputJson: string }>();
     for await (const event of parseSse(response)) {
       if (event.type === "content_block_delta" && event.delta?.text) {
         yield { type: "delta", content: event.delta.text };
       }
       if (event.type === "content_block_start" && event.content_block?.type === "tool_use") {
+        toolBlocks.set(Number(event.index), {
+          id: event.content_block.id,
+          name: event.content_block.name,
+          inputJson: event.content_block.input ? JSON.stringify(event.content_block.input) : "",
+        });
+      }
+      if (event.type === "content_block_delta" && event.delta?.type === "input_json_delta") {
+        const block = toolBlocks.get(Number(event.index));
+        if (block) {
+          block.inputJson += event.delta.partial_json ?? "";
+        }
+      }
+      if (event.type === "content_block_stop") {
+        const block = toolBlocks.get(Number(event.index));
+        if (!block) continue;
+        toolBlocks.delete(Number(event.index));
         yield {
           type: "tool_call",
           call: {
-            id: event.content_block.id,
-            name: event.content_block.name,
-            arguments: event.content_block.input ?? {},
+            id: block.id,
+            name: block.name,
+            arguments: parseToolInput(block.inputJson),
           },
         };
       }
@@ -129,5 +142,24 @@ export class AnthropicProvider implements LLMProvider {
     if (!response.ok) {
       throw new ProviderError(`Anthropic request failed: ${response.status} ${await response.text()}`, this.id);
     }
+  }
+}
+
+function toAnthropicTool(tool: any): { name: string; description?: string; input_schema: unknown } {
+  const definition = tool.function ?? tool;
+  return {
+    name: definition.name,
+    description: definition.description,
+    input_schema: definition.parameters ?? definition.input_schema ?? { type: "object", properties: {} },
+  };
+}
+
+function parseToolInput(inputJson: string): Record<string, unknown> {
+  if (!inputJson.trim()) return {};
+  try {
+    const parsed = JSON.parse(inputJson) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
   }
 }
