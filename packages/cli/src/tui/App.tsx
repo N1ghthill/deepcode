@@ -367,12 +367,19 @@ export function App(props: AppProps) {
         parsed = ["true", "1", "yes", "on"].includes(value.toLowerCase());
       }
 
+      const { ConfigLoader } = await import("@deepcode/core");
+      const loader = new ConfigLoader();
+      const fileConfig = await loader.loadFile({ cwd: props.cwd, configPath: props.config });
+
       const keys = field.key.split(".");
-      const currentConfig = JSON.parse(JSON.stringify(activeRuntime.config)) as Record<string, unknown>;
-      let obj: Record<string, unknown> = currentConfig;
+      const mutable = JSON.parse(JSON.stringify(fileConfig)) as Record<string, unknown>;
+      let obj: Record<string, unknown> = mutable;
       for (let i = 0; i < keys.length - 1; i += 1) {
         const key = keys[i];
-        if (key && typeof obj[key] === "object" && obj[key] !== null) {
+        if (key) {
+          if (!(key in obj) || typeof obj[key] !== "object" || obj[key] === null) {
+            obj[key] = {};
+          }
           obj = obj[key] as Record<string, unknown>;
         }
       }
@@ -381,9 +388,10 @@ export function App(props: AppProps) {
         obj[lastKey] = parsed;
       }
 
-      const { ConfigLoader } = await import("@deepcode/core");
-      const loader = new ConfigLoader();
-      await loader.save({ cwd: props.cwd, configPath: props.config }, currentConfig as any);
+      await loader.save({ cwd: props.cwd, configPath: props.config }, mutable as any);
+
+      const updatedConfig = await loader.load({ cwd: props.cwd, configPath: props.config });
+      setRuntime((prev) => (prev ? { ...prev, config: updatedConfig } : prev));
 
       setConfigSaveStatus(`${field.label} atualizado`);
       setEditingConfig(false);
