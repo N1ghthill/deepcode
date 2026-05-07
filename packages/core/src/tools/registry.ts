@@ -3,6 +3,7 @@ import { editFileTool, listDirTool, readFileTool, writeFileTool } from "./file-t
 import { gitTool } from "./git-tool.js";
 import { searchFilesTool, searchSymbolsTool, searchTextTool } from "./search-tools.js";
 import { bashTool } from "./shell-tool.js";
+import { fetchWebTool } from "./web-tool.js";
 import { ToolRegistry } from "./tool.js";
 
 export function createDefaultToolRegistry(): ToolRegistry {
@@ -19,5 +20,6 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(testTool);
   registry.register(bashTool);
   registry.register(gitTool);
+  registry.register(fetchWebTool);
   return registry;
 }
