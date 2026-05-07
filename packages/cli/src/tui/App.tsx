@@ -20,6 +20,11 @@ type VimMode = "insert" | "normal";
 type ConfigEditField =
   | "defaultProvider"
   | "defaultModel"
+  | "providers.openrouter.apiKey"
+  | "providers.anthropic.apiKey"
+  | "providers.openai.apiKey"
+  | "providers.deepseek.apiKey"
+  | "providers.opencode.apiKey"
   | "cache.enabled"
   | "cache.ttlSeconds"
   | "permissions.read"
@@ -33,13 +38,18 @@ type ConfigEditField =
 interface ConfigFieldDef {
   key: ConfigEditField;
   label: string;
-  type: "select" | "number" | "toggle";
+  type: "select" | "number" | "toggle" | "text";
   options?: string[];
 }
 
 const CONFIG_FIELDS: ConfigFieldDef[] = [
   { key: "defaultProvider", label: "Provider", type: "select", options: ["openrouter", "anthropic", "openai", "deepseek", "opencode"] },
-  { key: "defaultModel", label: "Model", type: "select" },
+  { key: "defaultModel", label: "Model", type: "text" },
+  { key: "providers.openrouter.apiKey", label: "OpenRouter API Key", type: "text" },
+  { key: "providers.anthropic.apiKey", label: "Anthropic API Key", type: "text" },
+  { key: "providers.openai.apiKey", label: "OpenAI API Key", type: "text" },
+  { key: "providers.deepseek.apiKey", label: "DeepSeek API Key", type: "text" },
+  { key: "providers.opencode.apiKey", label: "OpenCode API Key", type: "text" },
   { key: "cache.enabled", label: "Cache", type: "toggle" },
   { key: "cache.ttlSeconds", label: "Cache TTL (s)", type: "number" },
   { key: "permissions.read", label: "Read perm", type: "select", options: ["allow", "ask", "deny"] },
@@ -234,6 +244,10 @@ export function App(props: AppProps) {
           } else if (inputChar?.toLowerCase() === "n" || inputChar?.toLowerCase() === "f" || inputChar?.toLowerCase() === "0") {
             setConfigEditValue("false");
           }
+          return;
+        }
+        if (key.backspace || key.delete) {
+          setConfigEditValue((current) => current.slice(0, -1));
           return;
         }
         if (inputChar && !key.ctrl && !key.meta) {
@@ -815,12 +829,17 @@ function ConfigEditor({
       {CONFIG_FIELDS.map((field, index) => {
         const selected = index === selectedIndex;
         const currentValue = getConfigValue(runtime.config, field.key);
+        const isApiKey = field.key.endsWith(".apiKey");
         const displayValue =
           field.type === "toggle"
             ? currentValue
               ? "enabled"
               : "disabled"
-            : String(currentValue ?? "—");
+            : isApiKey
+              ? currentValue
+                ? "[set]"
+                : "[empty]"
+              : String(currentValue ?? "—");
 
         return (
           <Box key={field.key}>
