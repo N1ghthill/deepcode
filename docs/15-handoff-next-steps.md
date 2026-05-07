@@ -2,7 +2,7 @@
 
 ## Estado Atual
 
-Ultima rodada validada antes deste handoff: trabalho local nao commitado em `main`, validado em 2026-05-07.
+Ultima rodada validada: `main` commitado e pushado, validado em 2026-05-07.
 
 Repositorio remoto:
 
@@ -23,27 +23,21 @@ O projeto esta em formato monorepo TypeScript com:
 - `packages/cli`: comandos CLI e TUI Ink.
 - `apps/deepcode`: pacote executavel `deepcode`.
 
-O worktree contem mudancas locais amplas ainda nao commitadas, incluindo configuracao editavel, OAuth GitHub, redaction de secrets, melhorias de TUI e cobertura E2E adicional. Antes de retomar, rode `git status --short --branch` e revise o diff relevante.
-
 ## Validacao Atual
 
-Na ultima rodada, os comandos abaixo passaram:
+Os comandos abaixo passaram na ultima rodada:
 
 ```bash
-PATH="$PWD/.tools/bin:$PATH" pnpm typecheck
-PATH="$PWD/.tools/bin:$PATH" pnpm lint
-PATH="$PWD/.tools/bin:$PATH" pnpm test
-PATH="$PWD/.tools/bin:$PATH" pnpm build
-PATH="$PWD/.tools/bin:$PATH" pnpm exec prettier --check apps/deepcode/test/cli.e2e.test.ts docs/15-handoff-next-steps.md packages/core/test/github-client.test.ts
-git diff --check
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
 ```
 
 Cobertura de testes atual:
 
-- Core: 26 testes.
+- Core: 31 testes (5 novos: web-tool).
 - App CLI E2E: 7 testes.
-
-Observacao: no ambiente local foi usado Node.js 20.20.2 portatil em `.tools/`, ignorado pelo Git. Em uma maquina preparada, use Node.js 20+ instalado normalmente.
 
 ## Funcionalidades Ja Implementadas
 
@@ -59,18 +53,27 @@ Observacao: no ambiente local foi usado Node.js 20.20.2 portatil em `.tools/`, i
   - `read_file`, `write_file`, `edit_file`, `list_dir`.
   - `search_text`, `search_files`, `search_symbols` via LSP real.
   - `bash`, `git`, `analyze_code`, `lint`, `test`.
+  - `fetch_web` para consulta de documentacao e conteudo web.
 - Seguranca:
   - path whitelist/blacklist.
   - permission gateway.
   - audit log.
   - classificacao de shell em `shell`, `dangerous`, `blocked`.
+  - mascaramento centralizado de secrets (redaction).
 - Cache persistente para read/search em `.deepcode/cache`.
 - Configuracao editavel por CLI com validacao estrita.
-- Mascaramento centralizado de secrets em `config`, erros da CLI, output de agente/subagents/GitHub solve e audit log.
 - OAuth GitHub via device flow real, sem client ID embutido.
 - Validacao real de token GitHub via `GET /user` em `github whoami` e `doctor`.
 - Validacao real de provider/modelo via endpoint `/models` no `doctor`.
-- TUI com seletor navegavel de sessoes, tela de configuracao efetiva, ajuda, painel de aprovacao detalhado e redaction de streaming/erros.
+- TUI com:
+  - seletor navegavel de sessoes.
+  - editor interativo de configuracao (navegar, editar, salvar).
+  - tela de ajuda organizada.
+  - painel de aprovacao detalhado com fila.
+  - redaction de streaming/erros.
+  - icones de atividade por tipo (read, write, bash, git, search, test, lint).
+  - tracking de tool calls no painel lateral.
+  - cores de status (amarelo=executando, vermelho=erro, verde=idle).
 - Workflows core:
   - `ChainWorkflow`.
   - `ParallelWorkflow`.
@@ -131,14 +134,11 @@ Critico: usar uma issue de baixo risco primeiro, porque o fluxo faz branch, comm
 
 ### Prioridade 3 - TUI Final
 
-A TUI funciona, mas ainda precisa de acabamento para ficar no nivel da documentacao:
+A TUI esta funcional com editor de config interativo, mas ainda precisa de acabamento:
 
-- Refinamento visual do modal de aprovacao.
-- Refinamento visual do session switcher.
-- Edicao interativa na tela de configuracao.
-- Temas.
-- Keybindings Vim completos.
-- Melhor visual para atividades, tool calls, erros e progresso.
+- Temas customizaveis.
+- Keybindings Vim completos (modo normal/insert).
+- Refinamento visual adicional de layout e tipografia.
 
 ### Prioridade 4 - Configuracao e Seguranca
 
@@ -199,10 +199,12 @@ pnpm --filter deepcode publish --access public
 - [ ] `run` executa pelo menos uma tarefa real com tool calls.
 - [ ] `chat` consegue aprovar/negar uma operacao sensivel pela TUI.
 - [ ] `github solve` validado em issue real de teste.
-- [ ] TUI revisada para UX final.
+- [ ] TUI revisada para UX final (temas, Vim bindings).
 - [x] OAuth GitHub implementado.
 - [x] Testes E2E cobrindo projeto fixture TypeScript.
 - [x] Documentacao de config completa.
+- [x] Editor interativo de config na TUI.
+- [x] Tool fetch_web para documentacao.
 - [ ] Pacote publicado em NPM.
 
 ## Riscos Conhecidos
