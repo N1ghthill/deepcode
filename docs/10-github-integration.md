@@ -8,81 +8,75 @@ DeepCode oferece integração completa com GitHub, permitindo que o agente inter
 
 ### Métodos Suportados
 
-1. **Personal Access Token (PAT)**
-```typescript
-interface GitHubAuth {
-  type: 'token';
-  token: string;
-}
-```
+1. **Personal Access Token (PAT)** via `GITHUB_TOKEN` ou `github.token`.
+2. **OAuth Device Flow** via `deepcode github login`.
 
-2. **OAuth (via CLI)**
-```typescript
-interface GitHubOAuth {
-  type: 'oauth';
-  clientId: string;
-  clientSecret: string;
-}
-```
+O device flow usa endpoints reais do GitHub e nao embute `client_id`. Configure um OAuth app com Device Flow habilitado e informe o client ID por `--client-id`, `GITHUB_OAUTH_CLIENT_ID` ou `github.oauthClientId`.
 
 ### Configuração
-```typescript
-// .deepcode/config.json
+
+```json
 {
   "github": {
-    "auth": {
-      "type": "token",
-      "token": "ghp_xxxxxxxxxxxx"
-    },
-    "enterpriseUrl": null // ou "https://github.company.com"
+    "token": "ghp_xxxxxxxxxxxx",
+    "oauthClientId": "github-oauth-app-client-id",
+    "oauthScopes": ["repo"],
+    "enterpriseUrl": "https://github.company.com"
   }
 }
 ```
 
+```bash
+deepcode github login --client-id "github-oauth-app-client-id" --scope repo
+deepcode github whoami
+```
+
+`github whoami` and `doctor` validate the configured token with the real `GET /user` REST endpoint before reporting success.
+
 ## GitHub Client
 
 ```typescript
-import { Octokit } from '@octokit/rest';
+import { Octokit } from "@octokit/rest";
 
 class GitHubIntegration {
   private octokit: Octokit;
   private owner: string;
   private repo: string;
-  
+
   constructor(auth: GitHubAuth, repoUrl: string) {
     this.octokit = new Octokit({
       auth: auth.token,
       baseUrl: auth.enterpriseUrl,
     });
-    
+
     const parsed = this.parseRepoUrl(repoUrl);
     this.owner = parsed.owner;
     this.repo = parsed.repo;
   }
-  
+
   // Issues
   async listIssues(options?: IssueListOptions): Promise<Issue[]> {
     const response = await this.octokit.issues.listForRepo({
       owner: this.owner,
       repo: this.repo,
-      state: options?.state || 'open',
+      state: options?.state || "open",
       labels: options?.labels,
       assignee: options?.assignee,
     });
-    
+
     return response.data.map(this.mapIssue);
   }
-  
+
   async getIssue(number: number): Promise<Issue> {
     const response = await this.octokit.issues.get({
       owner: this.owner,
       repo: this.repo,
       issue_number: number,
     });
-    
+
     return this.mapIssue(response.data);
   }
-  
+
   async createIssue(title: string, body: string, options?: IssueOptions): Promise<Issue> {
     const response = await this.octokit.issues.create({
       owner: this.owner,
@@ -92,35 +86,35 @@ class GitHubIntegration {
       labels: options?.labels,
       assignees: options?.assignees,
     });
-    
+
     return this.mapIssue(response.data);
   }
-  
+
   async closeIssue(number: number): Promise<void> {
     await this.octokit.issues.update({
       owner: this.owner,
       repo: this.repo,
       issue_number: number,
-      state: 'closed',
+      state: "closed",
     });
   }
-  
+
   // Pull Requests
   async listPRs(options?: PRListOptions): Promise<PullRequest[]> {
     const response = await this.octokit.pulls.list({
       owner: this.owner,
       repo: this.repo,
-      state: options?.state || 'open',
+      state: options?.state || "open",
     });
-    
+
     return response.data.map(this.mapPR);
   }
-  
+
   async createPR(
     title: string,
     body: string,
     head: string,
-    base: string = 'main'
+    base: string = "main",
   ): Promise<PullRequest> {
     const response = await this.octokit.pulls.create({
       owner: this.owner,
@@ -130,11 +124,11 @@ class GitHubIntegration {
       head,
       base,
     });
-    
+
     return this.mapPR(response.data);
   }
-  
-  async mergePR(number: number, method: 'merge' | 'squash' | 'rebase' = 'squash'): Promise<void> {
+
+  async mergePR(number: number, method: "merge" | "squash" | "rebase" = "squash"): Promise<void> {
     await this.octokit.pulls.merge({
       owner: this.owner,
       repo: this.repo,
@@ -142,28 +136,28 @@ class GitHubIntegration {
       merge_method: method,
     });
   }
-  
+
   // Branches
   async listBranches(): Promise<Branch[]> {
     const response = await this.octokit.repos.listBranches({
       owner: this.owner,
       repo: this.repo,
     });
-    
-    return response.data.map(b => ({
+
+    return response.data.map((b) => ({
       name: b.name,
       protected: b.protected,
     }));
   }
-  
-  async createBranch(name: string, from: string = 'main'): Promise<Branch> {
+
+  async createBranch(name: string, from: string = "main"): Promise<Branch> {
     // Get SHA of base branch
     const baseRef = await this.octokit.git.getRef({
       owner: this.owner,
       repo: this.repo,
       ref: `heads/${from}`,
     });
-    
+
     // Create new branch
     await this.octokit.git.createRef({
       owner: this.owner,
@@ -171,10 +165,10 @@ class GitHubIntegration {
       ref: `refs/heads/${name}`,
       sha: baseRef.data.object.sha,
     });
-    
+
     return { name, protected: false };
   }
-  
+
   // Code
   async getFileContent(path: string, ref?: string): Promise<string> {
     const response = await this.octokit.repos.getContent({
@@ -183,32 +177,32 @@ class GitHubIntegration {
       path,
       ref,
     });
-    
-    if ('content' in response.data) {
-      return Buffer.from(response.data.content, 'base64').toString();
+
+    if ("content" in response.data) {
+      return Buffer.from(response.data.content, "base64").toString();
     }
-    
-    throw new Error('Path is a directory');
+
+    throw new Error("Path is a directory");
   }
-  
+
   async createOrUpdateFile(
     path: string,
     content: string,
     message: string,
     branch: string,
-    sha?: string
+    sha?: string,
   ): Promise<void> {
     await this.octokit.repos.createOrUpdateFileContents({
       owner: this.owner,
       repo: this.repo,
       path,
       message,
-      content: Buffer.from(content).toString('base64'),
+      content: Buffer.from(content).toString("base64"),
       branch,
       sha, // Required if updating existing file
     });
   }
-  
+
   // Comments
   async addIssueComment(issueNumber: number, body: string): Promise<void> {
     await this.octokit.issues.createComment({
@@ -218,7 +212,7 @@ class GitHubIntegration {
       body,
     });
   }
-  
+
   async addPRComment(prNumber: number, body: string): Promise<void> {
     await this.octokit.issues.createComment({
       owner: this.owner,
@@ -237,22 +231,22 @@ class IssueSolver {
   constructor(
     private github: GitHubIntegration,
     private git: GitIntegration,
-    private agent: Agent
+    private agent: Agent,
   ) {}
-  
+
   async solve(issueNumber: number): Promise<SolutionResult> {
     // 1. Busca detalhes da issue
     console.log(`🔍 Analisando issue #${issueNumber}...`);
     const issue = await this.github.getIssue(issueNumber);
-    
+
     // 2. Cria branch
     const branchName = `deepcode/fix-issue-${issueNumber}`;
     console.log(`🌿 Criando branch: ${branchName}`);
     await this.github.createBranch(branchName);
     await this.git.checkout(branchName);
-    
+
     // 3. Analisa e implementa solução
-    console.log('🤖 Implementando solução...');
+    console.log("🤖 Implementando solução...");
     const prompt = `
       Resolva a seguinte issue:
       
@@ -265,24 +259,24 @@ class IssueSolver {
       3. Adicione/atualize testes
       4. Verifique se tudo funciona
     `;
-    
+
     await this.agent.run(prompt);
-    
+
     // 4. Commit
-    console.log('💾 Criando commit...');
-    await this.git.add('.');
+    console.log("💾 Criando commit...");
+    await this.git.add(".");
     await this.git.commit(`fix: resolve issue #${issueNumber}
 
 ${issue.title}
 
 Closes #${issueNumber}`);
-    
+
     // 5. Push
-    console.log('📤 Enviando para GitHub...');
-    await this.git.push('origin', branchName);
-    
+    console.log("📤 Enviando para GitHub...");
+    await this.git.push("origin", branchName);
+
     // 6. Cria PR
-    console.log('📋 Criando Pull Request...');
+    console.log("📋 Criando Pull Request...");
     const pr = await this.github.createPR(
       `Fix: ${issue.title}`,
       `## Descrição
@@ -298,15 +292,15 @@ ${this.generateSummary()}
 
 Closes #${issueNumber}`,
       branchName,
-      'main'
+      "main",
     );
-    
+
     // 7. Adiciona comentário na issue
     await this.github.addIssueComment(
       issueNumber,
-      `🤖 DeepCode criou uma PR para resolver esta issue: ${pr.url}`
+      `🤖 DeepCode criou uma PR para resolver esta issue: ${pr.url}`,
     );
-    
+
     return {
       success: true,
       branch: branchName,
@@ -314,13 +308,11 @@ Closes #${issueNumber}`,
       prUrl: pr.url,
     };
   }
-  
+
   private generateSummary(): string {
     // Gera resumo das mudanças
     const status = this.git.status();
-    return status.files
-      .map(f => `- ${f.status}: ${f.path}`)
-      .join('\n');
+    return status.files.map((f) => `- ${f.status}: ${f.path}`).join("\n");
   }
 }
 ```
@@ -329,61 +321,61 @@ Closes #${issueNumber}`,
 
 ```typescript
 const githubTool = tool({
-  name: 'github',
-  description: 'Execute GitHub operations',
+  name: "github",
+  description: "Execute GitHub operations",
   parameters: z.object({
     operation: z.enum([
-      'list_issues', 'get_issue', 'create_issue', 'close_issue',
-      'list_prs', 'create_pr', 'merge_pr',
-      'list_branches', 'create_branch',
-      'get_file', 'create_file', 'update_file',
-      'add_comment'
+      "list_issues",
+      "get_issue",
+      "create_issue",
+      "close_issue",
+      "list_prs",
+      "create_pr",
+      "merge_pr",
+      "list_branches",
+      "create_branch",
+      "get_file",
+      "create_file",
+      "update_file",
+      "add_comment",
     ]),
     args: z.record(z.any()).optional(),
   }),
   execute: async (params, context) => {
     const github = await getGitHubIntegration(context.worktree);
-    
+
     switch (params.operation) {
-      case 'list_issues':
+      case "list_issues":
         return await github.listIssues(params.args);
-        
-      case 'get_issue':
+
+      case "get_issue":
         return await github.getIssue(params.args.number);
-        
-      case 'create_issue':
-        return await github.createIssue(
-          params.args.title,
-          params.args.body,
-          params.args
-        );
-        
-      case 'list_prs':
+
+      case "create_issue":
+        return await github.createIssue(params.args.title, params.args.body, params.args);
+
+      case "list_prs":
         return await github.listPRs(params.args);
-        
-      case 'create_pr':
+
+      case "create_pr":
         // Sempre requer aprovação
-        const allowed = await context.requestPermission(
-          `Create PR: ${params.args.title}`
-        );
+        const allowed = await context.requestPermission(`Create PR: ${params.args.title}`);
         if (!allowed) throw new PermissionDeniedError();
-        
+
         return await github.createPR(
           params.args.title,
           params.args.body,
           params.args.head,
-          params.args.base
+          params.args.base,
         );
-        
-      case 'merge_pr':
-        const mergeAllowed = await context.requestPermission(
-          `Merge PR #${params.args.number}`
-        );
+
+      case "merge_pr":
+        const mergeAllowed = await context.requestPermission(`Merge PR #${params.args.number}`);
         if (!mergeAllowed) throw new PermissionDeniedError();
-        
+
         await github.mergePR(params.args.number, params.args.method);
-        return 'PR merged successfully';
-        
+        return "PR merged successfully";
+
       // ... outros casos
     }
   },

@@ -7,6 +7,7 @@ DeepCode é um agente de codificação AI full-stack, profissional e autônomo, 
 ## Propósito
 
 Criar um agente de codificação que combine:
+
 - **Autonomia**: Capacidade de trabalhar de forma independente
 - **Restrições Sensíveis**: Sistema robusto de permissões e aprovações
 - **Multi-Provider**: Suporte a OpenRouter, Claude, GPT-4, DeepSeek e OpenCode Zen/Go
@@ -15,19 +16,21 @@ Criar um agente de codificação que combine:
 
 ## Status do Projeto
 
-- **Fase**: Planejamento Arquitetural
+- **Fase**: Implementacao funcional em progresso
 - **Timeline**: 14 semanas
 - **Tecnologia Base**: Node.js 20+ + TypeScript 5.5+
 
 ## Documentação
 
 ### Documentação Principal
+
 - [01 - Visão e Requisitos](./01-vision-and-requirements.md)
 - [02 - Arquitetura - 6 Camadas](./02-architecture-overview.md)
 - [03 - Stack Tecnológica](./03-technology-stack.md)
 - [04 - Fases de Implementação](./04-implementation-phases.md)
 
 ### Documentação Técnica Detalhada
+
 - [05 - Design da TUI](./05-tui-design.md)
 - [06 - Modelo de Segurança](./06-security-model.md)
 - [07 - Abstração de Providers](./07-provider-abstraction.md)
@@ -37,8 +40,10 @@ Criar um agente de codificação que combine:
 - [11 - Estratégia de Busca](./11-search-strategy.md)
 - [12 - Gerenciamento de Estado](./12-state-management.md)
 - [13 - Estratégia de Testes](./13-testing-strategy.md)
+- [16 - Configuracao](./16-configuration.md)
 
 ### Registro de Decisões
+
 - [14 - Log de Decisões](./14-decisions-log.md)
 - [15 - Handoff e Próximos Passos](./15-handoff-next-steps.md)
 

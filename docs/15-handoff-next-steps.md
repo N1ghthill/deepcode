@@ -2,7 +2,7 @@
 
 ## Estado Atual
 
-Ultima rodada validada antes deste handoff: `db4e53f test: add cli e2e and harden shell safety`
+Ultima rodada validada antes deste handoff: trabalho local nao commitado em `main`, validado em 2026-05-07.
 
 Repositorio remoto:
 
@@ -23,28 +23,33 @@ O projeto esta em formato monorepo TypeScript com:
 - `packages/cli`: comandos CLI e TUI Ink.
 - `apps/deepcode`: pacote executavel `deepcode`.
 
+O worktree contem mudancas locais amplas ainda nao commitadas, incluindo configuracao editavel, OAuth GitHub, redaction de secrets, melhorias de TUI e cobertura E2E adicional. Antes de retomar, rode `git status --short --branch` e revise o diff relevante.
+
 ## Validacao Atual
 
 Na ultima rodada, os comandos abaixo passaram:
 
 ```bash
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
+PATH="$PWD/.tools/bin:$PATH" pnpm typecheck
+PATH="$PWD/.tools/bin:$PATH" pnpm lint
+PATH="$PWD/.tools/bin:$PATH" pnpm test
+PATH="$PWD/.tools/bin:$PATH" pnpm build
+PATH="$PWD/.tools/bin:$PATH" pnpm exec prettier --check apps/deepcode/test/cli.e2e.test.ts docs/15-handoff-next-steps.md packages/core/test/github-client.test.ts
+git diff --check
 ```
 
 Cobertura de testes atual:
 
-- Core: 16 testes.
-- App CLI E2E: 3 testes.
+- Core: 26 testes.
+- App CLI E2E: 7 testes.
 
 Observacao: no ambiente local foi usado Node.js 20.20.2 portatil em `.tools/`, ignorado pelo Git. Em uma maquina preparada, use Node.js 20+ instalado normalmente.
 
 ## Funcionalidades Ja Implementadas
 
 - CLI: `init`, `chat`, `run`, `doctor`, `cache clear`.
-- GitHub CLI: `github issues`, `github pr`, `github solve`.
+- Config CLI: `config path`, `config show`, `config get`, `config set`, `config unset`.
+- GitHub CLI: `github login`, `github whoami`, `github issues`, `github pr`, `github solve`.
 - Subagents CLI: `subagents run --task ...`.
 - Providers reais: OpenRouter, Anthropic, OpenAI, DeepSeek, OpenCode.
 - Tool calling:
@@ -60,12 +65,21 @@ Observacao: no ambiente local foi usado Node.js 20.20.2 portatil em `.tools/`, i
   - audit log.
   - classificacao de shell em `shell`, `dangerous`, `blocked`.
 - Cache persistente para read/search em `.deepcode/cache`.
+- Configuracao editavel por CLI com validacao estrita.
+- Mascaramento centralizado de secrets em `config`, erros da CLI, output de agente/subagents/GitHub solve e audit log.
+- OAuth GitHub via device flow real, sem client ID embutido.
+- Validacao real de token GitHub via `GET /user` em `github whoami` e `doctor`.
+- Validacao real de provider/modelo via endpoint `/models` no `doctor`.
+- TUI com seletor navegavel de sessoes, tela de configuracao efetiva, ajuda, painel de aprovacao detalhado e redaction de streaming/erros.
 - Workflows core:
   - `ChainWorkflow`.
   - `ParallelWorkflow`.
   - `EvaluatorOptimizerWorkflow`.
 - SubagentManager com sessoes filhas reais.
 - Testes E2E locais do CLI.
+- Fixture E2E de projeto TypeScript em repositorio Git temporario.
+- E2E local dos comandos `github whoami`, `github issues`, `github pr` e validacao GitHub do `doctor` via `github.enterpriseUrl`.
+- Teste de contrato do GitHubClient com servidor HTTP local mockado.
 
 ## O Que Ainda Falta
 
@@ -119,30 +133,27 @@ Critico: usar uma issue de baixo risco primeiro, porque o fluxo faz branch, comm
 
 A TUI funciona, mas ainda precisa de acabamento para ficar no nivel da documentacao:
 
-- Modal de aprovacao mais claro e detalhado.
-- Session switcher navegavel.
-- Tela de configuracao.
+- Refinamento visual do modal de aprovacao.
+- Refinamento visual do session switcher.
+- Edicao interativa na tela de configuracao.
 - Temas.
 - Keybindings Vim completos.
 - Melhor visual para atividades, tool calls, erros e progresso.
 
-### Prioridade 4 - OAuth e Configuracao
+### Prioridade 4 - Configuracao e Seguranca
 
 Ainda falta:
 
-- OAuth GitHub via device flow.
-- Comando `config` para editar/listar providers e permissoes.
-- Mascaramento consistente de secrets em logs e saida.
-- Documentacao completa de `.deepcode/config.json`.
+- Revisao adicional de mascaramento em novas superficies que forem adicionadas.
 
 ### Prioridade 5 - E2E Mais Forte
 
 Adicionar fixtures para:
 
-- Projeto TypeScript simples com testes.
+- Projeto TypeScript simples com testes. Concluido para cobertura CLI basica; ainda falta executar tarefas reais do agente nessa fixture quando houver provider configurado.
 - Projeto Python simples.
 - Repositorio Git temporario.
-- GitHub mockado por servidor local somente para testes de contrato, sem substituir o fluxo real em producao.
+- GitHub mockado por servidor local somente para testes de contrato, sem substituir o fluxo real em producao. Concluido para `GitHubClient`.
 
 ## Comandos Uteis Para Retomar
 
@@ -161,6 +172,8 @@ Rodar CLI local pelo build:
 ```bash
 node apps/deepcode/dist/index.js --help
 node apps/deepcode/dist/index.js doctor
+node apps/deepcode/dist/index.js config show
+node apps/deepcode/dist/index.js github login --client-id "..." --scope repo
 node apps/deepcode/dist/index.js chat
 ```
 
@@ -187,9 +200,9 @@ pnpm --filter deepcode publish --access public
 - [ ] `chat` consegue aprovar/negar uma operacao sensivel pela TUI.
 - [ ] `github solve` validado em issue real de teste.
 - [ ] TUI revisada para UX final.
-- [ ] OAuth GitHub implementado ou decisao registrada mantendo PAT.
-- [ ] Testes E2E cobrindo projeto fixture TypeScript.
-- [ ] Documentacao de config completa.
+- [x] OAuth GitHub implementado.
+- [x] Testes E2E cobrindo projeto fixture TypeScript.
+- [x] Documentacao de config completa.
 - [ ] Pacote publicado em NPM.
 
 ## Riscos Conhecidos

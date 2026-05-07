@@ -1,5 +1,12 @@
+import { z } from "zod";
 import type { Issue, PullRequest } from "@deepcode/shared";
 import { execFileAsync } from "../tools/process.js";
+
+export interface GitHubAuthenticatedUser {
+  login: string;
+  id: number;
+  url: string;
+}
 
 export interface GitHubClientOptions {
   token?: string;
@@ -7,14 +14,28 @@ export interface GitHubClientOptions {
   worktree: string;
 }
 
+const GitHubAuthenticatedUserSchema = z
+  .object({
+    login: z.string(),
+    id: z.number(),
+    html_url: z.string().url(),
+  })
+  .passthrough();
+
 export class GitHubClient {
   private readonly apiBase: string;
 
   constructor(private readonly options: GitHubClientOptions) {
-    this.apiBase = options.enterpriseUrl ? `${options.enterpriseUrl.replace(/\/$/, "")}/api/v3` : "https://api.github.com";
+    this.apiBase = options.enterpriseUrl
+      ? `${options.enterpriseUrl.replace(/\/$/, "")}/api/v3`
+      : "https://api.github.com";
   }
 
-  async listIssues(input: { owner: string; repo: string; state?: "open" | "closed" | "all" }): Promise<Issue[]> {
+  async listIssues(input: {
+    owner: string;
+    repo: string;
+    state?: "open" | "closed" | "all";
+  }): Promise<Issue[]> {
     const data = await this.request<any[]>(
       `/repos/${input.owner}/${input.repo}/issues?state=${input.state ?? "open"}`,
     );
@@ -30,7 +51,9 @@ export class GitHubClient {
   }
 
   async getIssue(input: { owner: string; repo: string; number: number }): Promise<Issue> {
-    const issue = await this.request<any>(`/repos/${input.owner}/${input.repo}/issues/${input.number}`);
+    const issue = await this.request<any>(
+      `/repos/${input.owner}/${input.repo}/issues/${input.number}`,
+    );
     return {
       number: issue.number,
       title: issue.title,
@@ -60,11 +83,29 @@ export class GitHubClient {
     return { number: pr.number, title: pr.title, state: pr.state, url: pr.html_url };
   }
 
-  async addIssueComment(input: { owner: string; repo: string; number: number; body: string }): Promise<void> {
+  async addIssueComment(input: {
+    owner: string;
+    repo: string;
+    number: number;
+    body: string;
+  }): Promise<void> {
     await this.request(`/repos/${input.owner}/${input.repo}/issues/${input.number}/comments`, {
       method: "POST",
       body: JSON.stringify({ body: input.body }),
     });
+  }
+
+  async getAuthenticatedUser(): Promise<GitHubAuthenticatedUser> {
+    const data = await this.request<unknown>("/user");
+    const parsed = GitHubAuthenticatedUserSchema.safeParse(data);
+    if (!parsed.success) {
+      throw new Error(`Invalid GitHub authenticated user response: ${parsed.error.message}`);
+    }
+    return {
+      login: parsed.data.login,
+      id: parsed.data.id,
+      url: parsed.data.html_url,
+    };
   }
 
   async detectRepo(): Promise<{ owner: string; repo: string }> {
@@ -80,7 +121,9 @@ export class GitHubClient {
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (!this.options.token) {
-      throw new Error("GitHub token is required. Set GITHUB_TOKEN or .deepcode/config.json github.token.");
+      throw new Error(
+        "GitHub token is required. Set GITHUB_TOKEN or .deepcode/config.json github.token.",
+      );
     }
     const response = await fetch(`${this.apiBase}${path}`, {
       ...init,

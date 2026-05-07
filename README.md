@@ -31,6 +31,7 @@ export DEEPCODE_PROVIDER=openrouter
 export DEEPCODE_MODEL="provider/model-id"
 export OPENROUTER_API_KEY="..."
 export GITHUB_TOKEN="..."
+export GITHUB_OAUTH_CLIENT_ID="..."
 ```
 
 No provider or GitHub behavior is mocked. Missing credentials or missing model configuration produce explicit runtime errors.
@@ -41,6 +42,8 @@ Before running real agent tasks, use:
 deepcode doctor
 ```
 
+When credentials are configured, `doctor` performs real network validation: providers are checked with their `/models` endpoint and GitHub tokens are checked with GitHub's `GET /user` API.
+
 Install missing language servers reported by `doctor` when you need `search_symbols`.
 
 ## Usage
@@ -48,6 +51,12 @@ Install missing language servers reported by `doctor` when you need `search_symb
 ```bash
 deepcode chat
 deepcode run "Refactor the auth module and run tests" --yes
+deepcode config show
+deepcode config set defaultProvider openrouter
+deepcode config set defaultModel "provider/model-id"
+deepcode config set providers.openrouter.apiKey "..."
+deepcode github login --client-id "your-oauth-app-client-id" --scope repo
+deepcode github whoami
 deepcode github issues
 deepcode github pr --title "Fix auth" --body "Details" --head feature/auth --base main
 deepcode github solve 42 --base main --yes
@@ -56,9 +65,13 @@ deepcode subagents run --task "Inspect auth" --task "Inspect billing" --concurre
 deepcode cache clear
 ```
 
+`deepcode config show` and `deepcode config get` mask secrets by default. Use `--effective` to inspect the config after environment variable overrides without writing those values back to disk. The CLI also redacts known secrets from printed errors, agent task output, subagent output, GitHub solve streaming, and audit logs.
+
+`deepcode github login` uses GitHub's real OAuth device flow. DeepCode does not ship an embedded OAuth client ID; create or configure a GitHub OAuth app with device flow enabled, then pass `--client-id` or set `github.oauthClientId`.
+
 `--yes` approves permission requests for that one command. Without it, write/shell/dangerous operations are denied in non-interactive mode unless config allows them.
 
-Inside `deepcode chat`, use `/help`, `/clear`, `/new`, and `/sessions`. When an approval is pending, press `A` to approve or `D` to deny.
+Inside `deepcode chat`, use `/help`, `/clear`, `/new`, `/sessions`, and `/config`. `Ctrl+O` opens the session switcher, `Ctrl+N` creates a new session, and `Ctrl+H` opens help. When an approval is pending, DeepCode shows the operation, risk level, path, and redacted details; press `A` to approve or `D` to deny.
 
 `search_symbols` uses real Language Server Protocol servers. Install the relevant server in your environment, for example `typescript-language-server`, `pylsp`, `rust-analyzer`, or `gopls`, or override `lsp.servers` in `.deepcode/config.json`.
 

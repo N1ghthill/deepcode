@@ -25,6 +25,7 @@ export interface DeepCodeRuntime {
   events: EventBus;
   sessions: SessionManager;
   cache: ToolCache;
+  providers: ProviderManager;
   agent: Agent;
   subagents: SubagentManager;
 }
@@ -35,13 +36,33 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
   const events = new EventBus();
   const pathSecurity = new PathSecurity(worktree, config.paths);
   const audit = new AuditLogger(worktree);
-  const permissions = new PermissionGateway(config, pathSecurity, audit, events, options.interactive);
+  const permissions = new PermissionGateway(
+    config,
+    pathSecurity,
+    audit,
+    events,
+    options.interactive,
+  );
   const cache = new ToolCache(worktree, config);
   const sessions = new SessionManager(worktree);
   await sessions.loadAll();
   const providers = new ProviderManager(config);
   const tools = createDefaultToolRegistry();
-  const agent = new Agent(providers, tools, sessions, config, cache, permissions, pathSecurity, events);
-  const subagents = new SubagentManager(agent, sessions, config.defaultProvider, config.defaultModel);
-  return { config, events, sessions, cache, agent, subagents };
+  const agent = new Agent(
+    providers,
+    tools,
+    sessions,
+    config,
+    cache,
+    permissions,
+    pathSecurity,
+    events,
+  );
+  const subagents = new SubagentManager(
+    agent,
+    sessions,
+    config.defaultProvider,
+    config.defaultModel,
+  );
+  return { config, events, sessions, cache, providers, agent, subagents };
 }

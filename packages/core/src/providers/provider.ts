@@ -14,8 +14,8 @@ export interface LLMProvider {
   readonly capabilities: ProviderCapabilities;
   chat(messages: Message[], options: ChatOptions): AsyncIterable<Chunk>;
   complete(prompt: string, options?: Omit<ChatOptions, "tools">): Promise<string>;
-  listModels(): Promise<Model[]>;
-  validateConfig(): Promise<boolean>;
+  listModels(options?: { signal?: AbortSignal }): Promise<Model[]>;
+  validateConfig(options?: { signal?: AbortSignal }): Promise<boolean>;
 }
 
 export interface ProviderConfig {
@@ -27,7 +27,8 @@ export function toProviderMessages(messages: Message[]): Array<{ role: string; c
   return messages
     .filter((message) => message.role !== "tool")
     .map((message) => ({
-      role: message.role === "system" ? "system" : message.role === "assistant" ? "assistant" : "user",
+      role:
+        message.role === "system" ? "system" : message.role === "assistant" ? "assistant" : "user",
       content: message.content,
     }));
 }

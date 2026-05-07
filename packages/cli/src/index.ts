@@ -1,10 +1,24 @@
 import { render } from "ink";
 import React from "react";
 import { Command } from "commander";
+import { redactText } from "@deepcode/core";
 import { cacheClearCommand } from "./commands/cache.js";
+import {
+  configGetCommand,
+  configPathCommand,
+  configSetCommand,
+  configShowCommand,
+  configUnsetCommand,
+} from "./commands/config.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { initCommand } from "./commands/init.js";
-import { createPrCommand, listIssuesCommand, solveIssueCommand } from "./commands/github.js";
+import {
+  createPrCommand,
+  githubLoginCommand,
+  githubWhoamiCommand,
+  listIssuesCommand,
+  solveIssueCommand,
+} from "./commands/github.js";
 import { runCommand } from "./commands/run.js";
 import { subagentsRunCommand } from "./commands/subagents.js";
 import { App } from "./tui/App.js";
@@ -53,7 +67,85 @@ export function createProgram(): Command {
       await cacheClearCommand({ cwd: program.opts().cwd, config: program.opts().config });
     });
 
+  const config = program.command("config").description("view and edit .deepcode/config.json");
+  config
+    .command("path")
+    .description("print the active config file path")
+    .action(async () => {
+      await configPathCommand({ cwd: program.opts().cwd, config: program.opts().config });
+    });
+  config
+    .command("show")
+    .description("print config as JSON with secrets masked")
+    .option("--effective", "include environment variable overrides")
+    .action(async (options: { effective?: boolean }) => {
+      await configShowCommand({
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+        effective: options.effective,
+      });
+    });
+  config
+    .command("get")
+    .description("print one config value with secrets masked")
+    .argument("<key>", "dot-separated config key")
+    .option("--effective", "include environment variable overrides")
+    .action(async (key: string, options: { effective?: boolean }) => {
+      await configGetCommand(key, {
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+        effective: options.effective,
+      });
+    });
+  config
+    .command("set")
+    .description("set one config value")
+    .argument("<key>", "dot-separated config key")
+    .argument("<value>", "new value; arrays and objects must be JSON")
+    .option("--json", "parse value as JSON")
+    .action(async (key: string, value: string, options: { json?: boolean }) => {
+      await configSetCommand(key, value, {
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+        json: options.json,
+      });
+    });
+  config
+    .command("unset")
+    .description("remove one config value and fall back to schema defaults when applicable")
+    .argument("<key>", "dot-separated config key")
+    .action(async (key: string) => {
+      await configUnsetCommand(key, { cwd: program.opts().cwd, config: program.opts().config });
+    });
+
   const github = program.command("github").description("GitHub operations");
+  github
+    .command("login")
+    .description("authorize GitHub with the real OAuth device flow")
+    .option("--client-id <id>", "GitHub OAuth app client ID")
+    .option(
+      "--scope <scope>",
+      "OAuth scope to request; repeat for multiple scopes",
+      collectOption,
+      [],
+    )
+    .action(async (options: { clientId?: string; scope: string[] }) => {
+      await githubLoginCommand({
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+        clientId: options.clientId,
+        scopes: options.scope,
+      });
+    });
+  github
+    .command("whoami")
+    .description("validate the configured GitHub token against the real GitHub API")
+    .action(async () => {
+      await githubWhoamiCommand({
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+      });
+    });
   github
     .command("issues")
     .description("list repository issues")
@@ -122,7 +214,12 @@ export function createProgram(): Command {
 }
 
 export async function main(argv = process.argv): Promise<void> {
-  await createProgram().parseAsync(argv);
+  try {
+    await createProgram().parseAsync(argv);
+  } catch (error) {
+    console.error(redactText(error instanceof Error ? error.message : String(error)));
+    process.exitCode = 1;
+  }
 }
 
 function collectOption(value: string, previous: string[]): string[] {

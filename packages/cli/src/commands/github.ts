@@ -1,8 +1,92 @@
-import { execFileAsync, GitHubClient } from "@deepcode/core";
+import {
+  collectSecretValues,
+  ConfigLoader,
+  execFileAsync,
+  GitHubClient,
+  GitHubOAuthDeviceFlow,
+  redactText,
+} from "@deepcode/core";
 import { createRuntime } from "../runtime.js";
 
-export async function listIssuesCommand(options: { cwd: string; config?: string; state?: "open" | "closed" | "all" }): Promise<void> {
-  const runtime = await createRuntime({ cwd: options.cwd, configPath: options.config, interactive: false });
+export async function githubLoginCommand(options: {
+  cwd: string;
+  config?: string;
+  clientId?: string;
+  scopes?: string[];
+}): Promise<void> {
+  const loader = new ConfigLoader();
+  const loadOptions = { cwd: options.cwd, configPath: options.config };
+  const fileConfig = await loader.loadFile(loadOptions);
+  const effectiveConfig = await loader.load(loadOptions);
+  const clientId = options.clientId ?? effectiveConfig.github.oauthClientId;
+  if (!clientId) {
+    throw new Error(
+      "GitHub OAuth client ID is required. Use --client-id, GITHUB_OAUTH_CLIENT_ID, or github.oauthClientId.",
+    );
+  }
+  const scopes =
+    options.scopes && options.scopes.length > 0
+      ? options.scopes
+      : effectiveConfig.github.oauthScopes;
+  const flow = new GitHubOAuthDeviceFlow({ enterpriseUrl: effectiveConfig.github.enterpriseUrl });
+  const token = await flow.authorize({
+    clientId,
+    scopes,
+    onVerification: (code) => {
+      console.log(`Open ${code.verificationUri}`);
+      console.log(`Enter code: ${code.userCode}`);
+      console.log(`Code expires in ${Math.round(code.expiresIn / 60)} minutes.`);
+    },
+    onPoll: ({ attempt, nextIntervalSeconds }) => {
+      if (attempt === 1) {
+        console.log(`Waiting for GitHub authorization; polling every ${nextIntervalSeconds}s.`);
+      }
+    },
+  });
+  const savedPath = await loader.save(loadOptions, {
+    ...fileConfig,
+    github: {
+      ...fileConfig.github,
+      token: token.accessToken,
+      oauthClientId: options.clientId ?? fileConfig.github.oauthClientId,
+      oauthScopes:
+        options.scopes && options.scopes.length > 0
+          ? options.scopes
+          : fileConfig.github.oauthScopes,
+    },
+  });
+  console.log(`GitHub token saved to ${savedPath}`);
+}
+
+export async function githubWhoamiCommand(options: {
+  cwd: string;
+  config?: string;
+}): Promise<void> {
+  const runtime = await createRuntime({
+    cwd: options.cwd,
+    configPath: options.config,
+    interactive: false,
+  });
+  const client = new GitHubClient({
+    token: runtime.config.github.token,
+    enterpriseUrl: runtime.config.github.enterpriseUrl,
+    worktree: options.cwd,
+  });
+  const user = await client.getAuthenticatedUser();
+  console.log(`${user.login} (${user.id})`);
+  console.log(user.url);
+}
+
+export async function listIssuesCommand(options: {
+  cwd: string;
+  config?: string;
+  state?: "open" | "closed" | "all";
+}): Promise<void> {
+  const runtime = await createRuntime({
+    cwd: options.cwd,
+    configPath: options.config,
+    interactive: false,
+  });
   const client = new GitHubClient({
     token: runtime.config.github.token,
     enterpriseUrl: runtime.config.github.enterpriseUrl,
@@ -20,7 +104,11 @@ export async function createPrCommand(
   input: { title: string; body: string; head: string; base: string },
   options: { cwd: string; config?: string },
 ): Promise<void> {
-  const runtime = await createRuntime({ cwd: options.cwd, configPath: options.config, interactive: false });
+  const runtime = await createRuntime({
+    cwd: options.cwd,
+    configPath: options.config,
+    interactive: false,
+  });
   const client = new GitHubClient({
     token: runtime.config.github.token,
     enterpriseUrl: runtime.config.github.enterpriseUrl,
@@ -37,10 +125,16 @@ export async function solveIssueCommand(
   options: { cwd: string; config?: string; base?: string; yes?: boolean },
 ): Promise<void> {
   if (!options.yes) {
-    throw new Error("github solve performs commit, push, and PR creation. Re-run with --yes to approve this workflow.");
+    throw new Error(
+      "github solve performs commit, push, and PR creation. Re-run with --yes to approve this workflow.",
+    );
   }
 
-  const runtime = await createRuntime({ cwd: options.cwd, configPath: options.config, interactive: true });
+  const runtime = await createRuntime({
+    cwd: options.cwd,
+    configPath: options.config,
+    interactive: true,
+  });
   runtime.events.on("approval:request", (request) => {
     runtime.events.emit("approval:decision", {
       requestId: request.id,
@@ -65,6 +159,7 @@ export async function solveIssueCommand(
     provider: runtime.config.defaultProvider,
     model: runtime.config.defaultModel,
   });
+  const secretValues = collectSecretValues(runtime.config);
   const prompt = [
     `Resolva a issue GitHub #${issue.number}: ${issue.title}`,
     "",
@@ -81,7 +176,7 @@ export async function solveIssueCommand(
   await runtime.agent.run({
     session,
     input: prompt,
-    onChunk: (text) => process.stdout.write(text),
+    onChunk: (text) => process.stdout.write(redactText(text, secretValues)),
   });
   process.stdout.write("\n");
 

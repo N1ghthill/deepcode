@@ -1,6 +1,7 @@
 import { mkdir, appendFile } from "node:fs/promises";
 import path from "node:path";
 import { nowIso } from "@deepcode/shared";
+import { redactSecrets } from "./secret-redactor.js";
 
 export interface AuditEntry {
   operation: string;
@@ -17,7 +18,7 @@ export class AuditLogger {
   async log(entry: AuditEntry): Promise<void> {
     const dir = path.join(this.worktree, ".deepcode");
     await mkdir(dir, { recursive: true });
-    const payload = { ...entry, createdAt: entry.createdAt ?? nowIso() };
+    const payload = redactSecrets({ ...entry, createdAt: entry.createdAt ?? nowIso() });
     await appendFile(path.join(dir, "audit.log"), `${JSON.stringify(payload)}\n`, "utf8");
   }
 }

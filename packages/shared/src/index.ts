@@ -81,7 +81,13 @@ export const ActivitySchema = z.object({
 });
 export type Activity = z.infer<typeof ActivitySchema>;
 
-export const SessionStatusSchema = z.enum(["idle", "planning", "executing", "awaiting_approval", "error"]);
+export const SessionStatusSchema = z.enum([
+  "idle",
+  "planning",
+  "executing",
+  "awaiting_approval",
+  "error",
+]);
 export type SessionStatus = z.infer<typeof SessionStatusSchema>;
 
 export const SessionSchema = z.object({
@@ -98,58 +104,88 @@ export const SessionSchema = z.object({
 });
 export type Session = z.infer<typeof SessionSchema>;
 
-export const DeepCodeConfigSchema = z.object({
-  defaultProvider: ProviderIdSchema.default("openrouter"),
-  defaultModel: z.string().optional(),
-  maxIterations: z.number().int().positive().default(20),
-  providerRetries: z.number().int().min(0).max(5).default(2),
-  temperature: z.number().min(0).max(2).default(0.2),
-  maxTokens: z.number().int().positive().default(4096),
-  cache: z
-    .object({
-      enabled: z.boolean().default(true),
-      ttlSeconds: z.number().int().positive().max(86400).default(300),
-    })
-    .default({}),
-  providers: z
-    .object({
-      openrouter: z.object({ apiKey: z.string().optional(), baseUrl: z.string().url().optional() }).default({}),
-      anthropic: z.object({ apiKey: z.string().optional(), baseUrl: z.string().url().optional() }).default({}),
-      openai: z.object({ apiKey: z.string().optional(), baseUrl: z.string().url().optional() }).default({}),
-      deepseek: z.object({ apiKey: z.string().optional(), baseUrl: z.string().url().optional() }).default({}),
-      opencode: z.object({ apiKey: z.string().optional(), baseUrl: z.string().url().optional() }).default({}),
-    })
-    .default({}),
-  permissions: z
-    .object({
-      read: PermissionModeSchema.default("allow"),
-      write: PermissionModeSchema.default("ask"),
-      gitLocal: PermissionModeSchema.default("allow"),
-      shell: PermissionModeSchema.default("ask"),
-      dangerous: PermissionModeSchema.default("ask"),
-      allowShell: z.array(z.string()).default(["npm test", "npm run test", "npm run build", "pnpm test", "pnpm build", "git status"]),
-    })
-    .default({}),
-  paths: z
-    .object({
-      whitelist: z.array(z.string()).default(["${WORKTREE}/**", "/tmp/deepcode/**"]),
-      blacklist: z
-        .array(z.string())
-        .default(["**/.env", "**/.env.*", "**/.ssh/**", "**/.aws/**", "**/node_modules/**", "/etc/**", "/usr/bin/**", "${HOME}/.config/**"]),
-    })
-    .default({}),
-  lsp: z
-    .object({
-      servers: z
-        .array(
-          z.object({
-            languages: z.array(z.string().min(1)),
-            command: z.string().min(1),
-            args: z.array(z.string()).default([]),
-            fileExtensions: z.array(z.string().min(1)).default([]),
-          }),
-        )
-        .default([
+const ProviderConfigSchema = z
+  .object({
+    apiKey: z.string().optional(),
+    baseUrl: z.string().url().optional(),
+  })
+  .strict();
+
+const LspServerConfigSchema = z
+  .object({
+    languages: z.array(z.string().min(1)),
+    command: z.string().min(1),
+    args: z.array(z.string()).default([]),
+    fileExtensions: z.array(z.string().min(1)).default([]),
+  })
+  .strict();
+
+export const DeepCodeConfigSchema = z
+  .object({
+    defaultProvider: ProviderIdSchema.default("openrouter"),
+    defaultModel: z.string().optional(),
+    maxIterations: z.number().int().positive().default(20),
+    providerRetries: z.number().int().min(0).max(5).default(2),
+    temperature: z.number().min(0).max(2).default(0.2),
+    maxTokens: z.number().int().positive().default(4096),
+    cache: z
+      .object({
+        enabled: z.boolean().default(true),
+        ttlSeconds: z.number().int().positive().max(86400).default(300),
+      })
+      .strict()
+      .default({}),
+    providers: z
+      .object({
+        openrouter: ProviderConfigSchema.default({}),
+        anthropic: ProviderConfigSchema.default({}),
+        openai: ProviderConfigSchema.default({}),
+        deepseek: ProviderConfigSchema.default({}),
+        opencode: ProviderConfigSchema.default({}),
+      })
+      .strict()
+      .default({}),
+    permissions: z
+      .object({
+        read: PermissionModeSchema.default("allow"),
+        write: PermissionModeSchema.default("ask"),
+        gitLocal: PermissionModeSchema.default("allow"),
+        shell: PermissionModeSchema.default("ask"),
+        dangerous: PermissionModeSchema.default("ask"),
+        allowShell: z
+          .array(z.string())
+          .default([
+            "npm test",
+            "npm run test",
+            "npm run build",
+            "pnpm test",
+            "pnpm build",
+            "git status",
+          ]),
+      })
+      .strict()
+      .default({}),
+    paths: z
+      .object({
+        whitelist: z.array(z.string()).default(["${WORKTREE}/**", "/tmp/deepcode/**"]),
+        blacklist: z
+          .array(z.string())
+          .default([
+            "**/.env",
+            "**/.env.*",
+            "**/.ssh/**",
+            "**/.aws/**",
+            "**/node_modules/**",
+            "/etc/**",
+            "/usr/bin/**",
+            "${HOME}/.config/**",
+          ]),
+      })
+      .strict()
+      .default({}),
+    lsp: z
+      .object({
+        servers: z.array(LspServerConfigSchema).default([
           {
             languages: ["typescript", "javascript"],
             command: "typescript-language-server",
@@ -175,15 +211,20 @@ export const DeepCodeConfigSchema = z.object({
             fileExtensions: [".go"],
           },
         ]),
-    })
-    .default({}),
-  github: z
-    .object({
-      token: z.string().optional(),
-      enterpriseUrl: z.string().url().optional(),
-    })
-    .default({}),
-});
+      })
+      .strict()
+      .default({}),
+    github: z
+      .object({
+        token: z.string().optional(),
+        enterpriseUrl: z.string().url().optional(),
+        oauthClientId: z.string().optional(),
+        oauthScopes: z.array(z.string().min(1)).default([]),
+      })
+      .strict()
+      .default({}),
+  })
+  .strict();
 export type DeepCodeConfig = z.infer<typeof DeepCodeConfigSchema>;
 
 export const IssueSchema = z.object({

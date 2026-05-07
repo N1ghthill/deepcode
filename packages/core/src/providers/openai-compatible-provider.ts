@@ -1,7 +1,12 @@
 import type { ChatOptions, Chunk, Message, Model, ProviderId } from "@deepcode/shared";
 import { ProviderError } from "../errors.js";
 import { parseSse } from "./sse.js";
-import { toProviderMessages, type LLMProvider, type ProviderCapabilities, type ProviderConfig } from "./provider.js";
+import {
+  toProviderMessages,
+  type LLMProvider,
+  type ProviderCapabilities,
+  type ProviderConfig,
+} from "./provider.js";
 
 export interface OpenAICompatibleProviderOptions {
   id: ProviderId;
@@ -113,9 +118,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
     return output;
   }
 
-  async listModels(): Promise<Model[]> {
+  async listModels(options: { signal?: AbortSignal } = {}): Promise<Model[]> {
     this.requireApiKey();
-    const response = await fetch(`${this.baseUrl}/models`, { headers: this.headers() });
+    const response = await fetch(`${this.baseUrl}/models`, {
+      headers: this.headers(),
+      signal: options.signal,
+    });
     await this.assertOk(response);
     const payload = (await response.json()) as any;
     return (payload.data ?? []).map((model: any) => ({
@@ -138,10 +146,10 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }));
   }
 
-  async validateConfig(): Promise<boolean> {
+  async validateConfig(options: { signal?: AbortSignal } = {}): Promise<boolean> {
     if (!this.apiKey) return false;
     try {
-      await this.listModels();
+      await this.listModels(options);
       return true;
     } catch {
       return false;
@@ -166,7 +174,10 @@ export class OpenAICompatibleProvider implements LLMProvider {
   private resolveModel(model?: string): string {
     const resolved = model ?? this.defaultModel;
     if (!resolved) {
-      throw new ProviderError(`No model configured for ${this.name}. Set defaultModel in .deepcode/config.json.`, this.id);
+      throw new ProviderError(
+        `No model configured for ${this.name}. Set defaultModel in .deepcode/config.json.`,
+        this.id,
+      );
     }
     return resolved;
   }
@@ -183,7 +194,9 @@ function parseToolArguments(raw: unknown): Record<string, unknown> {
   if (typeof raw !== "string") return {};
   try {
     const parsed = JSON.parse(raw) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
   } catch {
     return {};
   }

@@ -1,6 +1,10 @@
+import { collectSecretValues, redactText } from "@deepcode/core";
 import { createRuntime } from "../runtime.js";
 
-export async function runCommand(input: string, options: { cwd: string; config?: string; yes?: boolean }): Promise<void> {
+export async function runCommand(
+  input: string,
+  options: { cwd: string; config?: string; yes?: boolean },
+): Promise<void> {
   const runtime = await createRuntime({
     cwd: options.cwd,
     configPath: options.config,
@@ -8,17 +12,21 @@ export async function runCommand(input: string, options: { cwd: string; config?:
   });
   if (options.yes) {
     runtime.events.on("approval:request", (request) => {
-      runtime.events.emit("approval:decision", { requestId: request.id, decision: { allowed: true } });
+      runtime.events.emit("approval:decision", {
+        requestId: request.id,
+        decision: { allowed: true },
+      });
     });
   }
   const session = runtime.sessions.create({
     provider: runtime.config.defaultProvider,
     model: runtime.config.defaultModel,
   });
+  const secretValues = collectSecretValues(runtime.config);
   const output = await runtime.agent.run({
     session,
     input,
-    onChunk: (text) => process.stdout.write(text),
+    onChunk: (text) => process.stdout.write(redactText(text, secretValues)),
   });
   if (!output) process.stdout.write("\n");
 }

@@ -96,13 +96,14 @@ export class AnthropicProvider implements LLMProvider {
     return output;
   }
 
-  async listModels(): Promise<Model[]> {
+  async listModels(options: { signal?: AbortSignal } = {}): Promise<Model[]> {
     this.requireApiKey();
     const response = await fetch(`${this.baseUrl}/models`, {
       headers: {
         "x-api-key": this.apiKey ?? "",
         "anthropic-version": "2023-06-01",
       },
+      signal: options.signal,
     });
     await this.assertOk(response);
     const payload = (await response.json()) as any;
@@ -115,10 +116,10 @@ export class AnthropicProvider implements LLMProvider {
     }));
   }
 
-  async validateConfig(): Promise<boolean> {
+  async validateConfig(options: { signal?: AbortSignal } = {}): Promise<boolean> {
     if (!this.apiKey) return false;
     try {
-      await this.listModels();
+      await this.listModels(options);
       return true;
     } catch {
       return false;
@@ -133,14 +134,20 @@ export class AnthropicProvider implements LLMProvider {
 
   private resolveModel(model?: string): string {
     if (!model) {
-      throw new ProviderError("No model configured for Anthropic. Set defaultModel in .deepcode/config.json.", this.id);
+      throw new ProviderError(
+        "No model configured for Anthropic. Set defaultModel in .deepcode/config.json.",
+        this.id,
+      );
     }
     return model;
   }
 
   private async assertOk(response: Response): Promise<void> {
     if (!response.ok) {
-      throw new ProviderError(`Anthropic request failed: ${response.status} ${await response.text()}`, this.id);
+      throw new ProviderError(
+        `Anthropic request failed: ${response.status} ${await response.text()}`,
+        this.id,
+      );
     }
   }
 }
@@ -150,7 +157,8 @@ function toAnthropicTool(tool: any): { name: string; description?: string; input
   return {
     name: definition.name,
     description: definition.description,
-    input_schema: definition.parameters ?? definition.input_schema ?? { type: "object", properties: {} },
+    input_schema: definition.parameters ??
+      definition.input_schema ?? { type: "object", properties: {} },
   };
 }
 
@@ -158,7 +166,9 @@ function parseToolInput(inputJson: string): Record<string, unknown> {
   if (!inputJson.trim()) return {};
   try {
     const parsed = JSON.parse(inputJson) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
   } catch {
     return {};
   }

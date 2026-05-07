@@ -9,13 +9,20 @@ export interface LoadConfigOptions {
 }
 
 export class ConfigLoader {
+  resolveConfigPath(options: LoadConfigOptions): string {
+    return options.configPath
+      ? path.resolve(options.configPath)
+      : path.join(options.cwd, ".deepcode", "config.json");
+  }
+
   async load(options: LoadConfigOptions): Promise<DeepCodeConfig> {
-    const configPath = options.configPath ?? path.join(options.cwd, ".deepcode", "config.json");
+    const configPath = this.resolveConfigPath(options);
     const rawFile = await this.readOptionalJson(configPath);
     const merged = {
       ...rawFile,
-      defaultProvider: process.env.DEEPCODE_PROVIDER ?? rawFile.defaultProvider,
-      defaultModel: process.env.DEEPCODE_MODEL ?? rawFile.defaultModel,
+      defaultProvider:
+        parseOptionalString(process.env.DEEPCODE_PROVIDER) ?? rawFile.defaultProvider,
+      defaultModel: parseOptionalString(process.env.DEEPCODE_MODEL) ?? rawFile.defaultModel,
       cache: {
         ...rawFile.cache,
         enabled: parseOptionalBoolean(process.env.CACHE_ENABLED) ?? rawFile.cache?.enabled,
@@ -25,28 +32,41 @@ export class ConfigLoader {
         ...rawFile.providers,
         openrouter: {
           ...rawFile.providers?.openrouter,
-          apiKey: process.env.OPENROUTER_API_KEY ?? rawFile.providers?.openrouter?.apiKey,
+          apiKey:
+            parseOptionalString(process.env.OPENROUTER_API_KEY) ??
+            rawFile.providers?.openrouter?.apiKey,
         },
         anthropic: {
           ...rawFile.providers?.anthropic,
-          apiKey: process.env.ANTHROPIC_API_KEY ?? rawFile.providers?.anthropic?.apiKey,
+          apiKey:
+            parseOptionalString(process.env.ANTHROPIC_API_KEY) ??
+            rawFile.providers?.anthropic?.apiKey,
         },
         openai: {
           ...rawFile.providers?.openai,
-          apiKey: process.env.OPENAI_API_KEY ?? rawFile.providers?.openai?.apiKey,
+          apiKey:
+            parseOptionalString(process.env.OPENAI_API_KEY) ?? rawFile.providers?.openai?.apiKey,
         },
         deepseek: {
           ...rawFile.providers?.deepseek,
-          apiKey: process.env.DEEPSEEK_API_KEY ?? rawFile.providers?.deepseek?.apiKey,
+          apiKey:
+            parseOptionalString(process.env.DEEPSEEK_API_KEY) ??
+            rawFile.providers?.deepseek?.apiKey,
         },
         opencode: {
           ...rawFile.providers?.opencode,
-          apiKey: process.env.OPENCODE_API_KEY ?? rawFile.providers?.opencode?.apiKey,
+          apiKey:
+            parseOptionalString(process.env.OPENCODE_API_KEY) ??
+            rawFile.providers?.opencode?.apiKey,
         },
       },
       github: {
         ...rawFile.github,
-        token: process.env.GITHUB_TOKEN ?? rawFile.github?.token,
+        token: parseOptionalString(process.env.GITHUB_TOKEN) ?? rawFile.github?.token,
+        oauthClientId:
+          parseOptionalString(process.env.GITHUB_OAUTH_CLIENT_ID) ?? rawFile.github?.oauthClientId,
+        oauthScopes:
+          parseOptionalList(process.env.GITHUB_OAUTH_SCOPES) ?? rawFile.github?.oauthScopes,
       },
     };
 
@@ -55,6 +75,27 @@ export class ConfigLoader {
       throw new ConfigError(`Invalid DeepCode config: ${parsed.error.message}`, parsed.error);
     }
     return parsed.data;
+  }
+
+  async loadFile(options: LoadConfigOptions): Promise<DeepCodeConfig> {
+    const configPath = this.resolveConfigPath(options);
+    const rawFile = await this.readOptionalJson(configPath);
+    const parsed = DeepCodeConfigSchema.safeParse(rawFile);
+    if (!parsed.success) {
+      throw new ConfigError(`Invalid DeepCode config: ${parsed.error.message}`, parsed.error);
+    }
+    return parsed.data;
+  }
+
+  async save(options: LoadConfigOptions, config: DeepCodeConfig): Promise<string> {
+    const configPath = this.resolveConfigPath(options);
+    const parsed = DeepCodeConfigSchema.safeParse(config);
+    if (!parsed.success) {
+      throw new ConfigError(`Invalid DeepCode config: ${parsed.error.message}`, parsed.error);
+    }
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(configPath, `${JSON.stringify(parsed.data, null, 2)}\n`, "utf8");
+    return configPath;
   }
 
   async init(cwd: string): Promise<string> {
@@ -89,4 +130,19 @@ function parseOptionalNumber(value: string | undefined): number | undefined {
   if (value === undefined) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseOptionalString(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseOptionalList(value: string | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  const values = value
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return values.length > 0 ? values : undefined;
 }
