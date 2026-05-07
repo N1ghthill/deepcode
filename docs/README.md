@@ -40,6 +40,7 @@ Criar um agente de codificação que combine:
 
 ### Registro de Decisões
 - [14 - Log de Decisões](./14-decisions-log.md)
+- [15 - Handoff e Próximos Passos](./15-handoff-next-steps.md)
 
 ## Inspiração
 

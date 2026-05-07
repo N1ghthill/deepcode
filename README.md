@@ -75,3 +75,5 @@ pnpm test
 pnpm build
 pnpm --filter deepcode publish --access public
 ```
+
+See `docs/15-handoff-next-steps.md` for the current handoff, known gaps, and the recommended order to continue development.
