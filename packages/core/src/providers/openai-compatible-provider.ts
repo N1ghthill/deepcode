@@ -54,23 +54,50 @@ export class OpenAICompatibleProvider implements LLMProvider {
     });
     await this.assertOk(response);
 
+    const pendingTools = new Map<number, { id: string; name: string; argumentsJson: string }>();
     for await (const event of parseSse(response)) {
-      const delta = event.choices?.[0]?.delta;
+      const choice = event.choices?.[0];
+      const delta = choice?.delta;
       if (delta?.content) {
         yield { type: "delta", content: delta.content };
       }
       for (const call of delta?.tool_calls ?? []) {
-        if (call.function?.name) {
+        const index = Number(call.index ?? pendingTools.size);
+        const existing = pendingTools.get(index) ?? {
+          id: call.id ?? `tool_${index}`,
+          name: "",
+          argumentsJson: "",
+        };
+        existing.id = call.id ?? existing.id;
+        existing.name += call.function?.name ?? "";
+        existing.argumentsJson += call.function?.arguments ?? "";
+        pendingTools.set(index, existing);
+      }
+      if (choice?.finish_reason === "tool_calls") {
+        for (const [index, call] of pendingTools) {
+          if (!call.name) continue;
           yield {
             type: "tool_call",
             call: {
-              id: call.id ?? `tool_${Date.now()}`,
-              name: call.function.name,
-              arguments: parseToolArguments(call.function.arguments),
+              id: call.id || `tool_${index}`,
+              name: call.name,
+              arguments: parseToolArguments(call.argumentsJson),
             },
           };
         }
+        pendingTools.clear();
       }
+    }
+    for (const [index, call] of pendingTools) {
+      if (!call.name) continue;
+      yield {
+        type: "tool_call",
+        call: {
+          id: call.id || `tool_${index}`,
+          name: call.name,
+          arguments: parseToolArguments(call.argumentsJson),
+        },
+      };
     }
     yield { type: "done" };
   }

@@ -102,6 +102,7 @@ export const DeepCodeConfigSchema = z.object({
   defaultProvider: ProviderIdSchema.default("openrouter"),
   defaultModel: z.string().optional(),
   maxIterations: z.number().int().positive().default(20),
+  providerRetries: z.number().int().min(0).max(5).default(2),
   temperature: z.number().min(0).max(2).default(0.2),
   maxTokens: z.number().int().positive().default(4096),
   providers: z

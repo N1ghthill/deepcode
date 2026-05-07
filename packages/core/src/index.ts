@@ -1,4 +1,5 @@
 export * from "./agent/agent.js";
+export * from "./agent/subagent-manager.js";
 export * from "./agent/task-planner.js";
 export * from "./config/config-loader.js";
 export * from "./errors.js";

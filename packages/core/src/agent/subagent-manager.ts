@@ -1,0 +1,87 @@
+import type { ProviderId, Session } from "@deepcode/shared";
+import type { Agent } from "./agent.js";
+import type { SessionManager } from "../sessions/session-manager.js";
+
+export interface SubagentTask {
+  id: string;
+  prompt: string;
+  provider?: ProviderId;
+  model?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SubagentResult {
+  taskId: string;
+  sessionId: string;
+  output: string;
+  error?: string;
+}
+
+export interface SubagentManagerOptions {
+  concurrency?: number;
+}
+
+export class SubagentManager {
+  constructor(
+    private readonly agent: Agent,
+    private readonly sessions: SessionManager,
+    private readonly defaultProvider: ProviderId,
+    private readonly defaultModel?: string,
+  ) {}
+
+  async runParallel(
+    tasks: SubagentTask[],
+    options: SubagentManagerOptions & { signal?: AbortSignal } = {},
+  ): Promise<SubagentResult[]> {
+    const concurrency = Math.max(1, options.concurrency ?? Math.min(tasks.length, 4));
+    const results: SubagentResult[] = [];
+    let cursor = 0;
+
+    const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
+      while (cursor < tasks.length) {
+        const task = tasks[cursor];
+        cursor += 1;
+        if (!task) continue;
+        results.push(await this.runOne(task, options.signal));
+      }
+    });
+
+    await Promise.all(workers);
+    return tasks.map((task) => results.find((result) => result.taskId === task.id)!).filter(Boolean);
+  }
+
+  async runOne(task: SubagentTask, signal?: AbortSignal): Promise<SubagentResult> {
+    const session = this.createChildSession(task);
+    try {
+      const output = await this.agent.run({
+        session,
+        input: task.prompt,
+        provider: task.provider,
+        signal,
+      });
+      return { taskId: task.id, sessionId: session.id, output };
+    } catch (error) {
+      return {
+        taskId: task.id,
+        sessionId: session.id,
+        output: "",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  private createChildSession(task: SubagentTask): Session {
+    const session = this.sessions.create({
+      provider: task.provider ?? this.defaultProvider,
+      model: task.model ?? this.defaultModel,
+    });
+    session.metadata = {
+      ...session.metadata,
+      subagent: true,
+      taskId: task.id,
+      ...task.metadata,
+    };
+    this.sessions.save(session);
+    return session;
+  }
+}

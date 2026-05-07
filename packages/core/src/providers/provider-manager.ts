@@ -6,8 +6,10 @@ import type { LLMProvider } from "./provider.js";
 
 export class ProviderManager {
   private readonly providers = new Map<ProviderId, LLMProvider>();
+  private readonly retries: number;
 
-  constructor(config: DeepCodeConfig) {
+  constructor(private readonly config: DeepCodeConfig) {
+    this.retries = config.providerRetries;
     this.register(
       new OpenAICompatibleProvider({
         id: "openrouter",
@@ -70,16 +72,43 @@ export class ProviderManager {
     );
     let lastError: unknown;
     for (const providerId of order) {
-      try {
-        const provider = this.get(providerId);
-        for await (const chunk of provider.chat(messages, options)) {
-          yield chunk;
+      for (let attempt = 0; attempt <= this.retries; attempt += 1) {
+        let emitted = false;
+        try {
+          const provider = this.get(providerId);
+          for await (const chunk of provider.chat(messages, options)) {
+            emitted = true;
+            yield chunk;
+          }
+          return;
+        } catch (error) {
+          lastError = error;
+          if (emitted || attempt >= this.retries || options.signal?.aborted) {
+            break;
+          }
+          await delay(backoffMs(attempt), options.signal);
         }
-        return;
-      } catch (error) {
-        lastError = error;
       }
     }
     throw new ProviderError("All configured providers failed", options.preferredProvider, lastError);
   }
+}
+
+function backoffMs(attempt: number): number {
+  return Math.min(250 * 2 ** attempt, 2_000);
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timeout = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout);
+        resolve();
+      },
+      { once: true },
+    );
+  });
 }

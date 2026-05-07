@@ -8,6 +8,7 @@ import {
   PermissionGateway,
   ProviderManager,
   SessionManager,
+  SubagentManager,
   createDefaultToolRegistry,
 } from "@deepcode/core";
 import type { DeepCodeConfig } from "@deepcode/shared";
@@ -23,6 +24,7 @@ export interface DeepCodeRuntime {
   events: EventBus;
   sessions: SessionManager;
   agent: Agent;
+  subagents: SubagentManager;
 }
 
 export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRuntime> {
@@ -37,5 +39,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
   const providers = new ProviderManager(config);
   const tools = createDefaultToolRegistry();
   const agent = new Agent(providers, tools, sessions, config, permissions, pathSecurity, events);
-  return { config, events, sessions, agent };
+  const subagents = new SubagentManager(agent, sessions, config.defaultProvider, config.defaultModel);
+  return { config, events, sessions, agent, subagents };
 }

@@ -50,3 +50,5 @@ deepcode github solve 42 --base main --yes
 Inside `deepcode chat`, use `/help`, `/clear`, `/new`, and `/sessions`. When an approval is pending, press `A` to approve or `D` to deny.
 
 `search_symbols` uses real Language Server Protocol servers. Install the relevant server in your environment, for example `typescript-language-server`, `pylsp`, `rust-analyzer`, or `gopls`, or override `lsp.servers` in `.deepcode/config.json`.
+
+Provider calls retry before any stream output is emitted, then fail over to the next configured provider. Core also exposes `SubagentManager` for running real child agent sessions concurrently.
