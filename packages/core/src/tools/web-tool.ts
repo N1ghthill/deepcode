@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { z } from "zod";
-import { createId, nowIso, type Activity } from "@deepcode/shared";
+import type { Activity } from "@deepcode/shared";
 import type { ToolContext } from "./tool.js";
 import { defineTool } from "./tool.js";
 

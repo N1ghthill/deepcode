@@ -8,20 +8,15 @@ import {
   type ApprovalRequest,
 } from "@deepcode/core";
 import { createRuntime, type DeepCodeRuntime } from "../runtime.js";
+import { getTheme, themeNames, type ThemeColors } from "./themes.js";
 
 export interface AppProps {
   cwd: string;
   config?: string;
 }
 
-const messageColors: Record<Message["role"], string> = {
-  system: "gray",
-  user: "cyan",
-  assistant: "green",
-  tool: "gray",
-};
-
 type ViewMode = "chat" | "sessions" | "config" | "help";
+type VimMode = "insert" | "normal";
 type ConfigEditField =
   | "defaultProvider"
   | "defaultModel"
@@ -31,7 +26,9 @@ type ConfigEditField =
   | "permissions.write"
   | "permissions.shell"
   | "permissions.dangerous"
-  | "permissions.gitLocal";
+  | "permissions.gitLocal"
+  | "tui.theme"
+  | "tui.compactMode";
 
 interface ConfigFieldDef {
   key: ConfigEditField;
@@ -50,6 +47,8 @@ const CONFIG_FIELDS: ConfigFieldDef[] = [
   { key: "permissions.shell", label: "Shell perm", type: "select", options: ["allow", "ask", "deny"] },
   { key: "permissions.dangerous", label: "Dangerous perm", type: "select", options: ["allow", "ask", "deny"] },
   { key: "permissions.gitLocal", label: "Git local perm", type: "select", options: ["allow", "ask", "deny"] },
+  { key: "tui.theme", label: "Theme", type: "select", options: themeNames },
+  { key: "tui.compactMode", label: "Compact mode", type: "toggle" },
 ];
 
 export function App(props: AppProps) {
@@ -74,6 +73,7 @@ export function App(props: AppProps) {
   const [editingConfig, setEditingConfig] = useState(false);
   const [configSaveStatus, setConfigSaveStatus] = useState<string | null>(null);
   const [toolCalls, setToolCalls] = useState<Array<{ id: string; name: string; args: string; result?: string }>>([]);
+  const [vimMode, setVimMode] = useState<VimMode>("insert");
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -128,6 +128,8 @@ export function App(props: AppProps) {
     };
   }, [props.cwd, props.config]);
 
+  const theme = runtime ? getTheme(runtime.config.tui.theme) : getTheme("dark");
+
   useInput((inputChar, key) => {
     if (key.ctrl && inputChar === "q") {
       abortRef.current?.abort();
@@ -151,6 +153,7 @@ export function App(props: AppProps) {
 
     if (key.ctrl && inputChar === "h") {
       setViewMode("help");
+      setVimMode("normal");
       setNotice("Ajuda aberta.");
       return;
     }
@@ -158,6 +161,7 @@ export function App(props: AppProps) {
     if (key.ctrl && inputChar === "o") {
       setSelectedSessionIndex(0);
       setViewMode("sessions");
+      setVimMode("normal");
       setNotice("Selecione uma sessão com ↑/↓ e Enter.");
       return;
     }
@@ -203,6 +207,7 @@ export function App(props: AppProps) {
       }
       if (key.escape) {
         setViewMode("chat");
+        setVimMode("insert");
         setNotice("Chat ativo.");
         return;
       }
@@ -218,7 +223,6 @@ export function App(props: AppProps) {
           return;
         }
         if (key.return) {
-          const field = CONFIG_FIELDS[configEditIndex];
           if (field) {
             void saveConfigEdit(runtime, field, configEditValue);
           }
@@ -239,27 +243,29 @@ export function App(props: AppProps) {
         return;
       }
 
-      if (key.upArrow) {
+      if (key.upArrow || inputChar?.toLowerCase() === "k") {
         setConfigEditIndex((current) => Math.max(0, current - 1));
         return;
       }
-      if (key.downArrow) {
+      if (key.downArrow || inputChar?.toLowerCase() === "j") {
         setConfigEditIndex((current) =>
           Math.min(CONFIG_FIELDS.length - 1, current + 1),
         );
         return;
       }
-      if (key.return) {
+      if (key.return || inputChar?.toLowerCase() === "i" || inputChar?.toLowerCase() === "e") {
         const field = CONFIG_FIELDS[configEditIndex];
         if (field) {
           const currentValue = getConfigValue(runtime.config, field.key);
           setConfigEditValue(String(currentValue ?? ""));
           setEditingConfig(true);
+          if (inputChar?.toLowerCase() === "i") setVimMode("insert");
         }
         return;
       }
       if (key.escape) {
         setViewMode("chat");
+        setVimMode("insert");
         setNotice("Chat ativo.");
         return;
       }
@@ -267,14 +273,31 @@ export function App(props: AppProps) {
     }
 
     if (viewMode === "help") {
-      if (key.escape || key.return) {
+      if (key.escape || key.return || inputChar?.toLowerCase() === "q") {
         setViewMode("chat");
+        setVimMode("insert");
         setNotice("Chat ativo.");
       }
       return;
     }
 
     if (streaming) return;
+
+    if (viewMode === "chat" && vimMode === "normal") {
+      if (inputChar?.toLowerCase() === "i") {
+        setVimMode("insert");
+        return;
+      }
+      if (inputChar?.toLowerCase() === "a") {
+        setVimMode("insert");
+        return;
+      }
+      if (key.escape) {
+        setVimMode("normal");
+        return;
+      }
+      return;
+    }
 
     if (key.return) {
       void submitInput(input.trim(), runtime, session);
@@ -419,6 +442,7 @@ export function App(props: AppProps) {
     const [name] = command.split(/\s+/, 1);
     if (name === "/help") {
       setViewMode("help");
+      setVimMode("normal");
       setNotice("Ajuda aberta.");
       return;
     }
@@ -435,6 +459,7 @@ export function App(props: AppProps) {
     if (name === "/sessions") {
       setSelectedSessionIndex(0);
       setViewMode("sessions");
+      setVimMode("normal");
       setNotice("Selecione uma sessão com ↑/↓ e Enter.");
       return;
     }
@@ -444,7 +469,8 @@ export function App(props: AppProps) {
       setConfigEditValue("");
       setConfigSaveStatus(null);
       setViewMode("config");
-      setNotice("Configuração: ↑/↓ navega, Enter edita, Esc volta.");
+      setVimMode("normal");
+      setNotice("Configuração: ↑/↓ ou j/k navega, Enter/i edita, Esc volta.");
       return;
     }
     setNotice(`Comando desconhecido: ${command}`);
@@ -462,6 +488,7 @@ export function App(props: AppProps) {
     setToolCalls([]);
     setStatus(next.status);
     setViewMode("chat");
+    setVimMode("insert");
     setNotice(`Nova sessão: ${next.id}`);
   }
 
@@ -474,6 +501,7 @@ export function App(props: AppProps) {
     setStatus(next.status);
     setAssistantDraft("");
     setViewMode("chat");
+    setVimMode("insert");
     setNotice(`Sessão ativa: ${next.id}`);
   }
 
@@ -500,7 +528,7 @@ export function App(props: AppProps) {
   if (error) {
     return (
       <Box flexDirection="column">
-        <Text color="red" bold>
+        <Text color={theme.error} bold>
           DeepCode error
         </Text>
         <Text>{error}</Text>
@@ -518,11 +546,13 @@ export function App(props: AppProps) {
 
   return (
     <Box flexDirection="column">
-      <Box justifyContent="space-between" borderStyle="single" paddingX={1}>
+      <Box justifyContent="space-between" borderStyle="single" paddingX={1} borderColor={theme.border}>
         <Text bold>DeepCode v1.0.0</Text>
         <Text>
-          Provider: {runtime.config.defaultProvider}
-          {runtime.config.defaultModel ? ` | Model: ${runtime.config.defaultModel}` : ""}
+          {runtime.config.defaultProvider}
+          {runtime.config.defaultModel ? ` | ${runtime.config.defaultModel}` : ""}
+          {vimMode === "normal" ? " | NORMAL" : ""}
+          {` | ${runtime.config.tui.theme}`}
         </Text>
       </Box>
 
@@ -532,12 +562,14 @@ export function App(props: AppProps) {
             request={activeApproval}
             runtime={runtime}
             queueLength={approvals.length}
+            theme={theme}
           />
         ) : viewMode === "sessions" ? (
           <SessionSwitcher
             sessions={sessionList}
             selectedIndex={selectedSessionIndex}
             activeId={session.id}
+            theme={theme}
           />
         ) : viewMode === "config" ? (
           <ConfigEditor
@@ -546,46 +578,47 @@ export function App(props: AppProps) {
             editing={editingConfig}
             editValue={configEditValue}
             saveStatus={configSaveStatus}
+            theme={theme}
           />
         ) : viewMode === "help" ? (
-          <HelpView />
+          <HelpView theme={theme} />
         ) : (
-          <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1}>
+          <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
             <Text bold>Chat</Text>
             {visibleMessages.length === 0 && (
-              <Text color="gray">Digite uma tarefa ou use /help.</Text>
+              <Text color={theme.fgMuted}>Digite uma tarefa ou use /help.</Text>
             )}
             {visibleMessages.map((message) => (
-              <MessageRow key={message.id} message={message} />
+              <MessageRow key={message.id} message={message} theme={theme} />
             ))}
             {assistantDraft && (
-              <Text color="green">
+              <Text color={theme.assistantMsg}>
                 assistant: {truncate(assistantDraft.replace(/\s+/g, " "), 900)}
               </Text>
             )}
           </Box>
         )}
 
-        <Box width="35%" flexDirection="column" borderStyle="single" paddingX={1}>
+        <Box width="35%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
           <Box>
             <Text bold>Status: </Text>
-            <Text color={streaming ? "yellow" : status === "error" ? "red" : "green"} bold>
+            <Text color={streaming ? theme.warning : status === "error" ? theme.error : theme.success} bold>
               {streaming ? "executing" : status}
             </Text>
           </Box>
-          <Text color="gray">Sessão: {session.id}</Text>
+          <Text color={theme.fgMuted}>Sessão: {session.id}</Text>
           <Text> </Text>
           <Text bold>Atividades</Text>
-          {activities.length === 0 && <Text color="gray">Sem atividade ainda.</Text>}
+          {activities.length === 0 && <Text color={theme.fgMuted}>Sem atividade ainda.</Text>}
           {activities.map((activity) => (
-            <ActivityRow key={activity.id} activity={activity} />
+            <ActivityRow key={activity.id} activity={activity} theme={theme} />
           ))}
           <Text> </Text>
           {toolCalls.length > 0 && (
             <>
               <Text bold>Tool calls</Text>
               {toolCalls.map((tc) => (
-                <Text key={tc.id} color="magenta">
+                <Text key={tc.id} color={theme.accent}>
                   → {tc.name} {tc.args ? truncate(tc.args, 50) : ""}
                 </Text>
               ))}
@@ -595,36 +628,38 @@ export function App(props: AppProps) {
           <Text>Aprovações: {approvals.length}</Text>
           {activeApproval && (
             <Box flexDirection="column" borderStyle="round" paddingX={1}>
-              <Text color="yellow" bold>
+              <Text color={theme.warning} bold>
                 Pendente
               </Text>
               <Text>{approvalRiskLabel(activeApproval.level)}</Text>
-              <Text color="gray">A aprova | D nega | Esc nega</Text>
+              <Text color={theme.fgMuted}>A aprova | D nega | Esc nega</Text>
             </Box>
           )}
         </Box>
       </Box>
 
-      <Box borderStyle="single" paddingX={1}>
+      <Box borderStyle="single" paddingX={1} borderColor={theme.border}>
         <Text>
           {viewMode === "chat"
             ? streaming
               ? "Executando..."
-              : `> ${input}_`
+              : vimMode === "normal"
+                ? "-- NORMAL -- pressione i para inserir"
+                : `> ${input}_`
             : editingConfig
               ? `Editando: ${configEditValue}_`
-              : "Enter edita | ↑/↓ navega | Esc volta"}
+              : "Enter/i edita | ↑/↓ ou j/k navega | Esc volta"}
         </Text>
       </Box>
-      <Text color="gray">{notice}</Text>
+      <Text color={theme.fgMuted}>{notice}</Text>
     </Box>
   );
 }
 
-function ActivityRow({ activity }: { activity: Activity }) {
+function ActivityRow({ activity, theme }: { activity: Activity; theme: ThemeColors }) {
   const icon = activityTypeIcon(activity.type);
   return (
-    <Text color="gray">
+    <Text color={theme.fgMuted}>
       {icon} {truncate(activity.message, 60)}
     </Text>
   );
@@ -639,6 +674,7 @@ function activityTypeIcon(type: string): string {
   if (type.includes("search")) return "🔍";
   if (type.includes("test")) return "🧪";
   if (type.includes("lint")) return "✨";
+  if (type.includes("web_fetch")) return "🌐";
   return "•";
 }
 
@@ -646,54 +682,60 @@ function ApprovalPanel({
   request,
   runtime,
   queueLength,
+  theme,
 }: {
   request: ApprovalRequest;
   runtime: DeepCodeRuntime;
   queueLength: number;
+  theme: ThemeColors;
 }) {
   const secretValues = collectSecretValues(runtime.config);
   const operation = redactText(request.operation, secretValues);
   const requestPath = request.path ? redactText(request.path, secretValues) : undefined;
   const details = formatApprovalDetails(request.details, secretValues);
   return (
-    <Box width="65%" flexDirection="column" borderStyle="double" paddingX={1}>
-      <Text color="yellow" bold>
+    <Box width="65%" flexDirection="column" borderStyle="double" paddingX={1} borderColor={theme.borderActive}>
+      <Text color={theme.warning} bold>
         Aprovação necessária
       </Text>
       <Text>
         Nível: {request.level} | {approvalRiskLabel(request.level)}
       </Text>
       <Text>Operação</Text>
-      <Text color="cyan">{truncate(operation, 900)}</Text>
+      <Text color={theme.primary}>{truncate(operation, 900)}</Text>
       {requestPath && (
         <>
           <Text>Caminho</Text>
-          <Text color="gray">{truncate(requestPath, 900)}</Text>
+          <Text color={theme.fgMuted}>{truncate(requestPath, 900)}</Text>
         </>
       )}
       {details.length > 0 && (
         <>
           <Text>Detalhes</Text>
           {details.map((line) => (
-            <Text key={line} color="gray">
+            <Text key={line} color={theme.fgMuted}>
               {truncate(line, 120)}
             </Text>
           ))}
         </>
       )}
       <Text>Solicitada: {formatSessionTime(request.createdAt)}</Text>
-      <Text color="yellow">A aprova | D nega | Esc nega</Text>
+      <Text color={theme.warning}>A aprova | D nega | Esc nega</Text>
       {queueLength > 1 && (
-        <Text color="gray">{queueLength - 1} aprovação(ões) aguardando na fila.</Text>
+        <Text color={theme.fgMuted}>{queueLength - 1} aprovação(ões) aguardando na fila.</Text>
       )}
     </Box>
   );
 }
 
-function MessageRow({ message }: { message: Message }) {
+function MessageRow({ message, theme }: { message: Message; theme: ThemeColors }) {
   const content = truncate(message.content.replace(/\s+/g, " "), 900);
   return (
-    <Text color={messageColors[message.role]}>
+    <Text color={
+      message.role === "user" ? theme.userMsg :
+      message.role === "assistant" ? theme.assistantMsg :
+      theme.toolMsg
+    }>
       {message.role}: {content}
     </Text>
   );
@@ -703,22 +745,24 @@ function SessionSwitcher({
   sessions,
   selectedIndex,
   activeId,
+  theme,
 }: {
   sessions: Session[];
   selectedIndex: number;
   activeId: string;
+  theme: ThemeColors;
 }) {
   return (
-    <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1}>
+    <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
       <Text bold>Sessões</Text>
-      {sessions.length === 0 && <Text color="gray">Nenhuma sessão salva.</Text>}
+      {sessions.length === 0 && <Text color={theme.fgMuted}>Nenhuma sessão salva.</Text>}
       {sessions.slice(0, 12).map((item, index) => {
         const selected = index === selectedIndex;
         const active = item.id === activeId;
         return (
-          <Text key={item.id} color={selected ? "cyan" : active ? "green" : undefined}>
+          <Text key={item.id} color={selected ? theme.primary : active ? theme.success : undefined}>
             {selected ? "> " : "  "}
-            {item.id} {active ? "*" : " "} {item.status} {item.messages.length} mensagens{" "}
+            {item.id} {active ? "*" : " "} {item.status} {item.messages.length} msgs{" "}
             {formatSessionTime(item.updatedAt)}
           </Text>
         );
@@ -746,12 +790,14 @@ function ConfigEditor({
   editing,
   editValue,
   saveStatus,
+  theme,
 }: {
   runtime: DeepCodeRuntime;
   selectedIndex: number;
   editing: boolean;
   editValue: string;
   saveStatus: string | null;
+  theme: ThemeColors;
 }) {
   const config = redactSecrets(runtime.config, {
     secretPlaceholder: "[set]",
@@ -760,10 +806,10 @@ function ConfigEditor({
   const providers = runtime.config.providers;
 
   return (
-    <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1}>
+    <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
       <Text bold>Configuração (editável)</Text>
-      <Text color="gray">Provider: {String(config.defaultProvider)}</Text>
-      <Text color="gray">Model: {String(config.defaultModel ?? "não configurado")}</Text>
+      <Text color={theme.fgMuted}>Provider: {String(config.defaultProvider)}</Text>
+      <Text color={theme.fgMuted}>Model: {String(config.defaultModel ?? "não configurado")}</Text>
       <Text> </Text>
       <Text bold>Campos editáveis</Text>
       {CONFIG_FIELDS.map((field, index) => {
@@ -778,29 +824,29 @@ function ConfigEditor({
 
         return (
           <Box key={field.key}>
-            <Text color={selected ? "cyan" : undefined}>
+            <Text color={selected ? theme.primary : undefined}>
               {selected ? "> " : "  "}
               {field.label}:{" "}
             </Text>
             {editing && selected ? (
-              <Text color="yellow">{editValue}_</Text>
+              <Text color={theme.warning}>{editValue}_</Text>
             ) : (
-              <Text color={selected ? "yellow" : "green"}>{displayValue}</Text>
+              <Text color={selected ? theme.warning : theme.success}>{displayValue}</Text>
             )}
           </Box>
         );
       })}
       <Text> </Text>
       {saveStatus && (
-        <Text color={saveStatus.startsWith("Erro") ? "red" : "green"}>{saveStatus}</Text>
+        <Text color={saveStatus.startsWith("Erro") ? theme.error : theme.success}>{saveStatus}</Text>
       )}
-      <Text color="gray">
-        {editing ? "Enter salva | Esc cancela" : "Enter edita | ↑/↓ navega | Esc volta"}
+      <Text color={theme.fgMuted}>
+        {editing ? "Enter salva | Esc cancela" : "Enter/i edita | ↑/↓ ou j/k navega | Esc volta"}
       </Text>
       <Text> </Text>
       <Text bold>Providers</Text>
       {Object.entries(providers).map(([name, provider]) => (
-        <Text key={name} color={provider.apiKey ? "green" : "gray"}>
+        <Text key={name} color={provider.apiKey ? theme.success : theme.fgMuted}>
           {name}: {provider.apiKey ? "apiKey [set]" : "apiKey missing"}
           {provider.baseUrl ? ` | ${provider.baseUrl}` : ""}
         </Text>
@@ -810,9 +856,9 @@ function ConfigEditor({
   );
 }
 
-function HelpView() {
+function HelpView({ theme }: { theme: ThemeColors }) {
   return (
-    <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1}>
+    <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
       <Text bold>Ajuda</Text>
       <Text> </Text>
       <Text bold>Comandos</Text>
@@ -822,15 +868,22 @@ function HelpView() {
       <Text>/sessions abre seletor de sessões</Text>
       <Text>/config abre editor de configuração</Text>
       <Text> </Text>
-      <Text bold>Atalhos</Text>
-      <Text>Ctrl+O abre sessões | Ctrl+N nova sessão</Text>
+      <Text bold>Atalhos gerais</Text>
+      <Text>Ctrl+O sessões | Ctrl+N nova sessão</Text>
       <Text>Ctrl+H ajuda | Ctrl+C cancela | Ctrl+Q sai</Text>
       <Text> </Text>
-      <Text bold>Aprovações</Text>
-      <Text>A aprova | D nega | Esc volta/nega aprovação pendente</Text>
+      <Text bold>Vim bindings (chat)</Text>
+      <Text>i / a entra modo insert | Esc volta modo normal</Text>
       <Text> </Text>
-      <Text bold>Configuração</Text>
-      <Text>Enter edita campo | ↑/↓ navega | Enter salva | Esc cancela</Text>
+      <Text bold>Vim bindings (config)</Text>
+      <Text>j / k navega | i / e edita | Enter salva | Esc volta</Text>
+      <Text> </Text>
+      <Text bold>Aprovações</Text>
+      <Text>A aprova | D nega | Esc volta/nega</Text>
+      <Text> </Text>
+      <Text bold>Temas disponíveis</Text>
+      <Text>{themeNames.join(", ")}</Text>
+      <Text>Altere via /config → Theme ou tui.theme no config</Text>
     </Box>
   );
 }

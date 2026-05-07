@@ -68,6 +68,11 @@ export class ConfigLoader {
         oauthScopes:
           parseOptionalList(process.env.GITHUB_OAUTH_SCOPES) ?? rawFile.github?.oauthScopes,
       },
+      tui: {
+        ...rawFile.tui,
+        theme: parseOptionalString(process.env.DEEPCODE_THEME) ?? rawFile.tui?.theme,
+        compactMode: parseOptionalBoolean(process.env.DEEPCODE_COMPACT) ?? rawFile.tui?.compactMode,
+      },
     };
 
     const parsed = DeepCodeConfigSchema.safeParse(merged);

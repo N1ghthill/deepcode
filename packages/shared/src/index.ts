@@ -223,6 +223,13 @@ export const DeepCodeConfigSchema = z
       })
       .strict()
       .default({}),
+    tui: z
+      .object({
+        theme: z.enum(["dark", "light", "high-contrast", "nord", "dracula"]).default("dark"),
+        compactMode: z.boolean().default(false),
+      })
+      .strict()
+      .default({}),
   })
   .strict();
 export type DeepCodeConfig = z.infer<typeof DeepCodeConfigSchema>;
