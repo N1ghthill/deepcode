@@ -2,7 +2,7 @@ import { render } from "ink";
 import React from "react";
 import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
-import { createPrCommand, listIssuesCommand } from "./commands/github.js";
+import { createPrCommand, listIssuesCommand, solveIssueCommand } from "./commands/github.js";
 import { runCommand } from "./commands/run.js";
 import { App } from "./tui/App.js";
 
@@ -56,6 +56,24 @@ export function createProgram(): Command {
     .option("--base <base>", "base branch", "main")
     .action(async (options: { title: string; body: string; head: string; base: string }) => {
       await createPrCommand(options, { cwd: program.opts().cwd, config: program.opts().config });
+    });
+  github
+    .command("solve")
+    .description("solve a GitHub issue end-to-end with branch, commit, push, and PR")
+    .argument("<number>", "issue number")
+    .option("--base <base>", "base branch", "main")
+    .option("-y, --yes", "approve commit/push/PR workflow")
+    .action(async (number: string, options: { base?: string; yes?: boolean }) => {
+      const issueNumber = Number.parseInt(number, 10);
+      if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+        throw new Error(`Invalid issue number: ${number}`);
+      }
+      await solveIssueCommand(issueNumber, {
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+        base: options.base,
+        yes: options.yes,
+      });
     });
 
   program

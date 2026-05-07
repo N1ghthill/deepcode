@@ -37,6 +37,10 @@ export class SessionManager {
     this.sessions.set(session.id, { ...session, updatedAt: nowIso() });
   }
 
+  list(): Session[] {
+    return [...this.sessions.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
   addMessage(sessionId: string, message: Omit<Message, "id" | "createdAt">): Message {
     const session = this.get(sessionId);
     const full: Message = { ...message, id: createId("msg"), createdAt: nowIso() };

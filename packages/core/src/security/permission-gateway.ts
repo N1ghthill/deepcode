@@ -62,8 +62,9 @@ export class PermissionGateway {
 
     this.eventBus.emit("approval:request", request);
     const decision = await new Promise<ApprovalDecision>((resolve) => {
-      this.eventBus.once("approval:decision", (payload) => {
+      const cleanup = this.eventBus.on("approval:decision", (payload) => {
         if (payload.requestId === request.id) {
+          cleanup();
           resolve(payload.decision);
         }
       });

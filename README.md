@@ -42,6 +42,9 @@ deepcode chat
 deepcode run "Refactor the auth module and run tests" --yes
 deepcode github issues
 deepcode github pr --title "Fix auth" --body "Details" --head feature/auth --base main
+deepcode github solve 42 --base main --yes
 ```
 
 `--yes` approves permission requests for that one command. Without it, write/shell/dangerous operations are denied in non-interactive mode unless config allows them.
+
+Inside `deepcode chat`, use `/help`, `/clear`, `/new`, and `/sessions`. When an approval is pending, press `A` to approve or `D` to deny.
