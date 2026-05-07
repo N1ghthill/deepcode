@@ -4,6 +4,15 @@
   "description": "Core engine for DeepCode",
   "license": "MIT",
   "type": "module",
+  "homepage": "https://github.com/N1ghthill/deepcode#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/N1ghthill/deepcode.git"
+  },
+  "files": [
+    "dist",
+    "package.json"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

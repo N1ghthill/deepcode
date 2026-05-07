@@ -35,6 +35,14 @@ export GITHUB_TOKEN="..."
 
 No provider or GitHub behavior is mocked. Missing credentials or missing model configuration produce explicit runtime errors.
 
+Before running real agent tasks, use:
+
+```bash
+deepcode doctor
+```
+
+Install missing language servers reported by `doctor` when you need `search_symbols`.
+
 ## Usage
 
 ```bash
@@ -57,3 +65,13 @@ Inside `deepcode chat`, use `/help`, `/clear`, `/new`, and `/sessions`. When an 
 Provider calls retry before any stream output is emitted, then fail over to the next configured provider. Core also exposes `SubagentManager` for running real child agent sessions concurrently.
 
 Read/search tool results are cached under `.deepcode/cache` when `cache.enabled` is true. The default TTL is 300 seconds.
+
+## Release
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+pnpm --filter deepcode publish --access public
+```

@@ -4,17 +4,31 @@ import { ToolExecutionError } from "../errors.js";
 import { runShell } from "./process.js";
 import { defineTool } from "./tool.js";
 
-function isDangerousCommand(command: string): boolean {
+export type ShellRisk = "shell" | "dangerous" | "blocked";
+
+export function classifyShellCommand(command: string): ShellRisk {
   const normalized = command.trim().replace(/\s+/g, " ");
-  return [
+  const blocked = [
+    /\brm\s+-[^\n]*r[^\n]*f\b\s+(?:\/|\/\*|~|\$HOME)(?:\s|$)/,
+    /\b(?:shutdown|reboot|poweroff|halt)\b/,
+    /\bmkfs(?:\.[a-z0-9]+)?\b/,
+    /\bdd\b.*\bof=\/dev\//,
+    /:\s*\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;/,
+    /\bchmod\s+-R\s+777\s+(?:\/|\/\*)/,
+    /\bchown\s+-R\b.*\s+(?:\/|\/\*)/,
+  ].some((pattern) => pattern.test(normalized));
+  if (blocked) return "blocked";
+
+  const dangerous = [
     /\brm\s+-[^\n]*r[^\n]*f\b/,
     /\bgit\s+push\b.*\s--force(?:-with-lease)?\b/,
     /\bgit\s+reset\s+--hard\b/,
     /\bdd\s+if=/,
-    /\bmkfs(?:\.[a-z0-9]+)?\b/,
+    /\bsudo\b/,
     /\bcurl\b.*\|\s*(sh|bash)\b/,
     /\bwget\b.*\|\s*(sh|bash)\b/,
   ].some((pattern) => pattern.test(normalized));
+  return dangerous ? "dangerous" : "shell";
 }
 
 export const bashTool = defineTool({
@@ -29,10 +43,13 @@ export const bashTool = defineTool({
     Effect.tryPromise({
       try: async () => {
         const cwd = await context.pathSecurity.normalize(args.cwd);
-        const kind = isDangerousCommand(args.command) ? "dangerous" : "shell";
+        const risk = classifyShellCommand(args.command);
+        if (risk === "blocked") {
+          throw new Error(`Blocked unsafe shell command: ${args.command}`);
+        }
         await context.permissions.ensure({
           operation: args.command.trim(),
-          kind,
+          kind: risk,
           path: cwd,
           details: { command: args.command },
         });

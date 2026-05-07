@@ -16,6 +16,11 @@ export class ConfigLoader {
       ...rawFile,
       defaultProvider: process.env.DEEPCODE_PROVIDER ?? rawFile.defaultProvider,
       defaultModel: process.env.DEEPCODE_MODEL ?? rawFile.defaultModel,
+      cache: {
+        ...rawFile.cache,
+        enabled: parseOptionalBoolean(process.env.CACHE_ENABLED) ?? rawFile.cache?.enabled,
+        ttlSeconds: parseOptionalNumber(process.env.CACHE_TTL_SECONDS) ?? rawFile.cache?.ttlSeconds,
+      },
       providers: {
         ...rawFile.providers,
         openrouter: {
@@ -71,4 +76,17 @@ export class ConfigLoader {
       throw new ConfigError(`Unable to read config at ${filePath}`, error);
     }
   }
+}
+
+function parseOptionalBoolean(value: string | undefined): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (["1", "true", "yes", "on"].includes(value.toLowerCase())) return true;
+  if (["0", "false", "no", "off"].includes(value.toLowerCase())) return false;
+  return undefined;
+}
+
+function parseOptionalNumber(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
