@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "description": "DeepCode AI coding agent monorepo",
+  "homepage": "https://github.com/N1ghthill/deepcode#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/N1ghthill/deepcode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/N1ghthill/deepcode/issues"
+  },
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@9.15.0",
@@ -11,19 +19,21 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "pnpm --filter @deepcode/app dev",
+    "dev": "pnpm --filter deepcode dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,json,md,yml,yaml}\""
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20.17.10",
     "@types/react": "^18.3.12",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
+    "ink-testing-library": "^4.0.0",
     "prettier": "^3.4.2",
     "tsup": "^8.3.5",
     "turbo": "^2.3.3",

@@ -1,7 +1,7 @@
 {
   "name": "deepcode",
   "version": "1.0.0",
-  "description": "DeepCode AI coding agent",
+  "description": "Terminal AI coding agent for local software development",
   "license": "MIT",
   "type": "module",
   "homepage": "https://github.com/N1ghthill/deepcode#readme",
@@ -12,8 +12,18 @@
   "bugs": {
     "url": "https://github.com/N1ghthill/deepcode/issues"
   },
+  "keywords": [
+    "ai",
+    "agent",
+    "coding-agent",
+    "developer-tools",
+    "terminal",
+    "tui",
+    "typescript"
+  ],
   "files": [
     "dist",
+    "LICENSE",
     "README.md",
     "package.json"
   ],
@@ -22,16 +32,26 @@
   },
   "scripts": {
     "build": "tsup",
-    "dev": "tsx src/index.ts",
+    "dev": "TSX_TSCONFIG_PATH=tsconfig.dev.json node --watch --import tsx src/index.ts --cwd \"$INIT_CWD\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "test": "pnpm build && vitest run --passWithNoTests",
     "prepublishOnly": "pnpm build"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@deepcode/cli": "workspace:*"
+    "chalk": "^5.4.1",
+    "commander": "^12.1.0",
+    "effect": "^3.12.7",
+    "ink": "^4.4.1",
+    "react": "^18.3.1",
+    "zod": "^3.24.1",
+    "zod-to-json-schema": "^3.24.1"
   },
   "devDependencies": {
+    "@deepcode/cli": "workspace:*",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
