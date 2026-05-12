@@ -42,4 +42,10 @@ describe("secret redaction", () => {
     expect(output).not.toContain("env-secret-value");
     expect(output).not.toContain("another-secret");
   });
+
+  it("does not treat apiKeyFile paths as secret values", () => {
+    expect(redactSecrets({ apiKeyFile: "/tmp/key.txt" })).toEqual({
+      apiKeyFile: "/tmp/key.txt",
+    });
+  });
 });

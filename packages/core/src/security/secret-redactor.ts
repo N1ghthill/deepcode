@@ -91,6 +91,7 @@ export function collectSecretValues(config?: DeepCodeConfig): string[] {
 
 export function isSecretPath(path: string[]): boolean {
   const key = path[path.length - 1] ?? "";
+  if (/(api[_-]?key|token|secret|credential).*file/i.test(key)) return false;
   return SECRET_KEY_PATTERN.test(key);
 }
 
