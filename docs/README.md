@@ -1,60 +1,38 @@
-# DeepCode - AI Coding Agent
+# DeepCode Documentation
 
-## Visão Geral
+This directory contains the product and engineering reference for DeepCode.
 
-DeepCode é um agente de codificação AI full-stack, profissional e autônomo, projetado para operar via Terminal User Interface (TUI). O agente possui capacidades avançadas de desenvolvimento, integração com Git/GitHub, e suporte a múltiplos providers de LLM.
+The repository README is the public entrypoint. This directory is the detailed reference layer behind it. Some engineering notes are still maintained in Portuguese because that is the working language of the repository today.
 
-## Propósito
+## Recommended Reading Order
 
-Criar um agente de codificação que combine:
+### Product and Architecture
 
-- **Autonomia**: Capacidade de trabalhar de forma independente
-- **Restrições Sensíveis**: Sistema robusto de permissões e aprovações
-- **Multi-Provider**: Suporte a OpenRouter, Claude, GPT-4, DeepSeek e OpenCode Zen/Go
-- **Interface TUI**: Interface exclusiva via terminal (sem GUI/web)
-- **Integração GitHub**: Gerenciamento completo de issues, PRs e branches
+- [01 - Vision and Requirements](./01-vision-and-requirements.md)
+- [02 - Architecture Overview](./02-architecture-overview.md)
+- [05 - TUI Design](./05-tui-design.md)
+- [06 - Security Model](./06-security-model.md)
+- [08 - Tool System](./08-tool-system.md)
+- [16 - Configuration](./16-configuration.md)
 
-## Status do Projeto
+### Runtime and Implementation Reference
 
-- **Fase**: Implementacao funcional em progresso
-- **Timeline**: 14 semanas
-- **Tecnologia Base**: Node.js 20+ + TypeScript 5.5+
+- [07 - Provider Abstraction](./07-provider-abstraction.md)
+- [09 - Agent Loop](./09-agent-loop.md)
+- [10 - GitHub Integration](./10-github-integration.md)
+- [11 - Search Strategy](./11-search-strategy.md)
+- [12 - State Management](./12-state-management.md)
+- [13 - Testing Strategy](./13-testing-strategy.md)
 
-## Documentação
+### Planning and Development History
 
-### Documentação Principal
+- [03 - Technology Stack](./03-technology-stack.md)
+- [04 - Implementation Phases](./04-implementation-phases.md)
+- [14 - Decisions Log](./14-decisions-log.md)
+- [15 - Handoff and Next Steps](./15-handoff-next-steps.md)
 
-- [01 - Visão e Requisitos](./01-vision-and-requirements.md)
-- [02 - Arquitetura - 6 Camadas](./02-architecture-overview.md)
-- [03 - Stack Tecnológica](./03-technology-stack.md)
-- [04 - Fases de Implementação](./04-implementation-phases.md)
+## Repository Policies
 
-### Documentação Técnica Detalhada
-
-- [05 - Design da TUI](./05-tui-design.md)
-- [06 - Modelo de Segurança](./06-security-model.md)
-- [07 - Abstração de Providers](./07-provider-abstraction.md)
-- [08 - Sistema de Ferramentas](./08-tool-system.md)
-- [09 - Loop do Agente](./09-agent-loop.md)
-- [10 - Integração GitHub](./10-github-integration.md)
-- [11 - Estratégia de Busca](./11-search-strategy.md)
-- [12 - Gerenciamento de Estado](./12-state-management.md)
-- [13 - Estratégia de Testes](./13-testing-strategy.md)
-- [16 - Configuracao](./16-configuration.md)
-
-### Registro de Decisões
-
-- [14 - Log de Decisões](./14-decisions-log.md)
-- [15 - Handoff e Próximos Passos](./15-handoff-next-steps.md)
-
-## Inspiração
-
-Este projeto é fortemente inspirado no [OpenCode CLI](https://opencode.ai), analisado e adaptado para Node.js/TypeScript com foco em performance e baixa latência.
-
-## Licença
-
-MIT License - Em definição
-
----
-
-**Nota**: Esta documentação representa o estado atual do planejamento. Alterações podem ocorrer durante a implementação.
+- [../CONTRIBUTING.md](../CONTRIBUTING.md)
+- [../SECURITY.md](../SECURITY.md)
+- [../CHANGELOG.md](../CHANGELOG.md)

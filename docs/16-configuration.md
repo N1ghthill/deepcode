@@ -2,55 +2,105 @@
 
 ## Visao Geral
 
-DeepCode carrega configuracao de `.deepcode/config.json` e aplica overrides de ambiente em runtime. O comando `deepcode config` edita somente o arquivo local; valores vindos de ambiente podem ser inspecionados com `--effective`, mas nao sao gravados no disco.
+DeepCode carrega configuracao de `.deepcode/config.json` e aplica overrides de ambiente em runtime. O comando `deepcode config` edita apenas o arquivo local; valores vindos de ambiente podem ser inspecionados com `--effective`, mas nao sao gravados no disco.
 
-Secrets sao mascarados em `config show`, `config get`, erros impressos pela CLI, output de tarefas do agente e logs de auditoria.
+Secrets sao mascarados em `config show`, `config get`, erros da CLI, output do agente, telemetry export e logs de auditoria.
 
 ## Ordem de Precedencia
 
-1. Defaults validados pelo schema compartilhado.
+1. Defaults do schema compartilhado.
 2. `.deepcode/config.json` ou o arquivo passado por `--config`.
-3. Variaveis de ambiente no runtime:
+3. Variaveis de ambiente aplicadas no runtime:
    - `DEEPCODE_PROVIDER`
    - `DEEPCODE_MODEL`
    - `OPENROUTER_API_KEY`
+   - `OPENROUTER_API_KEY_FILE`
    - `ANTHROPIC_API_KEY`
+   - `ANTHROPIC_API_KEY_FILE`
    - `OPENAI_API_KEY`
+   - `OPENAI_API_KEY_FILE`
    - `DEEPSEEK_API_KEY`
+   - `DEEPSEEK_API_KEY_FILE`
    - `OPENCODE_API_KEY`
+   - `OPENCODE_API_KEY_FILE`
    - `GITHUB_TOKEN`
    - `GITHUB_OAUTH_CLIENT_ID`
    - `GITHUB_OAUTH_SCOPES`
    - `CACHE_ENABLED`
    - `CACHE_TTL_SECONDS`
+   - `DEEPCODE_THEME`
+   - `DEEPCODE_COMPACT`
 
-## Comandos
+## Comandos Principais
 
 ```bash
 deepcode config path
 deepcode config show
 deepcode config show --effective
-deepcode config get defaultModel
-deepcode config get providers.openrouter.apiKey
-deepcode config set defaultProvider openrouter
-deepcode config set defaultModel "openai/gpt-4.1"
-deepcode config set providers.openrouter.apiKey "..."
+deepcode config get defaultProvider
+deepcode config get defaultModels.deepseek
+deepcode config set defaultProvider deepseek
+deepcode config set defaultModels.deepseek "deepseek-v4-flash"
+deepcode config set modeDefaults.plan.provider deepseek
+deepcode config set modeDefaults.plan.model deepseek-reasoner
+deepcode config set modeDefaults.build.provider openrouter
+deepcode config set buildTurnPolicy.mode heuristic
+deepcode config set providers.deepseek.apiKey "..."
+deepcode config set providers.deepseek.apiKeyFile "~/.config/deepseek.key"
 deepcode config set github.oauthClientId "..."
 deepcode config set github.oauthScopes '["repo"]'
 deepcode config set cache.enabled false
 deepcode config set cache.ttlSeconds 600
 deepcode config set permissions.allowShell '["pnpm test","pnpm build","git status"]'
-deepcode config unset providers.openrouter.apiKey
+deepcode config set paths.whitelist '["${WORKTREE}/**","/tmp/**"]'
+deepcode config set web.allowlist '["docs\\\\.example\\\\.com"]'
+deepcode config unset modeDefaults.plan.model
 ```
 
-Arrays and objects must be valid JSON. Scalar values are parsed from the existing schema type: booleans for boolean fields, numbers for numeric fields, and strings otherwise. Use `--json` when setting a scalar as JSON intentionally.
+Arrays and objects must be valid JSON. Scalar values are parsed from the current schema type; use `--json` when you intentionally want JSON parsing for a scalar.
 
-## Arquivo Completo
+## Provider e Modelo
+
+O schema atual suporta duas camadas de selecao:
+
+- `defaultProvider`: provider padrao do repositorio.
+- `defaultModels.<provider>`: modelo padrao por provider.
+- `modeDefaults.plan` e `modeDefaults.build`: overrides de provider/modelo por modo do agente.
+
+`defaultModel` ainda existe por compatibilidade retroativa, mas a configuracao recomendada para produto e:
+
+1. definir `defaultProvider`
+2. definir `defaultModels.<provider>`
+3. definir `modeDefaults.plan` e `modeDefaults.build` quando quiser comportamento diferente por modo
+
+## Build Turn Policy
+
+`buildTurnPolicy` controla como o modo `BUILD` decide entre responder diretamente e usar ferramentas.
+
+- `mode: "heuristic"` usa frases conversacionais, termos de workspace, verbos de tarefa e extensoes de arquivo.
+- `mode: "always-tools"` força o fluxo com tools para todo turno em `BUILD`.
+
+As comparacoes sao case-insensitive e accent-insensitive.
+
+## Arquivo Completo de Exemplo
 
 ```json
 {
-  "defaultProvider": "openrouter",
-  "defaultModel": "provider/model-id",
+  "defaultProvider": "deepseek",
+  "defaultModels": {
+    "deepseek": "deepseek-v4-flash",
+    "openrouter": "qwen/qwen3-coder"
+  },
+  "modeDefaults": {
+    "plan": {
+      "provider": "deepseek",
+      "model": "deepseek-reasoner"
+    },
+    "build": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash"
+    }
+  },
   "maxIterations": 20,
   "providerRetries": 2,
   "temperature": 0.2,
@@ -60,20 +110,11 @@ Arrays and objects must be valid JSON. Scalar values are parsed from the existin
     "ttlSeconds": 300
   },
   "providers": {
-    "openrouter": {
-      "apiKey": "..."
-    },
-    "anthropic": {
-      "apiKey": "..."
-    },
-    "openai": {
-      "apiKey": "..."
-    },
     "deepseek": {
       "apiKey": "..."
     },
-    "opencode": {
-      "apiKey": "..."
+    "openrouter": {
+      "apiKeyFile": "~/.config/openrouter.key"
     }
   },
   "permissions": {
@@ -83,16 +124,14 @@ Arrays and objects must be valid JSON. Scalar values are parsed from the existin
     "shell": "ask",
     "dangerous": "ask",
     "allowShell": [
-      "npm test",
-      "npm run test",
-      "npm run build",
+      "git status",
+      "git diff",
       "pnpm test",
-      "pnpm build",
-      "git status"
+      "pnpm build"
     ]
   },
   "paths": {
-    "whitelist": ["${WORKTREE}/**", "/tmp/deepcode/**"],
+    "whitelist": ["${WORKTREE}/**"],
     "blacklist": [
       "**/.env",
       "**/.env.*",
@@ -104,6 +143,10 @@ Arrays and objects must be valid JSON. Scalar values are parsed from the existin
       "${HOME}/.config/**"
     ]
   },
+  "web": {
+    "allowlist": [],
+    "blacklist": []
+  },
   "lsp": {
     "servers": [
       {
@@ -111,31 +154,70 @@ Arrays and objects must be valid JSON. Scalar values are parsed from the existin
         "command": "typescript-language-server",
         "args": ["--stdio"],
         "fileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+      },
+      {
+        "languages": ["python"],
+        "command": "pylsp",
+        "args": [],
+        "fileExtensions": [".py"]
       }
     ]
   },
   "github": {
     "token": "...",
     "oauthClientId": "github-oauth-app-client-id",
-    "oauthScopes": ["repo"],
-    "enterpriseUrl": "https://github.company.com"
+    "oauthScopes": ["repo"]
+  },
+  "tui": {
+    "theme": "dark",
+    "compactMode": false,
+    "showInputPreview": true
+  },
+  "buildTurnPolicy": {
+    "mode": "heuristic",
+    "conversationalPhrases": ["oi", "ola", "bom dia", "thanks"],
+    "workspaceTerms": ["repo", "project", "arquivo", "teste"],
+    "taskVerbs": ["read", "inspect", "fix", "refactor", "leia", "corrija"],
+    "fileExtensions": [".ts", ".tsx", ".js", ".json", ".md", ".py"]
+  },
+  "agentMode": "build",
+  "strictMode": false,
+  "telemetry": {
+    "enabled": true,
+    "persistHistory": true
   }
 }
 ```
 
-`baseUrl` pode ser definido em qualquer provider quando for necessario apontar para um endpoint compativel diferente:
+## Politica de Filesystem
 
-```bash
-deepcode config set providers.openai.baseUrl "https://api.openai.com/v1"
-```
+- `paths.whitelist`: define onde o agente pode operar.
+- `paths.blacklist`: bloqueia caminhos sensiveis mesmo que estejam dentro da allowlist.
+- por default, DeepCode opera apenas dentro de `${WORKTREE}/**`
+
+## Politica Web
+
+`fetch_web` usa politica separada da politica de filesystem.
+
+- `web.allowlist`: quando vazia, qualquer URL ainda depende de permissao.
+- `web.allowlist`: quando preenchida, a URL precisa casar com algum padrao.
+- `web.blacklist`: bloqueia URLs mesmo quando a allowlist permitiria.
+
+Os padroes sao tratados como expressoes regulares simples.
+
+## Telemetria
+
+`telemetry.enabled` controla a coleta local de estatisticas da sessao. Quando habilitada, DeepCode persiste historico local em `.deepcode/telemetry` e a TUI pode exportar snapshots em JSON por sessao.
 
 ## Validacao
 
-O schema de configuracao e estrito. Chaves desconhecidas ou valores com tipo invalido falham em `doctor`, `run`, `chat` e nos comandos `config`, evitando typos silenciosos.
+O schema de configuracao e estrito. Chaves desconhecidas ou tipos invalidos falham em `doctor`, `run`, `chat` e nos comandos `config`, evitando typos silenciosos.
 
-## Mascaramento
+Antes de depender de uma configuracao nova, rode:
 
-O mascaramento cobre campos cujo nome indica segredo (`apiKey`, `token`, `authorization`, `secret`, `password`, `credential`, `privateKey`) e valores sensiveis conhecidos vindos da configuracao ou de variaveis de ambiente com esses nomes. Valores com menos de quatro caracteres nao entram na lista global para evitar falsos positivos em textos comuns.
+```bash
+deepcode doctor
+```
 
 ## GitHub OAuth
 
@@ -146,6 +228,4 @@ deepcode github login --client-id "github-oauth-app-client-id" --scope repo
 deepcode github whoami
 ```
 
-O DeepCode nao embute client ID. Crie ou configure um OAuth app no GitHub com Device Flow habilitado, informe o `client_id` por `--client-id`, `GITHUB_OAUTH_CLIENT_ID` ou `github.oauthClientId`, e escolha explicitamente os escopos por `--scope`, `GITHUB_OAUTH_SCOPES` ou `github.oauthScopes`. Ao concluir a autorizacao no navegador, o token recebido e salvo em `github.token`.
-
-`deepcode github whoami` e `deepcode doctor` validam `github.token` com `GET /user` na API real do GitHub. O `doctor` tambem valida provider/modelo via endpoint `/models` quando a API key esta configurada.
+DeepCode nao embute client ID. Crie um OAuth app com Device Flow habilitado e informe o `client_id` por `--client-id`, `GITHUB_OAUTH_CLIENT_ID` ou `github.oauthClientId`.

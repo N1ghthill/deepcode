@@ -1,5 +1,7 @@
 # 15 - Handoff e Proximos Passos
 
+> Documento interno de engenharia. Nao use este arquivo como resumo oficial do produto; a superficie publica do repositorio esta em `README.md`, `docs/README.md`, `CONTRIBUTING.md` e `SECURITY.md`.
+
 ## Estado Atual
 
 Ultima rodada validada: `main` commitado e pushado, validado em 2026-05-07.

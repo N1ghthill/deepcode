@@ -3,10 +3,23 @@ dist
 coverage
 .turbo
 .tools
-.deepcode/sessions
-.deepcode/audit.log
-.deepcode/cache
-.deepcode/config.json
+# DeepCode configuration - may contain sensitive data
+.deepcode/*
+!.deepcode/.gitkeep
+apps/**/.deepcode/*
+!apps/**/.deepcode/.gitkeep
+IMPLEMENTATION_SUMMARY.md
 .env
 .env.*
 !.env.example
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

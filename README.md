@@ -1,92 +1,98 @@
 # DeepCode
 
-DeepCode is a terminal-only AI coding agent implemented in TypeScript. It includes:
+DeepCode is a terminal-first AI coding agent for local software development. It combines a multi-provider agent runtime, a permission-aware execution model, and an Ink-based TUI so you can inspect, change, validate, and ship code from the command line.
 
-- Multi-provider LLM support through real API calls
-- Controlled autonomy with path rules, permission checks, approvals, and audit logging
-- File, search, shell, git, lint, test, and code-analysis tools
-- Persistent sessions under `.deepcode/sessions`
-- GitHub issue and pull request operations through the GitHub API
-- Ink-based TUI and command mode
+## Product Scope
+
+- Terminal UI and non-interactive task execution
+- Local filesystem, search, shell, git, lint, test, and code-analysis tools
+- Multi-provider LLM support with provider/model routing for `PLAN` and `BUILD`
+- Permission gating, audit logging, path policy, and redaction of known secrets
+- Persistent sessions, local cache, and telemetry
+- GitHub issue, authentication, and pull request workflows
+
+## Repository Layout
+
+- `apps/deepcode`: publishable CLI package and executable entrypoint
+- `packages/cli`: command surface and Ink TUI
+- `packages/core`: agent runtime, providers, tools, security, GitHub, cache, and workflows
+- `packages/shared`: schemas, types, and config contracts shared across packages
+- `docs`: product, operator, and engineering reference material
 
 ## Requirements
 
 - Node.js 20+
 - pnpm 9+
-- `rg` for search tools
-- `git` for git and GitHub repository detection
+- `git`
+- `rg`
+- provider credentials for real agent usage
 
-## Setup
+## Quick Start
 
 ```bash
 pnpm install
 pnpm build
 pnpm --filter deepcode exec deepcode init
+cp .env.example .env
+pnpm dev
 ```
 
-Edit `.deepcode/config.json` or set environment variables:
+DeepCode stores local state in `.deepcode/`. Start by configuring one provider and one model:
 
 ```bash
-export DEEPCODE_PROVIDER=openrouter
-export DEEPCODE_MODEL="provider/model-id"
-export OPENROUTER_API_KEY="..."
-export GITHUB_TOKEN="..."
-export GITHUB_OAUTH_CLIENT_ID="..."
-```
-
-No provider or GitHub behavior is mocked. Missing credentials or missing model configuration produce explicit runtime errors.
-
-Before running real agent tasks, use:
-
-```bash
+deepcode config set defaultProvider deepseek
+deepcode config set defaultModels.deepseek "deepseek-v4-flash"
+deepcode config set providers.deepseek.apiKey "..."
 deepcode doctor
 ```
 
-When credentials are configured, `doctor` performs real network validation: providers are checked with their `/models` endpoint and GitHub tokens are checked with GitHub's `GET /user` API.
-
-Install missing language servers reported by `doctor` when you need `search_symbols`.
-
-## Usage
+You can also use environment variables:
 
 ```bash
+export DEEPCODE_PROVIDER=deepseek
+export DEEPCODE_MODEL=deepseek-v4-flash
+export DEEPSEEK_API_KEY="..."
+```
+
+## Core Commands
+
+```bash
+deepcode
 deepcode chat
-deepcode run "Refactor the auth module and run tests" --yes
-deepcode config show
-deepcode config set defaultProvider openrouter
-deepcode config set defaultModel "provider/model-id"
-deepcode config set providers.openrouter.apiKey "..."
-deepcode github login --client-id "your-oauth-app-client-id" --scope repo
-deepcode github whoami
-deepcode github issues
-deepcode github pr --title "Fix auth" --body "Details" --head feature/auth --base main
-deepcode github solve 42 --base main --yes
+deepcode run "inspect the repo and summarize the package boundaries" --mode plan
+deepcode run "fix the failing test and run the relevant suite" --yes
 deepcode doctor
-deepcode subagents run --task "Inspect auth" --task "Inspect billing" --concurrency 2 --yes
-deepcode cache clear
+deepcode config show --effective
+deepcode github login --client-id "<oauth-client-id>" --scope repo
+deepcode subagents run --task "inspect auth" --task "inspect billing" --concurrency 2 --yes
 ```
 
-`deepcode config show` and `deepcode config get` mask secrets by default. Use `--effective` to inspect the config after environment variable overrides without writing those values back to disk. The CLI also redacts known secrets from printed errors, agent task output, subagent output, GitHub solve streaming, and audit logs.
+## Safety Model
 
-`deepcode github login` uses GitHub's real OAuth device flow. DeepCode does not ship an embedded OAuth client ID; create or configure a GitHub OAuth app with device flow enabled, then pass `--client-id` or set `github.oauthClientId`.
+DeepCode is built to act on a real local repository, so product safety is part of the core runtime:
 
-`--yes` approves permission requests for that one command. Without it, write/shell/dangerous operations are denied in non-interactive mode unless config allows them.
+- path allowlist and blacklist enforcement
+- permission levels for read, write, git, shell, and dangerous actions
+- approval flow for sensitive operations
+- audit logging
+- redaction of known secrets in logs, errors, and agent output
 
-Inside `deepcode chat`, use `/help`, `/clear`, `/new`, `/sessions`, and `/config`. `Ctrl+O` opens the session switcher, `Ctrl+N` creates a new session, and `Ctrl+H` opens help. When an approval is pending, DeepCode shows the operation, risk level, path, and redacted details; press `A` to approve or `D` to deny.
+Read the full model in [docs/06-security-model.md](docs/06-security-model.md).
 
-`search_symbols` uses real Language Server Protocol servers. Install the relevant server in your environment, for example `typescript-language-server`, `pylsp`, `rust-analyzer`, or `gopls`, or override `lsp.servers` in `.deepcode/config.json`.
+## Documentation
 
-Provider calls retry before any stream output is emitted, then fail over to the next configured provider. Core also exposes `SubagentManager` for running real child agent sessions concurrently.
+- [Documentation Index](docs/README.md)
+- [Configuration Reference](docs/16-configuration.md)
+- [Architecture Overview](docs/02-architecture-overview.md)
+- [Tool System](docs/08-tool-system.md)
+- [Testing Strategy](docs/13-testing-strategy.md)
 
-Read/search tool results are cached under `.deepcode/cache` when `cache.enabled` is true. The default TTL is 300 seconds.
+## Repository Standards
 
-## Release
+- [CONTRIBUTING.md](CONTRIBUTING.md) defines contribution flow, validation expectations, and commit hygiene.
+- [SECURITY.md](SECURITY.md) defines vulnerability reporting and secret-handling expectations.
+- [CHANGELOG.md](CHANGELOG.md) tracks product-facing repository changes.
 
-```bash
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-pnpm --filter deepcode publish --access public
-```
+## Status
 
-See `docs/15-handoff-next-steps.md` for the current handoff, known gaps, and the recommended order to continue development.
+DeepCode is actively being hardened as a real developer product. The repository is public, but the project should still be treated as a fast-moving codebase: validate provider credentials, GitHub auth, and environment tooling with `deepcode doctor` before depending on it for critical work.
