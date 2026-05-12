@@ -35,6 +35,7 @@ describe("deepcode CLI e2e", () => {
       GITHUB_TOKEN: "",
     });
     expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("ok smoke:tools:");
     expect(result.stdout).toContain("provider");
     expect(result.stdout).toContain("model");
   });
@@ -129,6 +130,7 @@ describe("deepcode CLI e2e", () => {
     const doctor = await runCli(["--cwd", tempDir, "doctor"]);
     expect(doctor.exitCode).toBe(1);
     expect(doctor.stdout).toContain("ok git:");
+    expect(doctor.stdout).toContain("ok smoke:tools:");
     expect(doctor.stdout).toContain("provider");
     expect(doctor.stderr).toBe("");
   });
@@ -165,9 +167,10 @@ describe("deepcode CLI e2e", () => {
     const doctor = await runCli(["--cwd", tempDir, "doctor"]);
     expect(doctor.exitCode).toBe(1);
     expect(doctor.stdout).toContain("ok git:");
+    expect(doctor.stdout).toContain("ok smoke:tools:");
     expect(doctor.stdout).toContain("provider");
     expect(doctor.stderr).toBe("");
-  });
+  }, 10_000);
 
   it("runs GitHub CLI commands against a configured local enterprise API", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-cli-"));
@@ -202,6 +205,7 @@ describe("deepcode CLI e2e", () => {
 
       const doctor = await runCli(["--cwd", tempDir, "doctor"]);
       expect(doctor.exitCode).toBe(1);
+      expect(doctor.stdout).toContain("ok smoke:tools:");
       expect(doctor.stdout).toContain("ok github: authenticated as octocat");
       expect(doctor.stdout).toContain("provider");
       expect(doctor.stdout).not.toContain("e2e-token");
