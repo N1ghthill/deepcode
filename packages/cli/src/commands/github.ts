@@ -4,8 +4,10 @@ import {
   execFileAsync,
   GitHubClient,
   GitHubOAuthDeviceFlow,
+  loginWithGitHubCli,
   redactText,
 } from "@deepcode/core";
+import { resolveUsableProviderTarget } from "@deepcode/shared";
 import { createRuntime } from "../runtime.js";
 
 export async function githubLoginCommand(options: {
@@ -13,6 +15,7 @@ export async function githubLoginCommand(options: {
   config?: string;
   clientId?: string;
   scopes?: string[];
+  openBrowser?: boolean | ((url: string) => Promise<void>);
 }): Promise<void> {
   const loader = new ConfigLoader();
   const loadOptions = { cwd: options.cwd, configPath: options.config };
@@ -20,15 +23,48 @@ export async function githubLoginCommand(options: {
   const effectiveConfig = await loader.load(loadOptions);
   const clientId = options.clientId ?? effectiveConfig.github.oauthClientId;
   if (!clientId) {
-    throw new Error(
-      "GitHub OAuth client ID is required. Use --client-id, GITHUB_OAUTH_CLIENT_ID, or github.oauthClientId.",
-    );
+    console.log("No DeepCode OAuth app configured; using GitHub CLI browser login.");
+    const token = await loginWithGitHubCli({
+      cwd: options.cwd,
+      enterpriseUrl: effectiveConfig.github.enterpriseUrl,
+      scopes:
+        options.scopes && options.scopes.length > 0
+          ? options.scopes
+          : effectiveConfig.github.oauthScopes,
+      onOutput: (chunk) => process.stdout.write(chunk),
+    });
+    const client = new GitHubClient({
+      token,
+      enterpriseUrl: effectiveConfig.github.enterpriseUrl,
+      worktree: options.cwd,
+    });
+    await client.getAuthenticatedUser();
+    const savedPath = await loader.save(loadOptions, {
+      ...fileConfig,
+      github: {
+        ...fileConfig.github,
+        token,
+        oauthScopes:
+          options.scopes && options.scopes.length > 0
+            ? options.scopes
+            : fileConfig.github.oauthScopes,
+      },
+    });
+    console.log(`GitHub token saved to ${savedPath}`);
+    return;
   }
   const scopes =
     options.scopes && options.scopes.length > 0
       ? options.scopes
       : effectiveConfig.github.oauthScopes;
-  const flow = new GitHubOAuthDeviceFlow({ enterpriseUrl: effectiveConfig.github.enterpriseUrl });
+  const flow = new GitHubOAuthDeviceFlow({
+    enterpriseUrl: effectiveConfig.github.enterpriseUrl,
+    openBrowser: options.openBrowser ?? true,
+    onBrowserOpenError: (error) => {
+      console.log(`Unable to open browser automatically: ${error.message}`);
+      console.log("Continue with the URL and code shown above.");
+    },
+  });
   const token = await flow.authorize({
     clientId,
     scopes,
@@ -155,9 +191,10 @@ export async function solveIssueCommand(
   await runGit(options.cwd, ["fetch", "origin", base]);
   await runGit(options.cwd, ["checkout", "-B", branch, `origin/${base}`]);
 
+  const target = resolveUsableProviderTarget(runtime.config, [runtime.config.defaultProvider]);
   const session = runtime.sessions.create({
-    provider: runtime.config.defaultProvider,
-    model: runtime.config.defaultModel,
+    provider: target.provider,
+    model: target.model,
   });
   const secretValues = collectSecretValues(runtime.config);
   const prompt = [

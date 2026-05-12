@@ -2,6 +2,7 @@ import { render } from "ink";
 import React from "react";
 import { Command } from "commander";
 import { redactText } from "@deepcode/core";
+import type { AgentMode } from "@deepcode/shared";
 import { cacheClearCommand } from "./commands/cache.js";
 import {
   configGetCommand,
@@ -43,12 +44,14 @@ export function createProgram(): Command {
     .command("run")
     .description("run one non-interactive task")
     .argument("<prompt...>", "task prompt")
+    .option("--mode <mode>", "agent mode: plan or build")
     .option("-y, --yes", "approve permission requests for this run")
-    .action(async (prompt: string[], options: { yes?: boolean }) => {
+    .action(async (prompt: string[], options: { yes?: boolean; mode?: AgentMode }) => {
       await runCommand(prompt.join(" "), {
         cwd: program.opts().cwd,
         config: program.opts().config,
         yes: options.yes,
+        mode: options.mode,
       });
     });
 
@@ -123,18 +126,20 @@ export function createProgram(): Command {
     .command("login")
     .description("authorize GitHub with the real OAuth device flow")
     .option("--client-id <id>", "GitHub OAuth app client ID")
+    .option("--no-browser", "print the verification URL without opening a browser")
     .option(
       "--scope <scope>",
       "OAuth scope to request; repeat for multiple scopes",
       collectOption,
       [],
     )
-    .action(async (options: { clientId?: string; scope: string[] }) => {
+    .action(async (options: { clientId?: string; scope: string[]; browser?: boolean }) => {
       await githubLoginCommand({
         cwd: program.opts().cwd,
         config: program.opts().config,
         clientId: options.clientId,
         scopes: options.scope,
+        openBrowser: options.browser !== false,
       });
     });
   github

@@ -12,7 +12,7 @@ import {
   ToolCache,
   createDefaultToolRegistry,
 } from "@deepcode/core";
-import type { DeepCodeConfig } from "@deepcode/shared";
+import { resolveUsableProviderTarget, type DeepCodeConfig } from "@deepcode/shared";
 
 export interface RuntimeOptions {
   cwd: string;
@@ -28,6 +28,7 @@ export interface DeepCodeRuntime {
   providers: ProviderManager;
   agent: Agent;
   subagents: SubagentManager;
+  permissions: PermissionGateway;
 }
 
 export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRuntime> {
@@ -58,11 +59,12 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
     pathSecurity,
     events,
   );
+  const defaultTarget = resolveUsableProviderTarget(config, [config.defaultProvider]);
   const subagents = new SubagentManager(
     agent,
     sessions,
-    config.defaultProvider,
-    config.defaultModel,
+    defaultTarget.provider,
+    defaultTarget.model,
   );
-  return { config, events, sessions, cache, providers, agent, subagents };
+  return { config, events, sessions, cache, providers, agent, subagents, permissions };
 }

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@deepcode/cli": ["../../packages/cli/src/index.ts"],
+      "@deepcode/core": ["../../packages/core/src/index.ts"],
+      "@deepcode/shared": ["../../packages/shared/src/index.ts"]
+    }
+  }
+}
