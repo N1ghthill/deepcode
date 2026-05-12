@@ -1,6 +1,15 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { createId, nowIso, SessionSchema, type Message, type ProviderId, type Session } from "@deepcode/shared";
+import {
+  createId,
+  nowIso,
+  quarantineCorruptFile,
+  SessionSchema,
+  type Message,
+  type ProviderId,
+  type Session,
+  writeFileAtomic,
+} from "@deepcode/shared";
 
 export class SessionManager {
   private readonly sessions = new Map<string, Session>();
@@ -34,7 +43,8 @@ export class SessionManager {
   }
 
   save(session: Session): void {
-    this.sessions.set(session.id, { ...session, updatedAt: nowIso() });
+    session.updatedAt = nowIso();
+    this.sessions.set(session.id, session);
   }
 
   list(): Session[] {
@@ -55,7 +65,7 @@ export class SessionManager {
     const dir = path.join(this.worktree, ".deepcode", "sessions");
     await mkdir(dir, { recursive: true });
     const filePath = path.join(dir, `${session.id}.json`);
-    await writeFile(filePath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
+    await writeFileAtomic(filePath, `${JSON.stringify(session, null, 2)}\n`);
     return filePath;
   }
 
@@ -63,16 +73,40 @@ export class SessionManager {
     const dir = path.join(this.worktree, ".deepcode", "sessions");
     try {
       const entries = await readdir(dir);
-      const loaded = await Promise.all(
-        entries
-          .filter((entry) => entry.endsWith(".json"))
-          .map(async (entry) => SessionSchema.parse(JSON.parse(await readFile(path.join(dir, entry), "utf8")))),
-      );
+      const loaded: Session[] = [];
+      for (const entry of entries.filter((value) => value.endsWith(".json"))) {
+        const filePath = path.join(dir, entry);
+        try {
+          const parsed = JSON.parse(await readFile(filePath, "utf8"));
+          const result = SessionSchema.safeParse(parsed);
+          if (result.success) {
+            loaded.push(result.data);
+            continue;
+          }
+          const quarantined = await quarantineFileIfPossible(filePath);
+          console.warn(
+            `Skipping corrupted session file ${entry}: ${result.error.message}${quarantined ? ` (moved to ${quarantined})` : ""}`,
+          );
+        } catch (error) {
+          const quarantined = await quarantineFileIfPossible(filePath);
+          console.warn(
+            `Skipping unreadable session file ${entry}: ${error instanceof Error ? error.message : String(error)}${quarantined ? ` (moved to ${quarantined})` : ""}`,
+          );
+        }
+      }
       for (const session of loaded) this.sessions.set(session.id, session);
       return loaded;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw error;
     }
+  }
+}
+
+async function quarantineFileIfPossible(filePath: string): Promise<string | null> {
+  try {
+    return await quarantineCorruptFile(filePath);
+  } catch {
+    return null;
   }
 }

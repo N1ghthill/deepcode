@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
-import { DeepCodeConfigSchema, type DeepCodeConfig } from "@deepcode/shared";
+import { DeepCodeConfigSchema, type DeepCodeConfig, writeFileAtomic } from "@deepcode/shared";
 import { ConfigError } from "../errors.js";
 
 export interface LoadConfigOptions {
@@ -18,6 +19,24 @@ export class ConfigLoader {
   async load(options: LoadConfigOptions): Promise<DeepCodeConfig> {
     const configPath = this.resolveConfigPath(options);
     const rawFile = await this.readOptionalJson(configPath);
+    const cwd = path.dirname(configPath) === path.join(path.resolve(options.cwd), ".deepcode")
+      ? path.resolve(options.cwd)
+      : path.dirname(configPath);
+    const openrouterApiKeyFile =
+      parseOptionalString(process.env.OPENROUTER_API_KEY_FILE) ??
+      rawFile.providers?.openrouter?.apiKeyFile;
+    const anthropicApiKeyFile =
+      parseOptionalString(process.env.ANTHROPIC_API_KEY_FILE) ??
+      rawFile.providers?.anthropic?.apiKeyFile;
+    const openaiApiKeyFile =
+      parseOptionalString(process.env.OPENAI_API_KEY_FILE) ??
+      rawFile.providers?.openai?.apiKeyFile;
+    const deepseekApiKeyFile =
+      parseOptionalString(process.env.DEEPSEEK_API_KEY_FILE) ??
+      rawFile.providers?.deepseek?.apiKeyFile;
+    const opencodeApiKeyFile =
+      parseOptionalString(process.env.OPENCODE_API_KEY_FILE) ??
+      rawFile.providers?.opencode?.apiKeyFile;
     const merged = {
       ...rawFile,
       defaultProvider:
@@ -32,32 +51,43 @@ export class ConfigLoader {
         ...rawFile.providers,
         openrouter: {
           ...rawFile.providers?.openrouter,
+          apiKeyFile: openrouterApiKeyFile,
           apiKey:
             parseOptionalString(process.env.OPENROUTER_API_KEY) ??
-            rawFile.providers?.openrouter?.apiKey,
+            rawFile.providers?.openrouter?.apiKey ??
+            await this.readSecretFile(openrouterApiKeyFile, cwd, ["openrouter", "OPENROUTER_API_KEY"]),
         },
         anthropic: {
           ...rawFile.providers?.anthropic,
+          apiKeyFile: anthropicApiKeyFile,
           apiKey:
             parseOptionalString(process.env.ANTHROPIC_API_KEY) ??
-            rawFile.providers?.anthropic?.apiKey,
+            rawFile.providers?.anthropic?.apiKey ??
+            await this.readSecretFile(anthropicApiKeyFile, cwd, ["anthropic", "claude", "ANTHROPIC_API_KEY"]),
         },
         openai: {
           ...rawFile.providers?.openai,
+          apiKeyFile: openaiApiKeyFile,
           apiKey:
-            parseOptionalString(process.env.OPENAI_API_KEY) ?? rawFile.providers?.openai?.apiKey,
+            parseOptionalString(process.env.OPENAI_API_KEY) ??
+            rawFile.providers?.openai?.apiKey ??
+            await this.readSecretFile(openaiApiKeyFile, cwd, ["openai", "openia", "OPENAI_API_KEY"]),
         },
         deepseek: {
           ...rawFile.providers?.deepseek,
+          apiKeyFile: deepseekApiKeyFile,
           apiKey:
             parseOptionalString(process.env.DEEPSEEK_API_KEY) ??
-            rawFile.providers?.deepseek?.apiKey,
+            rawFile.providers?.deepseek?.apiKey ??
+            await this.readSecretFile(deepseekApiKeyFile, cwd, ["deepseek", "DEEPSEEK_API_KEY"]),
         },
         opencode: {
           ...rawFile.providers?.opencode,
+          apiKeyFile: opencodeApiKeyFile,
           apiKey:
             parseOptionalString(process.env.OPENCODE_API_KEY) ??
-            rawFile.providers?.opencode?.apiKey,
+            rawFile.providers?.opencode?.apiKey ??
+            await this.readSecretFile(opencodeApiKeyFile, cwd, ["opencode", "opencode(go)", "OPENCODE_API_KEY"]),
         },
       },
       github: {
@@ -99,7 +129,7 @@ export class ConfigLoader {
       throw new ConfigError(`Invalid DeepCode config: ${parsed.error.message}`, parsed.error);
     }
     await mkdir(path.dirname(configPath), { recursive: true });
-    await writeFile(configPath, `${JSON.stringify(parsed.data, null, 2)}\n`, "utf8");
+    await writeFileAtomic(configPath, `${JSON.stringify(parsed.data, null, 2)}\n`);
     return configPath;
   }
 
@@ -108,7 +138,7 @@ export class ConfigLoader {
     const configPath = path.join(dir, "config.json");
     await mkdir(dir, { recursive: true });
     const config = DeepCodeConfigSchema.parse({});
-    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    await writeFileAtomic(configPath, `${JSON.stringify(config, null, 2)}\n`);
     return configPath;
   }
 
@@ -122,6 +152,57 @@ export class ConfigLoader {
       throw new ConfigError(`Unable to read config at ${filePath}`, error);
     }
   }
+
+  private async readSecretFile(
+    filePath: string | undefined,
+    cwd: string,
+    labels: string[],
+  ): Promise<string | undefined> {
+    const resolved = resolveUserPath(filePath, cwd);
+    if (!resolved) return undefined;
+    try {
+      return parseSecretFile(await readFile(resolved, "utf8"), labels);
+    } catch (error) {
+      throw new ConfigError(`Unable to read secret file at ${resolved}`, error);
+    }
+  }
+}
+
+function parseSecretFile(content: string, labels: string[]): string | undefined {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return undefined;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const envMatch = line.match(/^([A-Z0-9_]+)\s*=\s*(.+)$/);
+    if (envMatch && labels.some((label) => sameLabel(label, envMatch[1]!))) {
+      return parseOptionalString(envMatch[2]);
+    }
+
+    const labeledMatch = line.match(/^([^:=]+)\s*:\s*(.*)$/);
+    if (labeledMatch && labels.some((label) => sameLabel(label, labeledMatch[1]!))) {
+      return parseOptionalString(labeledMatch[2]) ?? parseOptionalString(lines[index + 1]);
+    }
+  }
+
+  return lines.length === 1 ? parseOptionalString(lines[0]) : undefined;
+}
+
+function sameLabel(left: string, right: string): boolean {
+  return normalizeLabel(left) === normalizeLabel(right);
+}
+
+function normalizeLabel(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function resolveUserPath(filePath: string | undefined, cwd: string): string | undefined {
+  if (!filePath) return undefined;
+  const expanded = filePath === "~" ? os.homedir() : filePath.replace(/^~(?=\/|\\)/, os.homedir());
+  return path.isAbsolute(expanded) ? expanded : path.resolve(cwd, expanded);
 }
 
 function parseOptionalBoolean(value: string | undefined): boolean | undefined {

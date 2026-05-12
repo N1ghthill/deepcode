@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type { z } from "zod";
-import type { Activity, DeepCodeConfig } from "@deepcode/shared";
+import type { Activity, AgentMode, DeepCodeConfig } from "@deepcode/shared";
 import type { PermissionGateway } from "../security/permission-gateway.js";
 import type { PathSecurity } from "../security/path-security.js";
 import type { ToolCache } from "../cache/tool-cache.js";
@@ -12,6 +12,7 @@ export interface ToolContext {
   directory: string;
   abortSignal: AbortSignal;
   config: DeepCodeConfig;
+  agentMode: AgentMode;
   cache: ToolCache;
   permissions: PermissionGateway;
   pathSecurity: PathSecurity;
@@ -29,6 +30,10 @@ export function defineTool<TSchema extends z.ZodTypeAny, TResult>(
   definition: ToolDefinition<TSchema, TResult>,
 ): ToolDefinition<TSchema, TResult> {
   return definition;
+}
+
+export function runToolEffect<TResult>(effect: Effect.Effect<TResult, Error>): Promise<TResult> {
+  return Effect.runPromise(effect);
 }
 
 export class ToolRegistry {

@@ -42,17 +42,25 @@ export const bashTool = defineTool({
   execute: (args, context) =>
     Effect.tryPromise({
       try: async () => {
-        const cwd = await context.pathSecurity.normalize(args.cwd);
+        // Classify command risk FIRST
         const risk = classifyShellCommand(args.command);
         if (risk === "blocked") {
           throw new Error(`Blocked unsafe shell command: ${args.command}`);
         }
+
+        // Normalize path
+        const cwd = await context.pathSecurity.normalize(args.cwd, { enforceAccess: false });
+
+        // Check permissions (may wait for approval)
         await context.permissions.ensure({
           operation: args.command.trim(),
           kind: risk,
           path: cwd,
           details: { command: args.command },
+          agentMode: context.agentMode,
+          signal: context.abortSignal,
         });
+
         const result = await runShell(args.command, {
           cwd,
           timeoutMs: args.timeout * 1000,
@@ -64,8 +72,26 @@ export const bashTool = defineTool({
           metadata: { cwd, exitCode: result.exitCode },
         });
         const output = [result.stdout, result.stderr ? `stderr:\n${result.stderr}` : ""].filter(Boolean).join("\n");
+        if (result.timedOut) {
+          throw new Error([
+            `Command timed out after ${args.timeout}s and was terminated.`,
+            output,
+          ].filter(Boolean).join("\n"));
+        }
+        if (result.exitCode && result.exitCode !== 0) {
+          throw new Error([
+            `Command exited with ${result.exitCode}.`,
+            output,
+          ].filter(Boolean).join("\n"));
+        }
         return output || `Command exited with ${result.exitCode ?? "unknown"} and no output`;
       },
-      catch: (error) => new ToolExecutionError("Failed to execute shell command", error),
+      catch: (error) => {
+        // Don't wrap abort errors as ToolExecutionError
+        if ((error as any)?.name === "AbortError") {
+          throw error;
+        }
+        throw new ToolExecutionError("Failed to execute shell command", error);
+      },
     }),
 });

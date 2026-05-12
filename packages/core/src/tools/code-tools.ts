@@ -15,7 +15,7 @@ export const analyzeCodeTool = defineTool({
   execute: (args, context) =>
     Effect.tryPromise({
       try: async () => {
-        const filePath = await context.pathSecurity.normalize(args.path);
+        const filePath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "analyze_code", kind: "read", path: filePath });
         const content = await readFile(filePath, "utf8");
         const declarations = content

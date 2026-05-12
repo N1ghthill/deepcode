@@ -11,6 +11,7 @@ afterEach(async () => {
   delete process.env.DEEPCODE_PROVIDER;
   delete process.env.DEEPCODE_MODEL;
   delete process.env.OPENROUTER_API_KEY;
+  delete process.env.OPENROUTER_API_KEY_FILE;
   delete process.env.GITHUB_TOKEN;
   if (tempDir) {
     await rm(tempDir, { recursive: true, force: true });
@@ -74,6 +75,101 @@ describe("ConfigLoader", () => {
       providers: { openrouter: {} },
       github: {},
     });
+  });
+
+  it("loads provider API keys from configured files without writing the secret into config", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-config-"));
+    await new ConfigLoader().init(tempDir);
+    const secretPath = path.join(tempDir, "openrouter.key");
+    await writeFile(secretPath, "file-secret\n", "utf8");
+    await writeFile(
+      path.join(tempDir, ".deepcode", "config.json"),
+      `${JSON.stringify({ providers: { openrouter: { apiKeyFile: "openrouter.key" } } })}\n`,
+      "utf8",
+    );
+
+    const loaded = await new ConfigLoader().load({ cwd: tempDir });
+
+    expect(loaded.providers.openrouter.apiKey).toBe("file-secret");
+    expect(loaded.providers.openrouter.apiKeyFile).toBe("openrouter.key");
+    const raw = await readFile(path.join(tempDir, ".deepcode", "config.json"), "utf8");
+    expect(raw).not.toContain("file-secret");
+  });
+
+  it("loads a custom build turn policy from config", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-config-"));
+    await new ConfigLoader().init(tempDir);
+    await writeFile(
+      path.join(tempDir, ".deepcode", "config.json"),
+      `${JSON.stringify({
+        buildTurnPolicy: {
+          mode: "always-tools",
+          conversationalPhrases: ["saudacoes"],
+          workspaceTerms: ["monorepo"],
+          taskVerbs: ["inspecione"],
+          fileExtensions: [".feature.ts"],
+        },
+      })}\n`,
+      "utf8",
+    );
+
+    await expect(new ConfigLoader().loadFile({ cwd: tempDir })).resolves.toMatchObject({
+      buildTurnPolicy: {
+        mode: "always-tools",
+        conversationalPhrases: ["saudacoes"],
+        workspaceTerms: ["monorepo"],
+        taskVerbs: ["inspecione"],
+        fileExtensions: [".feature.ts"],
+      },
+    });
+  });
+
+  it("loads a custom web policy from config", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-config-"));
+    await new ConfigLoader().init(tempDir);
+    await writeFile(
+      path.join(tempDir, ".deepcode", "config.json"),
+      `${JSON.stringify({
+        web: {
+          allowlist: ["docs\\.example\\.com"],
+          blacklist: ["private\\.example\\.com"],
+        },
+      })}\n`,
+      "utf8",
+    );
+
+    await expect(new ConfigLoader().loadFile({ cwd: tempDir })).resolves.toMatchObject({
+      web: {
+        allowlist: ["docs\\.example\\.com"],
+        blacklist: ["private\\.example\\.com"],
+      },
+    });
+  });
+
+  it("selects a provider key from a labeled multi-key secret file", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-config-"));
+    await new ConfigLoader().init(tempDir);
+    const secretPath = path.join(tempDir, "keys.txt");
+    await writeFile(
+      secretPath,
+      ["OpenAI:", "openai-secret", "", "OpenRouter:", "openrouter-secret"].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(tempDir, ".deepcode", "config.json"),
+      `${JSON.stringify({
+        providers: {
+          openrouter: { apiKeyFile: "keys.txt" },
+          openai: { apiKeyFile: "keys.txt" },
+        },
+      })}\n`,
+      "utf8",
+    );
+
+    const loaded = await new ConfigLoader().load({ cwd: tempDir });
+
+    expect(loaded.providers.openrouter.apiKey).toBe("openrouter-secret");
+    expect(loaded.providers.openai.apiKey).toBe("openai-secret");
   });
 
   it("rejects unknown config keys", async () => {

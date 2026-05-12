@@ -16,7 +16,7 @@ export const readFileTool = defineTool({
   execute: (args, context) =>
     Effect.tryPromise({
       try: async () => {
-        const filePath = await context.pathSecurity.normalize(args.path);
+        const filePath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "read_file", kind: "read", path: filePath });
         const fileInfo = await stat(filePath);
         const cacheParts = [filePath, fileInfo.mtimeMs, fileInfo.size, args.offset ?? 0, args.limit ?? null];
@@ -59,7 +59,7 @@ export const writeFileTool = defineTool({
   execute: (args, context) =>
     Effect.tryPromise({
       try: async () => {
-        const filePath = await context.pathSecurity.normalize(args.path);
+        const filePath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "write_file", kind: "write", path: filePath });
         await mkdir(path.dirname(filePath), { recursive: true });
         await writeFile(filePath, args.content, "utf8");
@@ -85,7 +85,7 @@ export const editFileTool = defineTool({
   execute: (args, context) =>
     Effect.tryPromise({
       try: async () => {
-        const filePath = await context.pathSecurity.normalize(args.path);
+        const filePath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "edit_file", kind: "write", path: filePath });
         const content = await readFile(filePath, "utf8");
         const occurrences = content.split(args.oldString).length - 1;
@@ -117,7 +117,7 @@ export const listDirTool = defineTool({
   execute: (args, context) =>
     Effect.tryPromise({
       try: async () => {
-        const dirPath = await context.pathSecurity.normalize(args.path);
+        const dirPath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "list_dir", kind: "read", path: dirPath });
         const entries = await readdir(dirPath, { withFileTypes: true });
         const rows = await Promise.all(
@@ -137,6 +137,9 @@ export const listDirTool = defineTool({
         });
         return rows.join("\n");
       },
-      catch: (error) => new ToolExecutionError("Failed to list directory", error),
+      catch: (error) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new ToolExecutionError(`Failed to list directory '${args.path}': ${errorMessage}`, error);
+      },
     }),
 });

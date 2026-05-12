@@ -8,22 +8,45 @@ export interface ApprovalRequest {
   path?: string;
   details?: Record<string, unknown>;
   createdAt: string;
+  diff?: {
+    before: string;
+    after: string;
+    filePath: string;
+    lineStart?: number;
+    lineEnd?: number;
+  };
+  preview?: {
+    type: 'file_write' | 'file_edit' | 'shell_command' | 'git_operation';
+    content?: string;
+    command?: string;
+    args?: string[];
+    affectedFiles?: string[];
+  };
 }
 
 export interface ApprovalDecision {
   allowed: boolean;
   reason?: string;
+  scope?: "once" | "session" | "always";
 }
 
 export interface AppEvents {
   "activity": Activity;
   "approval:request": ApprovalRequest;
   "approval:decision": { requestId: string; decision: ApprovalDecision };
-  "error": { error: Error; context?: Record<string, unknown> };
+  "app:error": { error: Error; context?: Record<string, unknown> };
 }
 
 export class EventBus {
   private readonly emitter = new EventEmitter();
+
+  constructor() {
+    // Node's EventEmitter treats "error" as a special event and throws when
+    // it is emitted without listeners. DeepCode surfaces operational errors
+    // through this channel frequently, so keep a default no-op subscriber.
+    // We use "app:error" to avoid colliding with Node's built-in "error" semantics.
+    this.emitter.on("app:error", () => {});
+  }
 
   emit<K extends keyof AppEvents>(event: K, payload: AppEvents[K]): void {
     this.emitter.emit(event, payload);
@@ -36,5 +59,13 @@ export class EventBus {
 
   once<K extends keyof AppEvents>(event: K, listener: (payload: AppEvents[K]) => void): void {
     this.emitter.once(event, listener);
+  }
+
+  removeAll<K extends keyof AppEvents>(event?: K): void {
+    if (event) {
+      this.emitter.removeAllListeners(event);
+    } else {
+      this.emitter.removeAllListeners();
+    }
   }
 }

@@ -4,6 +4,7 @@ export interface ProcessResult {
   stdout: string;
   stderr: string;
   exitCode: number | null;
+  timedOut?: boolean;
 }
 
 export function execFileAsync(
@@ -52,7 +53,9 @@ export function runShell(
 
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
     const timer = setTimeout(() => {
+      timedOut = true;
       child.kill("SIGTERM");
       setTimeout(() => child.kill("SIGKILL"), 1500).unref();
     }, options.timeoutMs);
@@ -69,7 +72,7 @@ export function runShell(
     });
     child.on("close", (exitCode) => {
       clearTimeout(timer);
-      resolve({ stdout, stderr, exitCode });
+      resolve({ stdout, stderr, exitCode, timedOut });
     });
   });
 }

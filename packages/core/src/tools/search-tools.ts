@@ -20,7 +20,7 @@ export const searchTextTool = defineTool({
   execute: (args, context) =>
     Effect.tryPromise({
       try: async () => {
-        const searchPath = await context.pathSecurity.normalize(args.path);
+        const searchPath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "search_text", kind: "read", path: searchPath });
         const rgArgs = ["--json", "--context", String(args.context)];
         if (!args.caseSensitive) rgArgs.push("--ignore-case");
@@ -79,7 +79,7 @@ export const searchFilesTool = defineTool({
   execute: (args, context) =>
     Effect.tryPromise({
       try: async () => {
-        const searchPath = await context.pathSecurity.normalize(args.path);
+        const searchPath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "search_files", kind: "read", path: searchPath });
         const cacheParts = [searchPath, args.query];
         const cached = await context.cache.get<string>("search_files", cacheParts);
@@ -128,7 +128,7 @@ export const searchSymbolsTool = defineTool({
   execute: (args, context) =>
     Effect.tryPromise({
       try: async () => {
-        const searchPath = await context.pathSecurity.normalize(args.path);
+        const searchPath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "search_symbols", kind: "read", path: searchPath });
         const server = pickLanguageServer(context.config.lsp.servers, context.worktree, searchPath);
         if (!server) {

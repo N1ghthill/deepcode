@@ -3,8 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { githubHostnameFromEnterpriseUrl } from "../src/github/gh-cli-auth.js";
 import { GitHubClient, parseGitHubRemote } from "../src/github/github-client.js";
-import { normalizeGitHubWebBase } from "../src/github/oauth-device-flow.js";
+import { GitHubOAuthDeviceFlow, normalizeGitHubWebBase } from "../src/github/oauth-device-flow.js";
 import { execFileAsync } from "../src/tools/process.js";
 
 let tempDir: string | undefined;
@@ -38,6 +39,16 @@ describe("parseGitHubRemote", () => {
     );
     expect(normalizeGitHubWebBase("https://github.company.com/api/v3")).toBe(
       "https://github.company.com",
+    );
+  });
+
+  it("derives GitHub CLI hostnames from enterprise URLs", () => {
+    expect(githubHostnameFromEnterpriseUrl()).toBe("github.com");
+    expect(githubHostnameFromEnterpriseUrl("https://github.company.com/api/v3")).toBe(
+      "github.company.com",
+    );
+    expect(githubHostnameFromEnterpriseUrl("github.company.com/api/v3")).toBe(
+      "github.company.com",
     );
   });
 });
@@ -152,6 +163,170 @@ describe("GitHubClient", () => {
       owner: "acme",
       repo: "project",
     });
+  });
+});
+
+describe("GitHubOAuthDeviceFlow", () => {
+  it("opens the verification URL and exchanges the device code without exposing the token", async () => {
+    const opened: string[] = [];
+    const requests: string[] = [];
+    const server = createServer(async (request, response) => {
+      requests.push(`${request.method ?? "GET"} ${request.url ?? ""}`);
+      if (request.url === "/login/device/code") {
+        sendJson(response, {
+          device_code: "device-123",
+          user_code: "USER-CODE",
+          verification_uri: `http://${request.headers.host}/device`,
+          expires_in: 60,
+          interval: 1,
+        });
+        return;
+      }
+      if (request.url === "/login/oauth/access_token") {
+        sendJson(response, {
+          access_token: "oauth-secret-token",
+          token_type: "bearer",
+          scope: "repo,read:user",
+        });
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Unable to bind server");
+    const enterpriseUrl = `http://127.0.0.1:${address.port}`;
+
+    try {
+      const verificationCodes: string[] = [];
+      const token = await new GitHubOAuthDeviceFlow({
+        enterpriseUrl,
+        openBrowser: async (url) => {
+          opened.push(url);
+        },
+      }).authorize({
+        clientId: "client-123",
+        scopes: ["repo", "read:user"],
+        onVerification: (code) => verificationCodes.push(code.userCode),
+      });
+
+      expect(token).toEqual({
+        accessToken: "oauth-secret-token",
+        tokenType: "bearer",
+        scopes: ["repo", "read:user"],
+      });
+      expect(opened).toEqual([`${enterpriseUrl}/device`]);
+      expect(verificationCodes).toEqual(["USER-CODE"]);
+      expect(requests).toEqual([
+        "POST /login/device/code",
+        "POST /login/oauth/access_token",
+      ]);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it("continues polling when the browser opener fails", async () => {
+    const browserErrors: string[] = [];
+    const server = createServer((request, response) => {
+      if (request.url === "/login/device/code") {
+        sendJson(response, {
+          device_code: "device-123",
+          user_code: "USER-CODE",
+          verification_uri: `http://${request.headers.host}/device`,
+          expires_in: 60,
+          interval: 1,
+        });
+        return;
+      }
+      if (request.url === "/login/oauth/access_token") {
+        sendJson(response, {
+          access_token: "oauth-secret-token",
+          token_type: "bearer",
+          scope: "",
+        });
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Unable to bind server");
+
+    try {
+      const token = await new GitHubOAuthDeviceFlow({
+        enterpriseUrl: `http://127.0.0.1:${address.port}`,
+        openBrowser: async () => {
+          throw new Error("no browser");
+        },
+        onBrowserOpenError: (error) => browserErrors.push(error.message),
+      }).authorize({ clientId: "client-123" });
+
+      expect(token.accessToken).toBe("oauth-secret-token");
+      expect(browserErrors).toEqual(["no browser"]);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it("does not wait for the browser opener to finish before polling for the token", async () => {
+    const requests: string[] = [];
+    let releaseBrowserOpen: (() => void) | undefined;
+    const browserOpened = new Promise<void>((resolve) => {
+      releaseBrowserOpen = resolve;
+    });
+    const server = createServer((request, response) => {
+      requests.push(`${request.method ?? "GET"} ${request.url ?? ""}`);
+      if (request.url === "/login/device/code") {
+        sendJson(response, {
+          device_code: "device-123",
+          user_code: "USER-CODE",
+          verification_uri: `http://${request.headers.host}/device`,
+          expires_in: 60,
+          interval: 1,
+        });
+        return;
+      }
+      if (request.url === "/login/oauth/access_token") {
+        sendJson(response, {
+          access_token: "oauth-secret-token",
+          token_type: "bearer",
+          scope: "",
+        });
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Unable to bind server");
+
+    try {
+      const authorizePromise = new GitHubOAuthDeviceFlow({
+        enterpriseUrl: `http://127.0.0.1:${address.port}`,
+        openBrowser: async () => browserOpened,
+      }).authorize({ clientId: "client-123" });
+
+      await expect(authorizePromise).resolves.toMatchObject({
+        accessToken: "oauth-secret-token",
+      });
+      expect(requests).toEqual([
+        "POST /login/device/code",
+        "POST /login/oauth/access_token",
+      ]);
+    } finally {
+      releaseBrowserOpen?.();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 });
 
