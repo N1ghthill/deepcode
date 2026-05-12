@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { ModelInfo, ProviderId } from "@deepcode/shared";
+import { t } from "../i18n/index.js";
 
 interface UseModelsResult {
   models: ModelInfo[];
@@ -65,7 +66,7 @@ export function useModels(providerId: ProviderId, provider: ModelProvider | null
   const fetchModels = useCallback(async () => {
     if (!provider) {
       if (mountedRef.current) {
-        setError("Provider not available");
+        setError(t("modelsProviderNotAvailable"));
       }
       return;
     }
@@ -111,9 +112,9 @@ export function useModels(providerId: ProviderId, provider: ModelProvider | null
       if (!mountedRef.current) return;
       const isAbort = err instanceof Error && err.name === "AbortError";
       if (isAbort) {
-        setError("Request timed out");
+        setError(t("modelsRequestTimedOut"));
       } else {
-        setError(err instanceof Error ? err.message : "Failed to fetch models");
+        setError(err instanceof Error ? err.message : t("modelsFailedToFetch"));
       }
     } finally {
       clearTimeout(timeout);
@@ -154,7 +155,7 @@ export function useModelCatalog(entries: ModelCatalogProviderEntry[]): UseModelC
       if (mountedRef.current) {
         setModels([]);
         setProviderErrors({});
-        setError("Nenhum provider configurado com credencial.");
+        setError(t("modelsNoProviderWithCredential"));
         setLastUpdated(null);
         setLoading(false);
       }
@@ -202,10 +203,10 @@ export function useModelCatalog(entries: ModelCatalogProviderEntry[]): UseModelC
         } catch (err) {
           const isAbort = err instanceof Error && err.name === "AbortError";
           nextErrors[entry.id] = isAbort
-            ? "Request timed out"
+            ? t("modelsRequestTimedOut")
             : err instanceof Error
               ? err.message
-              : "Failed to fetch models";
+              : t("modelsFailedToFetch");
         } finally {
           clearTimeout(timeout);
         }
@@ -234,9 +235,9 @@ export function useModelCatalog(entries: ModelCatalogProviderEntry[]): UseModelC
       setError(null);
     } else if (Object.keys(nextErrors).length > 0) {
       const [firstProviderId] = Object.keys(nextErrors) as ProviderId[];
-      setError(firstProviderId ? `${firstProviderId}: ${nextErrors[firstProviderId]}` : "Falha ao carregar modelos.");
+      setError(firstProviderId ? `${firstProviderId}: ${nextErrors[firstProviderId]}` : t("modelsFailedToLoad"));
     } else {
-      setError("Nenhum modelo disponível.");
+      setError(t("modelsNoModelsAvailable"));
     }
 
     setLoading(false);

@@ -71,7 +71,7 @@ export class ConfigLoader {
           apiKey:
             parseOptionalString(process.env.OPENAI_API_KEY) ??
             rawFile.providers?.openai?.apiKey ??
-            await this.readSecretFile(openaiApiKeyFile, cwd, ["openai", "openia", "OPENAI_API_KEY"]),
+            await this.readSecretFile(openaiApiKeyFile, cwd, ["openai", "OPENAI_API_KEY"]),
         },
         deepseek: {
           ...rawFile.providers?.deepseek,

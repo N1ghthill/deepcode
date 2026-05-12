@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { ThemeColors } from "../../themes.js";
 import type { SessionStats } from "@deepcode/core";
+import { t } from "../../i18n/index.js";
 
 export interface TelemetrySidebarProps {
   theme: ThemeColors;
@@ -41,57 +42,57 @@ export function TelemetrySidebar({
   if (!stats) {
     return (
       <Box flexDirection="column">
-        <Text color={theme.fgMuted}>Sem dados de telemetria.</Text>
+        <Text color={theme.fgMuted}>{t("telemetrySidebarNoData")}</Text>
       </Box>
     );
   }
 
   return (
     <Box flexDirection="column">
-      <Text bold color={theme.accent}>Resumo</Text>
+      <Text bold color={theme.accent}>{t("telemetrySummary")}</Text>
       <Text color={theme.fgMuted}>
-        Provider: {stats.provider}
+        {t("telemetryProviderLabel")}{stats.provider}
       </Text>
       <Text color={theme.fgMuted}>
-        Modelo: {stats.model || "não configurado"}
+        {t("telemetryModelLabel")}{stats.model || t("notConfigured")}
       </Text>
       <Text color={theme.fgMuted}>
-        Duração: {formatDuration(stats.duration)}
-      </Text>
-      <Text> </Text>
-
-      <Text bold color={theme.accent}>Tokens</Text>
-      <Text color={theme.fgMuted}>
-        Input:  {formatTokens(stats.inputTokens)}
-      </Text>
-      <Text color={theme.fgMuted}>
-        Output: {formatTokens(stats.outputTokens)}
+        {t("telemetryDurationLabel")}{formatDuration(stats.duration)}
       </Text>
       <Text> </Text>
 
-      <Text bold color={theme.success}>Custo</Text>
+      <Text bold color={theme.accent}>{t("telemetrySidebarTokens")}</Text>
+      <Text color={theme.fgMuted}>
+        {t("telemetryInputLabel")}{formatTokens(stats.inputTokens)}
+      </Text>
+      <Text color={theme.fgMuted}>
+        {t("telemetryOutputLabel")}{formatTokens(stats.outputTokens)}
+      </Text>
+      <Text> </Text>
+
+      <Text bold color={theme.success}>{t("telemetrySidebarCost")}</Text>
       <Text color={theme.success}>
         ${(stats.estimatedCost ?? 0).toFixed(4)}
       </Text>
       <Text> </Text>
 
-      <Text bold color={theme.fgMuted}>Tool Calls</Text>
+      <Text bold color={theme.fgMuted}>{t("telemetryToolCalls")}</Text>
       <Text color={theme.fgMuted}>
-        Total: {stats.toolCalls}
+        {t("totalLabel")}{stats.toolCalls}
       </Text>
       {stats.errorCount > 0 && (
         <>
           <Text> </Text>
-          <Text bold color={theme.error}>Erros</Text>
+          <Text bold color={theme.error}>{t("telemetryErrors")}</Text>
           <Text color={theme.error}>
-            Total: {stats.errorCount}
+            {t("totalLabel")}{stats.errorCount}
           </Text>
         </>
       )}
       {toolBreakdown && Object.keys(toolBreakdown).length > 0 && (
         <>
           <Text> </Text>
-          <Text bold color={theme.fgMuted}>Breakdown</Text>
+          <Text bold color={theme.fgMuted}>{t("telemetrySidebarBreakdown")}</Text>
           {Object.entries(toolBreakdown)
             .sort(([, a], [, b]) => b - a)
             .slice(0, 5)

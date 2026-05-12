@@ -12,11 +12,6 @@ import {
 import {
   collectSecretValues,
   redactText,
-  type ApprovalRequest,
-  ConfigLoader,
-  GitHubClient,
-  GitHubOAuthDeviceFlow,
-  loginWithGitHubCli,
   TelemetryCollector,
   type TaskPlan,
 } from "@deepcode/core";
@@ -41,6 +36,11 @@ import {
   useProviderStatus,
   EMPTY_PROVIDER_STATUS,
   getScopedProviderStatus,
+  useGithubOAuth,
+  useApprovalFlow,
+  useConfigEditor,
+  useSessionManager,
+  useLiveMetrics,
 } from "./hooks/index.js";
 import { UIStateManager, type RecentModelSelection, type UIState } from "./persistence/ui-state.js";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary.js";
@@ -56,10 +56,7 @@ import {
   CONFIG_FIELDS,
   PROVIDER_IDS,
   PROVIDER_LABELS,
-  type ConfigFieldDef,
-  type GithubOAuthState,
 } from "./app-config.js";
-import { truncate } from "./utils/truncate.js";
 import {
   buildProviderHealthCheck,
   cloneTaskPlan,
@@ -74,13 +71,9 @@ import {
   getSlashMenuAction,
   isSidebarHotkeysEnabled,
   isSlashCommandInput,
-  parseConfigEditValue,
-  parseGithubLoginClientId,
   recordAgentRunError,
-  resolveLaunchSessionTarget,
   selectInitialSessionForLaunch,
   serializeConfigEditValue,
-  syncLegacyDefaultModel,
 } from "./app-utils.js";
 import {
   ApprovalPanel,
@@ -93,74 +86,79 @@ import {
   SessionSwitcher,
   SlashCommandMenu,
 } from "./components/views/AppPanels.js";
+import { t, setLanguage } from "./i18n/index.js";
 
 export function App(props: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
+
   const [runtime, setRuntime] = useState<DeepCodeRuntime | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
-  const [history, setHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [assistantDraft, setAssistantDraft] = useState("");
   const [status, setStatus] = useState("loading");
-  const [notice, setNotice] = useState("Ctrl+Q sai. Ctrl+H ajuda. Ctrl+O sessões. Ctrl+P providers. Ctrl+M modelos. Ctrl+T telemetria. Esc modo normal. Tab alterna modo. Ctrl+C cancela execução.");
+  const [notice, setNotice] = useState(t("initialNotice"));
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("chat");
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
-  const [configEditIndex, setConfigEditIndex] = useState(0);
-  const [configEditValue, setConfigEditValue] = useState("");
-  const [editingConfig, setEditingConfig] = useState(false);
-  const [configSaveStatus, setConfigSaveStatus] = useState<string | null>(null);
-  const [toolCalls, setToolCalls] = useState<Array<{ id: string; name: string; args: string; result?: string }>>([]);
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [vimMode, setVimMode] = useState<VimMode>("insert");
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("sessions");
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [agentMode, setAgentMode] = useState<AgentMode>("build");
-  const abortRef = useRef<AbortController | null>(null);
-  const [telemetryCollector, setTelemetryCollector] = useState<TelemetryCollector | null>(null);
-  const telemetryRef = useRef<TelemetryCollector | null>(null);
-  const uiStateRef = useRef<UIStateManager | null>(null);
-  const [telemetryExportStatus, setTelemetryExportStatus] = useState<'idle' | 'exporting' | 'success' | 'error'>('idle');
-  const [lastExportPath, setLastExportPath] = useState<string | null>(null);
   const [showInputPreview, setShowInputPreview] = useState(false);
   const [pendingInput, setPendingInput] = useState("");
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
-  const activeSessionIdRef = useRef<string | null>(null);
-  const githubOAuthAbortRef = useRef<AbortController | null>(null);
-  const [githubOAuth, setGithubOAuth] = useState<GithubOAuthState>({ status: "idle" });
   const [currentPlan, setCurrentPlan] = useState<TaskPlan | undefined>();
   const [recentModels, setRecentModels] = useState<RecentModelSelection[]>([]);
-  const [liveTokens, setLiveTokens] = useState({ input: 0, output: 0, cost: 0 });
-  const liveTokensRef = useRef({ input: 0, output: 0, cost: 0, startedAt: 0 });
-  const [elapsed, setElapsed] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
+  const telemetryRef = useRef<TelemetryCollector | null>(null);
+  const uiStateRef = useRef<UIStateManager | null>(null);
+  const [toolCalls, setToolCalls] = useState<Array<{ id: string; name: string; args: string; result?: string }>>([]);
   const [toolExecuting, setToolExecuting] = useState(false);
-  const liveIntervalRef = useRef<ReturnType<typeof globalThis.setInterval> | null>(null);
   const [phase, setPhase] = useState("");
   const [iteration, setIteration] = useState({ current: 0, max: 0 });
+  const [telemetryCollector, setTelemetryCollector] = useState<TelemetryCollector | null>(null);
+  const [telemetryExportStatus, setTelemetryExportStatus] = useState<"idle" | "exporting" | "success" | "error">("idle");
+  const [lastExportPath, setLastExportPath] = useState<string | null>(null);
 
-  const activateTelemetrySession = useCallback((
-    targetSession: Pick<Session, "id" | "provider" | "model">,
-    finalizePrevious = true,
-  ) => {
-    const previousSessionId = activeSessionIdRef.current;
-    activeSessionIdRef.current = targetSession.id;
-
-    const collector = telemetryRef.current;
-    if (!collector) {
-      return;
-    }
-
-    if (finalizePrevious && previousSessionId && previousSessionId !== targetSession.id) {
-      void collector.finalizeSession(previousSessionId);
-    }
-
-    void collector.createSession(targetSession.id, targetSession.provider, targetSession.model || "unknown");
+  const applyUpdatedConfig = useCallback((activeRuntime: DeepCodeRuntime, updatedConfig: DeepCodeRuntime["config"]) => {
+    Object.assign(activeRuntime.config, updatedConfig);
+    activeRuntime.providers.reload(activeRuntime.config);
+    setRuntime((prev) => (prev ? { ...prev, config: activeRuntime.config } : prev));
   }, []);
+
+  const handleSessionUpdate = useCallback((next: Session, extras?: {
+    messages?: Message[];
+    activities?: Activity[];
+    toolCalls?: Array<{ id: string; name: string; args: string; result?: string }>;
+    status?: string;
+    currentPlan?: TaskPlan | undefined;
+    viewMode?: ViewMode;
+    vimMode?: VimMode;
+    assistantDraft?: string;
+  }) => {
+    setSession(next);
+    if (extras?.messages !== undefined) setMessages(extras.messages);
+    if (extras?.activities !== undefined) setActivities(extras.activities);
+    if (extras?.toolCalls !== undefined) setToolCalls(extras.toolCalls);
+    if (extras?.status !== undefined) setStatus(extras.status);
+    if (extras?.currentPlan !== undefined) setCurrentPlan(extras.currentPlan);
+    if (extras?.viewMode !== undefined) setViewMode(extras.viewMode);
+    if (extras?.vimMode !== undefined) setVimMode(extras.vimMode);
+    if (extras?.assistantDraft !== undefined) setAssistantDraft(extras.assistantDraft);
+  }, []);
+
+  const { githubOAuth, abortRef: githubOAuthAbortRef, startGithubLogin, cancelOAuth } = useGithubOAuth({ cwd: props.cwd, configPath: props.config, setNotice, applyUpdatedConfig });
+  const { approvals, setApprovals, resolveApproval } = useApprovalFlow();
+  const { configEditIndex, setConfigEditIndex, configEditValue, setConfigEditValue, editingConfig, setEditingConfig, configSaveStatus, saveConfigEdit, saveConfigPatch, resetEditor } = useConfigEditor({ cwd: props.cwd, configPath: props.config, applyUpdatedConfig });
+  const { activateTelemetrySession, createNewSession, switchSession } = useSessionManager({ telemetryRef, activeSessionIdRef, onUpdateSession: handleSessionUpdate });
+  const { liveTokens, elapsed, resetMetrics, recordTokenUsage } = useLiveMetrics(streaming);
 
   useEffect(() => {
     if (!stdout.isTTY) return;
@@ -177,11 +175,11 @@ export function App(props: AppProps) {
       .then(async (created) => {
         if (!mounted) return;
 
-        // Initialize UI state manager
+        setLanguage(created.config.tui.language);
+
         const uiStateManager = new UIStateManager(props.cwd);
         uiStateRef.current = uiStateManager;
 
-        // Try to restore UI state
         const savedState = await uiStateManager.load();
         if (savedState) {
           setViewMode(savedState.viewMode);
@@ -193,7 +191,6 @@ export function App(props: AppProps) {
           setRecentModels(savedState.modals.recentModels ?? []);
         }
 
-        // Initialize telemetry
         const collector = new TelemetryCollector({ worktree: props.cwd });
         await collector.init();
         setTelemetryCollector(collector);
@@ -232,7 +229,7 @@ export function App(props: AppProps) {
           setApprovals((current) => [...current, request]);
           setStatus("awaiting approval");
           setNotice(
-            `Aprovação pendente: ${redactText(request.operation, collectSecretValues(created.config))}`,
+            t("approvalPending", { operation: redactText(request.operation, collectSecretValues(created.config)) }),
           );
         });
         const offError = created.events.on("app:error", ({ error }) => {
@@ -247,9 +244,8 @@ export function App(props: AppProps) {
           offActivity();
           offApproval();
           offError();
-          // Reject all pending approvals when session ends
           created.permissions.rejectAllPending("Session ended");
-          runtime.permissions.clearSessionAllowSet();
+          created.permissions.clearSessionAllowSet();
           if (activeSessionIdRef.current) {
             void collector.finalizeSession(activeSessionIdRef.current);
           }
@@ -270,7 +266,7 @@ export function App(props: AppProps) {
       mounted = false;
       cleanupRuntime?.();
     };
-  }, [activateTelemetrySession, props.cwd, props.config]);
+  }, [activateTelemetrySession, props.cwd, props.config, setApprovals]);
 
   const theme = useMemo(() => (runtime ? getTheme(runtime.config.tui.theme) : getTheme("dark")), [runtime?.config.tui.theme]);
   const { statuses, checkStatus } = useProviderStatus();
@@ -360,43 +356,6 @@ export function App(props: AppProps) {
     }
   }, [currentPlan, sidebarTab]);
 
-  // Live metrics: flush accumulator + compute elapsed every 250ms during execution
-  useEffect(() => {
-    if (!streaming) {
-      if (liveIntervalRef.current) {
-        globalThis.clearInterval(liveIntervalRef.current);
-        liveIntervalRef.current = null;
-      }
-      return;
-    }
-
-    liveIntervalRef.current = globalThis.setInterval(() => {
-      const acc = liveTokensRef.current;
-      if (acc.startedAt > 0) {
-        setElapsed(Date.now() - acc.startedAt);
-      }
-      setLiveTokens({
-        input: acc.input,
-        output: acc.output,
-        cost: acc.cost,
-      });
-    }, 250);
-
-    return () => {
-      if (liveIntervalRef.current) {
-        globalThis.clearInterval(liveIntervalRef.current);
-        liveIntervalRef.current = null;
-      }
-    };
-  }, [streaming]);
-
-  function applyUpdatedConfig(activeRuntime: DeepCodeRuntime, updatedConfig: DeepCodeRuntime["config"]): void {
-    Object.assign(activeRuntime.config, updatedConfig);
-    activeRuntime.providers.reload(activeRuntime.config);
-    setRuntime((prev) => (prev ? { ...prev, config: activeRuntime.config } : prev));
-  }
-
-  // Helper function to save UI state
   const saveUIState = useCallback(() => {
     if (!uiStateRef.current || !session) return;
     const stateToSave: UIState = {
@@ -416,7 +375,6 @@ export function App(props: AppProps) {
   }, [session, viewMode, sidebarTab, agentMode, vimMode, selectedSessionIndex, history, recentModels]);
 
   useInput((inputChar, key) => {
-    // ===== NÍVEL 0: Comandos de emergência (sempre funcionam) =====
     if (key.ctrl && inputChar === "q") {
       saveUIState();
       abortRef.current?.abort();
@@ -426,20 +384,13 @@ export function App(props: AppProps) {
     }
 
     if (key.ctrl && inputChar === "c") {
-      if (githubOAuthAbortRef.current) {
-        githubOAuthAbortRef.current.abort();
-        githubOAuthAbortRef.current = null;
-        setGithubOAuth((current) => ({
-          ...current,
-          status: "cancelled",
-          message: "GitHub OAuth cancelado.",
-        }));
-        setNotice("GitHub OAuth cancelado.");
+      if (githubOAuth.status !== "idle") {
+        cancelOAuth();
       } else if (streaming) {
         abortRef.current?.abort();
         setStreaming(false);
         setStatus("cancelled");
-        setNotice("Execução cancelada.");
+        setNotice(t("executionCancelled"));
       } else {
         exit();
       }
@@ -448,63 +399,51 @@ export function App(props: AppProps) {
 
     if (!runtime || !session) return;
 
-    // ===== NÍVEL 1: GitHub OAuth em andamento (bloqueia quase tudo) =====
     if (githubOAuthAbortRef.current || githubOAuth.status === "waiting") {
       if (key.escape) {
-        githubOAuthAbortRef.current?.abort();
-        githubOAuthAbortRef.current = null;
-        setGithubOAuth({ status: "idle" });
-        setNotice("GitHub OAuth cancelado.");
+        cancelOAuth();
         return;
       }
-      // Retry
       if (inputChar?.toLowerCase() === "r") {
-        void startGithubLogin("/github-login", runtime);
+        void startGithubLogin("/github-login", runtime, session);
         return;
       }
-      // Durante OAuth, bloquear todos os outros comandos
       return;
     }
 
-    // ===== NÍVEL 2: Modal aberto (bloqueia atalhos globais) =====
     if (activeModal) {
       if (key.escape) {
         setActiveModal(null);
-        setNotice("Modal fechado.");
+        setNotice(t("modalClosed"));
         return;
       }
-      // NÃO permitir abrir outros modais ou mudar view mode
-      // Cada modal processa suas próprias teclas internamente
       return;
     }
 
-    // ===== NÍVEL 3: Aprovação pendente (bloqueia interface) =====
     if (approvals.length > 0) {
       if (inputChar?.toLowerCase() === "a") {
-        resolveApproval(runtime, approvals[0], true, "once");
+        resolveApproval(runtime, approvals[0], true, "once", { setNotice, setStatus });
         return;
       }
       if (inputChar?.toLowerCase() === "l") {
-        resolveApproval(runtime, approvals[0], true, "always");
+        resolveApproval(runtime, approvals[0], true, "always", { setNotice, setStatus });
         return;
       }
       if (inputChar?.toLowerCase() === "s") {
-        resolveApproval(runtime, approvals[0], true, "session");
+        resolveApproval(runtime, approvals[0], true, "session", { setNotice, setStatus });
         return;
       }
       if (inputChar?.toLowerCase() === "d" || inputChar?.toLowerCase() === "n") {
-        resolveApproval(runtime, approvals[0], false);
+        resolveApproval(runtime, approvals[0], false, "once", { setNotice, setStatus });
         return;
       }
       if (key.escape) {
-        resolveApproval(runtime, approvals[0], false);
+        resolveApproval(runtime, approvals[0], false, "once", { setNotice, setStatus });
         return;
       }
-      // Bloquear outros comandos enquanto aguarda aprovação
       return;
     }
 
-    // ===== NÍVEL 4: Input Preview =====
     if (showInputPreview) {
       if (key.escape || key.return) {
         setShowInputPreview(false);
@@ -513,7 +452,6 @@ export function App(props: AppProps) {
       return;
     }
 
-    // ===== NÍVEL 5: View Modes específicos =====
     if (viewMode === "sessions") {
       const sessionList = runtime.sessions.list();
       if (key.upArrow) {
@@ -529,14 +467,16 @@ export function App(props: AppProps) {
       if (key.return) {
         const selected = sessionList[selectedSessionIndex];
         if (selected) {
-          switchSession(selected);
+          switchSession(selected, runtime);
+          setApprovals([]);
+          setNotice(t("activeSession", { id: selected.id }));
         }
         return;
       }
       if (key.escape) {
         setViewMode("chat");
         setVimMode("insert");
-        setNotice("Chat ativo.");
+        setNotice(t("chatActive"));
         return;
       }
       return;
@@ -598,7 +538,7 @@ export function App(props: AppProps) {
       if (key.escape) {
         setViewMode("chat");
         setVimMode("insert");
-        setNotice("Chat ativo.");
+        setNotice(t("chatActive"));
         return;
       }
       return;
@@ -608,18 +548,15 @@ export function App(props: AppProps) {
       if (key.escape || key.return || inputChar?.toLowerCase() === "q") {
         setViewMode("chat");
         setVimMode("insert");
-        setNotice("Chat ativo.");
+        setNotice(t("chatActive"));
       }
       return;
     }
 
-    // ===== NÍVEL 6: Chat Normal (atalhos globais) =====
-    // Só chega aqui se estiver em viewMode === "chat" e sem modais/aprovações
-
     if (key.ctrl && inputChar === "h") {
       setViewMode("help");
       setVimMode("normal");
-      setNotice("Ajuda aberta. Pressione Q ou Escape para voltar.");
+      setNotice(t("helpOpenedEscapeToReturn"));
       return;
     }
 
@@ -627,30 +564,32 @@ export function App(props: AppProps) {
       setSelectedSessionIndex(0);
       setViewMode("sessions");
       setVimMode("normal");
-      setNotice("Selecione uma sessão com ↑/↓ e Enter. Escape para voltar.");
+      setNotice(t("selectSessionEscapeToReturn"));
       return;
     }
 
     if (key.ctrl && inputChar === "n") {
-      createNewSession(runtime);
+      const newSession = createNewSession(runtime, agentMode);
+      setApprovals([]);
+      setNotice(t("newSession", { id: newSession.id }));
       return;
     }
 
     if (key.ctrl && inputChar === "p") {
       setActiveModal("provider");
-      setNotice("Modal de providers aberto. Escape para fechar.");
+      setNotice(t("providerModalOpenedEscapeToClose"));
       return;
     }
 
     if (key.ctrl && inputChar === "m") {
       setActiveModal("model");
-      setNotice(`Seletor de modelos do modo ${agentMode.toUpperCase()} aberto. Escape para fechar, Enter para selecionar.`);
+      setNotice(t("modelSelectorOpenedEscapeToClose", { mode: agentMode.toUpperCase() }));
       return;
     }
 
     if (key.ctrl && inputChar === "t") {
       setActiveModal("telemetry");
-      setNotice("Painel de telemetria aberto. Escape para fechar.");
+      setNotice(t("appTelemetryPanelOpened"));
       return;
     }
 
@@ -660,15 +599,14 @@ export function App(props: AppProps) {
         const nextSelection = runtime && session ? resolveEffectiveModeSelection(runtime.config, session, next) : null;
         setNotice(
           nextSelection
-            ? `Modo alterado para ${next.toUpperCase()} com ${formatModelSelection(nextSelection)}.`
-            : `Modo alterado para ${next.toUpperCase()}.`,
+            ? t("modeChangedWithModel", { mode: next.toUpperCase(), model: formatModelSelection(nextSelection) })
+            : t("modeChanged", { mode: next.toUpperCase() }),
         );
         return next;
       });
       return;
     }
 
-    // ===== NÍVEL 7: Chat input normal =====
     if (streaming) return;
 
     if (viewMode === "chat" && vimMode === "normal") {
@@ -691,8 +629,8 @@ export function App(props: AppProps) {
       setVimMode("normal");
       setNotice(
         input.trim().length === 0
-          ? "Modo NORMAL ativo. Use 1-4 para abas laterais ou i para inserir."
-          : "Modo NORMAL ativo. Pressione i para continuar editando a mensagem.",
+          ? t("normalModeActiveInsert")
+          : t("normalModeActiveContinueEditing"),
       );
       return;
     }
@@ -710,7 +648,7 @@ export function App(props: AppProps) {
         setSelectedSlashCommandIndex(slashMenuAction.selectedIndex);
       } else if (slashMenuAction.type === "close") {
         setInput("");
-        setNotice("Comando cancelado.");
+        setNotice(t("commandCancelled"));
       } else {
         setInput("");
         handleCommand(slashMenuAction.command, runtime);
@@ -764,85 +702,6 @@ export function App(props: AppProps) {
     }
   });
 
-  async function saveConfigEdit(
-    activeRuntime: DeepCodeRuntime,
-    field: ConfigFieldDef,
-    value: string,
-  ): Promise<void> {
-    try {
-      const { ConfigLoader } = await import("@deepcode/core");
-      const loader = new ConfigLoader();
-      const fileConfig = await loader.loadFile({ cwd: props.cwd, configPath: props.config });
-      const currentValue = getConfigValue(fileConfig, field.key);
-
-      let parsed = parseConfigEditValue(value, currentValue, field.type);
-      if (field.type === "number") {
-        if (typeof parsed !== "number" || !Number.isFinite(parsed)) {
-          setConfigSaveStatus("Valor inválido");
-          setEditingConfig(false);
-          return;
-        }
-      }
-
-      const keys = field.key.split(".");
-      const mutable = JSON.parse(JSON.stringify(fileConfig)) as Record<string, unknown>;
-      let obj: Record<string, unknown> = mutable;
-      for (let i = 0; i < keys.length - 1; i += 1) {
-        const key = keys[i];
-        if (key) {
-          if (!(key in obj) || typeof obj[key] !== "object" || obj[key] === null) {
-            obj[key] = {};
-          }
-          obj = obj[key] as Record<string, unknown>;
-        }
-      }
-      const lastKey = keys[keys.length - 1];
-      if (lastKey) {
-        if (
-          field.key.startsWith("defaultModels.")
-          && typeof parsed === "string"
-          && parsed.trim().length === 0
-        ) {
-          delete obj[lastKey];
-        } else {
-          obj[lastKey] = parsed;
-        }
-      }
-
-      if (field.key === "defaultProvider" || field.key.startsWith("defaultModels.")) {
-        syncLegacyDefaultModel(mutable);
-      }
-
-      await loader.save({ cwd: props.cwd, configPath: props.config }, mutable as any);
-
-      const updatedConfig = await loader.load({ cwd: props.cwd, configPath: props.config });
-      applyUpdatedConfig(activeRuntime, updatedConfig);
-
-      setConfigSaveStatus(`${field.label} atualizado`);
-      setEditingConfig(false);
-      setConfigEditValue("");
-      setTimeout(() => setConfigSaveStatus(null), 3000);
-    } catch (err) {
-      setConfigSaveStatus(`Erro: ${err instanceof Error ? err.message : String(err)}`);
-      setEditingConfig(false);
-    }
-  }
-
-  async function saveConfigPatch(
-    activeRuntime: DeepCodeRuntime,
-    mutate: (mutable: Record<string, unknown>) => void,
-  ): Promise<DeepCodeRuntime["config"]> {
-    const loader = new ConfigLoader();
-    const loadOptions = { cwd: props.cwd, configPath: props.config };
-    const fileConfig = await loader.loadFile(loadOptions);
-    const mutable = JSON.parse(JSON.stringify(fileConfig)) as Record<string, unknown>;
-    mutate(mutable);
-    await loader.save(loadOptions, mutable as any);
-    const updatedConfig = await loader.load(loadOptions);
-    applyUpdatedConfig(activeRuntime, updatedConfig);
-    return updatedConfig;
-  }
-
   async function submitInput(
     prompt: string,
     activeRuntime: DeepCodeRuntime,
@@ -877,15 +736,13 @@ export function App(props: AppProps) {
     setStreaming(true);
     setAssistantDraft("");
     setStatus("executing");
-    setNotice("Executando tarefa...");
+    setNotice(t("executingTask"));
     setToolCalls([]);
     setCurrentPlan(undefined);
-    setElapsed(0);
     setToolExecuting(false);
     setPhase("planning");
     setIteration({ current: 0, max: 0 });
-    liveTokensRef.current = { input: 0, output: 0, cost: 0, startedAt: Date.now() };
-    setLiveTokens({ input: 0, output: 0, cost: 0 });
+    resetMetrics();
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -910,9 +767,7 @@ export function App(props: AppProps) {
       },
       onUsage: (inputTokens, outputTokens) => {
         const cost = (inputTokens / 1000) * modelPricing.inputPer1k + (outputTokens / 1000) * modelPricing.outputPer1k;
-        liveTokensRef.current.input += inputTokens;
-        liveTokensRef.current.output += outputTokens;
-        liveTokensRef.current.cost += cost;
+        recordTokenUsage(inputTokens, outputTokens, cost);
         telemetryRef.current?.recordTokenUsage(
           activeSession.id,
           inputTokens,
@@ -929,7 +784,7 @@ export function App(props: AppProps) {
         const nextPlan = cloneTaskPlan(plan);
         activeSession.metadata.plan = nextPlan;
         setCurrentPlan(nextPlan);
-        const progress = plan.tasks.filter((t) => t.status === "completed").length;
+        const progress = plan.tasks.filter((task) => task.status === "completed").length;
         setPhase(`task ${progress + 1}/${plan.tasks.length}`);
         setIteration({ current: progress + 1, max: plan.tasks.length });
       },
@@ -944,9 +799,9 @@ export function App(props: AppProps) {
       setCurrentPlan(extractTaskPlanFromSession(activeSession));
       const planError = activeSession.metadata?.planError as string | undefined;
       if (planError && !currentPlan) {
-        setNotice(`⚠ Planejamento falhou: ${planError}. Continuando sem plano estruturado.`);
+        setNotice(t("planningFailed", { error: planError }));
       } else {
-        setNotice("Tarefa concluída.");
+        setNotice(t("taskCompleted"));
       }
     } catch (err) {
       const message = await recordAgentRunError(activeRuntime, activeSession, err);
@@ -954,7 +809,7 @@ export function App(props: AppProps) {
       setActivities(activeSession.activities.slice(-10));
       setStatus("error");
       setCurrentPlan(extractTaskPlanFromSession(activeSession));
-      setNotice(`Erro: ${message}`);
+      setNotice(t("error", { message }));
     } finally {
       setStreaming(false);
       setAssistantDraft("");
@@ -970,44 +825,43 @@ export function App(props: AppProps) {
     if (name === "/help") {
       setViewMode("help");
       setVimMode("normal");
-      setNotice("Ajuda aberta.");
+      setNotice(t("helpOpened"));
       return;
     }
     if (name === "/clear") {
       setMessages([]);
       setAssistantDraft("");
-      setNotice("Tela limpa. A sessão continua salva.");
+      setNotice(t("screenCleared"));
       return;
     }
     if (name === "/new") {
-      createNewSession(activeRuntime);
+      const newSession = createNewSession(activeRuntime, agentMode);
+      setApprovals([]);
+      setNotice(t("newSession", { id: newSession.id }));
       return;
     }
     if (name === "/sessions") {
       setSelectedSessionIndex(0);
       setViewMode("sessions");
       setVimMode("normal");
-      setNotice("Selecione uma sessão com ↑/↓ e Enter.");
+      setNotice(t("selectSessionEscapeToReturn"));
       return;
     }
     if (name === "/config") {
-      setConfigEditIndex(0);
-      setEditingConfig(false);
-      setConfigEditValue("");
-      setConfigSaveStatus(null);
+      resetEditor();
       setViewMode("config");
       setVimMode("normal");
-      setNotice("Configuração: ↑/↓ ou j/k navega, Enter/i edita, Esc volta.");
+      setNotice(t("configNavigateEdit"));
       return;
     }
     if (name === "/provider" || name === "/providers") {
       setActiveModal("provider");
-      setNotice("Modal de providers aberto.");
+      setNotice(t("providerModalOpened"));
       return;
     }
     if (name === "/model" || name === "/models") {
       setActiveModal("model");
-      setNotice(`Seletor de modelos do modo ${agentMode.toUpperCase()} aberto.`);
+      setNotice(t("modelSelectorOpenedEscapeToClose", { mode: agentMode.toUpperCase() }));
       return;
     }
     if (name === "/mode") {
@@ -1019,333 +873,35 @@ export function App(props: AppProps) {
           : null;
         setNotice(
           nextSelection
-            ? `Modo alterado para ${value.toUpperCase()} com ${formatModelSelection(nextSelection)}.`
-            : `Modo alterado para ${value.toUpperCase()}.`,
+            ? t("modeChangedWithModel", { mode: value.toUpperCase(), model: formatModelSelection(nextSelection) })
+            : t("modeChanged", { mode: value.toUpperCase() }),
         );
         return;
       }
-      setNotice("Uso: /mode plan ou /mode build");
+      setNotice(t("modeUsage"));
       return;
     }
     if (name === "/github-login" || command.startsWith("/github login")) {
-      void startGithubLogin(command, activeRuntime);
+      void startGithubLogin(command, activeRuntime, session);
       return;
     }
-    setNotice(`Comando desconhecido: ${command}`);
-  }
-
-  function createNewSession(activeRuntime: DeepCodeRuntime): void {
-    const next = activeRuntime.sessions.create(resolveLaunchSessionTarget(activeRuntime.config, agentMode));
-    activateTelemetrySession(next);
-    setSession(next);
-    setMessages([]);
-    setActivities([]);
-    setApprovals([]);
-    setToolCalls([]);
-    setStatus(next.status);
-    setCurrentPlan(extractTaskPlanFromSession(next));
-    setViewMode("chat");
-    setVimMode("insert");
-    activeRuntime.permissions.clearSessionAllowSet();
-    setNotice(`Nova sessão: ${next.id}`);
-  }
-
-  function switchSession(next: Session): void {
-    // Clear any pending approvals from the previous session
-    setApprovals([]);
-    activateTelemetrySession(next);
-    setSession(next);
-    setMessages(next.messages);
-    setActivities(next.activities.slice(-10));
-    setApprovals([]);
-    setToolCalls([]);
-    setStatus(next.status);
-    setCurrentPlan(extractTaskPlanFromSession(next));
-    setAssistantDraft("");
-    setViewMode("chat");
-    setVimMode("insert");
-    runtime?.permissions.clearSessionAllowSet();
-    setNotice(`Sessão ativa: ${next.id}`);
-  }
-
-  async function startGithubLogin(command: string, activeRuntime: DeepCodeRuntime): Promise<void> {
-    if (!session) return;
-    if (githubOAuthAbortRef.current) {
-      setNotice("GitHub OAuth já está em andamento. Use Ctrl+C para cancelar.");
-      return;
-    }
-    const controller = new AbortController();
-    githubOAuthAbortRef.current = controller;
-    setGithubOAuth({ status: "opening", message: "Preparando GitHub OAuth..." });
-    try {
-      const explicitClientId = parseGithubLoginClientId(command);
-      const loader = new ConfigLoader();
-      const loadOptions = { cwd: props.cwd, configPath: props.config };
-      const fileConfig = await loader.loadFile(loadOptions);
-      const effectiveConfig = await loader.load(loadOptions);
-      const clientId = explicitClientId ?? effectiveConfig.github.oauthClientId;
-      if (!clientId) {
-        await startGithubCliLogin({
-          activeRuntime,
-          fileConfig,
-          effectiveConfig,
-          loader,
-          loadOptions,
-        });
-        return;
-      }
-      const token = await authorizeWithGitHubOAuthApp({
-        activeRuntime,
-        command,
-        clientId,
-        controller,
-        effectiveConfig,
-        explicitClientId,
-      });
-      setGithubOAuth((current) => ({
-        ...current,
-        status: "saving",
-        message: "Autorização recebida. Salvando token...",
-      }));
-      await validateGithubToken(effectiveConfig, token.accessToken);
-      await saveGithubToken({
-        activeRuntime,
-        fileConfig,
-        loader,
-        loadOptions,
-        token: token.accessToken,
-        oauthClientId: explicitClientId ?? fileConfig.github?.oauthClientId,
-        oauthScopes: effectiveConfig.github.oauthScopes,
-      });
-      setGithubOAuth((current) => ({
-        ...current,
-        status: "success",
-        message: "GitHub OAuth concluído e token salvo.",
-      }));
-      setNotice("GitHub OAuth concluído e token salvo.");
-    } catch (err) {
-      const message = redactText(
-        err instanceof Error ? err.message : String(err),
-        collectSecretValues(activeRuntime.config),
-      );
-      const cancelled = controller.signal.aborted || /cancelled|aborted/i.test(message);
-      setGithubOAuth((current) => ({
-        ...current,
-        status: cancelled ? "cancelled" : "error",
-        message: cancelled ? "GitHub OAuth cancelado." : message,
-      }));
-      setNotice(cancelled ? "GitHub OAuth cancelado." : `GitHub OAuth falhou: ${message}`);
-    } finally {
-      if (githubOAuthAbortRef.current === controller) {
-        githubOAuthAbortRef.current = null;
-      }
-    }
-  }
-
-  async function authorizeWithGitHubOAuthApp({
-    activeRuntime,
-    command,
-    clientId,
-    controller,
-    effectiveConfig,
-    explicitClientId,
-  }: {
-    activeRuntime: DeepCodeRuntime;
-    command: string;
-    clientId: string;
-    controller: AbortController;
-    effectiveConfig: DeepCodeRuntime["config"];
-    explicitClientId?: string;
-  }) {
-    const flow = new GitHubOAuthDeviceFlow({
-      enterpriseUrl: effectiveConfig.github.enterpriseUrl,
-      openBrowser: true,
-      signal: controller.signal,
-      onBrowserOpenError: (error) => {
-        setGithubOAuth((current) => ({
-          ...current,
-          browserError: error.message,
-        }));
-        setNotice("Não consegui abrir o navegador automaticamente. Use a URL/código exibidos.");
-      },
-    });
-    setNotice("Abrindo autenticação GitHub no navegador...");
-    return flow.authorize({
-      clientId,
-      scopes: effectiveConfig.github.oauthScopes,
-      onVerification: (code) => {
-        const expiresAt = new Date(Date.now() + code.expiresIn * 1000).toLocaleTimeString();
-        setGithubOAuth({
-          status: "waiting",
-          verificationUri: code.verificationUri,
-          userCode: code.userCode,
-          expiresAt,
-          message: "Aguardando autorização no GitHub.",
-        });
-        if (!session) return;
-        activeRuntime.sessions.addMessage(session.id, {
-          role: "assistant",
-          source: "ui",
-          content: [
-            "GitHub OAuth iniciado.",
-            `URL: ${code.verificationUri}`,
-            `Código: ${code.userCode}`,
-            `Expira às ${expiresAt}.`,
-            explicitClientId ? "OAuth app informado no comando." : "OAuth app carregado da configuração.",
-            command.startsWith("/github login") ? "Comando: /github login" : "Comando: /github-login",
-          ].join("\n"),
-        });
-        setMessages([...session.messages]);
-        setNotice(`GitHub OAuth: copie o código ${code.userCode} se o navegador não preencher automaticamente.`);
-      },
-      onPoll: ({ attempt }) => {
-        if (attempt === 1) setNotice("Aguardando autorização GitHub...");
-      },
-    });
-  }
-
-  async function startGithubCliLogin({
-    activeRuntime,
-    fileConfig,
-    effectiveConfig,
-    loader,
-    loadOptions,
-  }: {
-    activeRuntime: DeepCodeRuntime;
-    fileConfig: Awaited<ReturnType<ConfigLoader["loadFile"]>>;
-    effectiveConfig: DeepCodeRuntime["config"];
-    loader: ConfigLoader;
-    loadOptions: { cwd: string; configPath?: string };
-  }): Promise<void> {
-    setGithubOAuth({
-      status: "opening",
-      message: "Abrindo login do GitHub no navegador via GitHub CLI...",
-    });
-    setNotice("Abrindo login GitHub pelo navegador...");
-
-    const outputBuffer: string[] = [];
-    const token = await loginWithGitHubCli({
-      cwd: props.cwd,
-      enterpriseUrl: effectiveConfig.github.enterpriseUrl,
-      scopes: effectiveConfig.github.oauthScopes,
-      signal: githubOAuthAbortRef.current?.signal,
-      onOutput: (chunk) => {
-        outputBuffer.push(chunk);
-        const output = redactText(
-          outputBuffer.join("").replace(/\s+/g, " ").trim(),
-          collectSecretValues(activeRuntime.config),
-        );
-        setGithubOAuth({
-          status: "waiting",
-          message: output ? truncate(output, 220) : "Aguardando autorização no navegador.",
-        });
-      },
-    });
-
-    await validateGithubToken(effectiveConfig, token);
-    await saveGithubToken({
-      activeRuntime,
-      fileConfig,
-      loader,
-      loadOptions,
-      token,
-      oauthClientId: fileConfig.github?.oauthClientId,
-      oauthScopes: effectiveConfig.github.oauthScopes,
-    });
-    setGithubOAuth({
-      status: "success",
-      message: "GitHub login concluído via navegador e token salvo no DeepCode.",
-    });
-    setNotice("GitHub login concluído e token salvo.");
-  }
-
-  async function validateGithubToken(
-    effectiveConfig: DeepCodeRuntime["config"],
-    token: string,
-  ): Promise<void> {
-    const client = new GitHubClient({
-      token,
-      enterpriseUrl: effectiveConfig.github.enterpriseUrl,
-      worktree: props.cwd,
-    });
-    await client.getAuthenticatedUser();
-  }
-
-  async function saveGithubToken({
-    activeRuntime,
-    fileConfig,
-    loader,
-    loadOptions,
-    token,
-    oauthClientId,
-    oauthScopes,
-  }: {
-    activeRuntime: DeepCodeRuntime;
-    fileConfig: Awaited<ReturnType<ConfigLoader["loadFile"]>>;
-    loader: ConfigLoader;
-    loadOptions: { cwd: string; configPath?: string };
-    token: string;
-    oauthClientId?: string;
-    oauthScopes: string[];
-  }): Promise<void> {
-    await loader.save(loadOptions, {
-      ...fileConfig,
-      github: {
-        ...fileConfig.github,
-        token,
-        oauthClientId,
-        oauthScopes,
-      },
-    });
-    const updatedConfig = await loader.load(loadOptions);
-    applyUpdatedConfig(activeRuntime, updatedConfig);
-  }
-
-  function resolveApproval(
-    activeRuntime: DeepCodeRuntime,
-    request: ApprovalRequest | undefined,
-    allowed: boolean,
-    scope: "once" | "session" | "always" = "once",
-  ): void {
-    if (!request) return;
-    activeRuntime.events.emit("approval:decision", {
-      requestId: request.id,
-      decision: {
-        allowed,
-        scope: allowed ? scope : undefined,
-        reason: allowed
-          ? scope === "session"
-            ? "Approved for session from TUI"
-            : scope === "always"
-              ? "Approved permanently from TUI"
-              : "Approved from TUI"
-          : "Denied from TUI",
-      },
-    });
-    setApprovals((current) => current.filter((item) => item.id !== request.id));
-    setStatus(allowed ? "executing" : "denied");
-    const label = allowed
-      ? scope === "session" ? "Aprovado (sessão)" : scope === "always" ? "Aprovado (sempre)" : "Aprovado"
-      : "Negado";
-    setNotice(
-      `${label}: ${redactText(request.operation, collectSecretValues(activeRuntime.config))}`,
-    );
+    setNotice(t("unknownCommand", { command }));
   }
 
   async function handleExportTelemetry(): Promise<void> {
     if (!telemetryCollector || !session) return;
 
-    setTelemetryExportStatus('exporting');
+    setTelemetryExportStatus("exporting");
     try {
       const exportPath = await telemetryCollector.exportToJson(session.id);
       setLastExportPath(exportPath);
-      setTelemetryExportStatus('success');
-      setNotice(`Telemetria exportada para: ${exportPath}`);
-      setTimeout(() => setTelemetryExportStatus('idle'), 5000);
+      setTelemetryExportStatus("success");
+      setNotice(t("telemetryExported", { path: exportPath }));
+      setTimeout(() => setTelemetryExportStatus("idle"), 5000);
     } catch (err) {
-      setTelemetryExportStatus('error');
-      setNotice(`Erro ao exportar: ${err instanceof Error ? err.message : String(err)}`);
-      setTimeout(() => setTelemetryExportStatus('idle'), 5000);
+      setTelemetryExportStatus("error");
+      setNotice(t("exportError", { error: err instanceof Error ? err.message : String(err) }));
+      setTimeout(() => setTelemetryExportStatus("idle"), 5000);
     }
   }
 
@@ -1371,7 +927,7 @@ export function App(props: AppProps) {
     return (
       <Box flexDirection="column">
         <Text color={theme.error} bold>
-          DeepCode error
+          {t("appDeepCodeError")}
         </Text>
         <Text>{error}</Text>
       </Box>
@@ -1379,7 +935,7 @@ export function App(props: AppProps) {
   }
 
   if (!runtime || !session) {
-    return <Text>Carregando DeepCode...</Text>;
+    return <Text>{t("loadingDeepCode")}</Text>;
   }
 
   const activeApproval = approvals[0];
@@ -1390,7 +946,7 @@ export function App(props: AppProps) {
       header={
         <Header
           provider={activeModeSelection?.provider ?? currentProviderId}
-          model={activeModeSelection?.model || "não configurado"}
+          model={activeModeSelection?.model || t("notConfigured")}
           agentMode={agentMode}
           theme={theme}
           providerStatus={activeProviderStatus}
@@ -1411,7 +967,7 @@ export function App(props: AppProps) {
           currentApprovals={approvals}
           onTabChange={setSidebarTab}
           onApprovalAction={(requestId: string, allowed: boolean, scope: "once" | "session" | "always") => {
-            resolveApproval(runtime, approvals.find(a => a.id === requestId), allowed, scope);
+            resolveApproval(runtime, approvals.find(a => a.id === requestId), allowed, scope, { setNotice, setStatus });
           }}
           telemetryStats={telemetry.stats}
           telemetryBreakdown={telemetry.toolBreakdown}
@@ -1494,13 +1050,13 @@ export function App(props: AppProps) {
                   if (!next.model) {
                     setActiveModal("model");
                     setNotice(
-                      `Provider do modo ${agentMode.toUpperCase()} ativo: ${providerId}. Escolha um modelo para concluir a troca.`,
+                      t("providerForModeActiveChooseModel", { mode: agentMode.toUpperCase(), provider: providerId }),
                     );
                   } else {
-                    setNotice(`Provider do modo ${agentMode.toUpperCase()} ativo: ${providerId}`);
+                    setNotice(t("providerForModeActive", { mode: agentMode.toUpperCase(), provider: providerId }));
                   }
                 } catch (err) {
-                  setNotice(`Erro ao selecionar provider: ${err instanceof Error ? err.message : String(err)}`);
+                  setNotice(t("errorSelectingProvider", { error: err instanceof Error ? err.message : String(err) }));
                 }
               }}
               onTestConnection={async (providerId) => {
@@ -1511,9 +1067,9 @@ export function App(props: AppProps) {
                 setNotice(
                   result.online
                     ? healthCheck.modelUnderTest
-                      ? `Teste OK em ${label} com o modelo ${healthCheck.modelUnderTest}.`
-                      : `Teste OK em ${label}. Credencial e endpoint responderam; escolha um modelo para validar chat.`
-                    : `Falha ao testar ${label}: ${result.error ?? "erro desconhecido"}`,
+                      ? t("testOkWithModel", { label, model: healthCheck.modelUnderTest })
+                      : t("testOkChooseModel", { label })
+                    : t("testFailedLabel", { label, error: result.error ?? "unknown error" }),
                 );
               }}
               onUpdateApiKey={async (providerId, apiKey) => {
@@ -1525,9 +1081,9 @@ export function App(props: AppProps) {
                     providers[providerId] = provider;
                     mutable.providers = providers;
                   });
-                  setNotice(`API key atualizada para ${providerId}`);
+                  setNotice(t("apiKeyUpdated", { provider: providerId }));
                 } catch (err) {
-                  setNotice(`Erro ao atualizar API key: ${err instanceof Error ? err.message : String(err)}`);
+                  setNotice(t("errorUpdatingApiKey", { error: err instanceof Error ? err.message : String(err) }));
                 }
               }}
               onUpdateApiKeyFile={async (providerId, apiKeyFile) => {
@@ -1540,9 +1096,9 @@ export function App(props: AppProps) {
                     providers[providerId] = provider;
                     mutable.providers = providers;
                   });
-                  setNotice(`Arquivo de API key configurado para ${providerId}`);
+                  setNotice(t("apiKeyFileConfigured", { provider: providerId }));
                 } catch (err) {
-                  setNotice(`Erro ao salvar arquivo de API key: ${err instanceof Error ? err.message : String(err)}`);
+                  setNotice(t("errorSavingApiKeyFile", { error: err instanceof Error ? err.message : String(err) }));
                 }
               }}
             />
@@ -1588,9 +1144,9 @@ export function App(props: AppProps) {
                     void telemetryRef.current?.createSession(next.id, next.provider, next.model || "unknown");
                     setSession(runtime.sessions.get(session.id));
                     setActiveModal(null);
-                    setNotice(`Modelo do modo ${agentMode.toUpperCase()}: ${formatModelSelection(selection)}`);
+                    setNotice(t("modelForMode", { mode: agentMode.toUpperCase(), model: formatModelSelection(selection) }));
                   } catch (err) {
-                    setNotice(`Erro ao selecionar modelo: ${err instanceof Error ? err.message : String(err)}`);
+                    setNotice(t("errorSelectingModel", { error: err instanceof Error ? err.message : String(err) }));
                   }
                 })();
               }}
@@ -1682,7 +1238,7 @@ export function App(props: AppProps) {
           >
             <Box marginBottom={1}>
               <Text bold color={theme.primary}>
-                Chat
+                {t("appChatLabel")}
               </Text>
               <Text color={theme.fgMuted}> {" "}{session.id}</Text>
             </Box>
@@ -1705,7 +1261,7 @@ export function App(props: AppProps) {
                   {visibleMessages.map((msg) => (
                     <Box key={msg.id} flexDirection="column">
                       <Text color={msg.role === "user" ? theme.userMsg : theme.assistantMsg} bold>
-                        {msg.role === "user" ? "Você" : "DeepCode"}
+                        {msg.role === "user" ? t("you") : t("deepCodeLabel")}
                       </Text>
                       <Text>{redactText(msg.content, collectSecretValues(runtime.config))}</Text>
                       <Text> </Text>
@@ -1718,7 +1274,7 @@ export function App(props: AppProps) {
                     <Box flexDirection="column">
                       <Box gap={1}>
                         <Text color={theme.assistantMsg} bold>
-                          DeepCode (rascunho)
+                          {t("deepCodeDraft")}
                         </Text>
                         <TypingIndicator theme={theme} />
                       </Box>
@@ -1753,4 +1309,3 @@ export {
   selectInitialSessionForLaunch,
   shouldUseSelectedSlashCommand,
 } from "./app-utils.js";
-

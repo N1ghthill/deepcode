@@ -28,6 +28,8 @@ import {
 import { getConfigValue, serializeConfigDisplayValue } from "../../app-utils.js";
 import { DiffPreview } from "../shared/DiffPreview.js";
 import { CommandPreview } from "../shared/CommandPreview.js";
+import { t } from "../../i18n/index.js";
+import { formatAgentStatus } from "../../utils/status-format.js";
 
 export function
 
@@ -46,14 +48,14 @@ export function
       <Box flexDirection="row" alignItems="center">
         <Text color={riskColor} bold>⚠ </Text>
         <Text color={riskColor} bold>[{request.level.toUpperCase()}] </Text>
-        <Text>Aprovação necessária: </Text>
-        <Text color={theme.fgMuted}>{operation.length > 50 ? operation.slice(0, 50) + "..." : operation}</Text>
+        <Text>{t("approvalRequired")}</Text>
+        <Text color={theme.fgMuted}>{(operation ?? "").length > 50 ? (operation ?? "").slice(0, 50) + "..." : (operation ?? "")}</Text>
       </Box>
       <Box flexDirection="row" gap={2}>
-        <Text backgroundColor={theme.success} bold> A=Uma vez </Text>
-        <Text backgroundColor={theme.primary} bold> L=Sempre </Text>
-        <Text backgroundColor={theme.accent} bold> S=Sessão </Text>
-        <Text backgroundColor={theme.error} bold> D=Negar </Text>
+        <Text backgroundColor={theme.success} bold> {t("approveOnce")} </Text>
+        <Text backgroundColor={theme.primary} bold> {t("approveAlways")} </Text>
+        <Text backgroundColor={theme.accent} bold> {t("approveSessionKey")} </Text>
+        <Text backgroundColor={theme.error} bold> {t("denyKey")} </Text>
       </Box>
     </Box>
   );
@@ -70,9 +72,9 @@ export function SlashCommandMenu({
 }) {
   return (
     <Box width="100%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.borderActive}>
-      <Text color={theme.primary} bold>
-        Comandos
-      </Text>
+        <Text color={theme.primary} bold>
+          {t("commands")}
+        </Text>
       {commands.slice(0, 8).map((item, index) => {
         const selected = index === selectedIndex;
         return (
@@ -88,7 +90,7 @@ export function SlashCommandMenu({
           </Box>
         );
       })}
-      <Text color={theme.fgMuted}>Enter executa | ↑/↓ navega | Tab próximo | Esc fecha</Text>
+      <Text color={theme.fgMuted}>{t("commandBarHint")}</Text>
     </Box>
   );
 }
@@ -109,28 +111,28 @@ export function GithubOAuthPanel({
 
   return (
     <Box width="65%" flexDirection="column" borderStyle="double" paddingX={1} borderColor={theme.borderActive}>
-      <Text color={statusColor} bold>
-        GitHub OAuth: {state.status}
-      </Text>
+        <Text color={statusColor} bold>
+          {t("appPanelsGithubOAuthLabel")}{state.status}
+        </Text>
       {state.message && <Text>{state.message}</Text>}
       {state.verificationUri && (
         <>
-          <Text>URL</Text>
+          <Text>{t("url")}</Text>
           <Text color={theme.primary}>{state.verificationUri}</Text>
         </>
       )}
       {state.userCode && (
         <>
-          <Text>Código</Text>
+          <Text>{t("code")}</Text>
           <Text color={theme.warning} bold>{state.userCode}</Text>
         </>
       )}
-      {state.expiresAt && <Text color={theme.fgMuted}>Expira: {state.expiresAt}</Text>}
+      {state.expiresAt && <Text color={theme.fgMuted}>{t("expires", { time: state.expiresAt })}</Text>}
       {state.browserError && (
-        <Text color={theme.warning}>Navegador: {truncate(state.browserError, 160)}</Text>
+        <Text color={theme.warning}>{t("browserError", { error: truncate(state.browserError, 160) })}</Text>
       )}
       {(state.status === "opening" || state.status === "waiting") && (
-        <Text color={theme.fgMuted}>Ctrl+C cancela. Se o navegador não abrir, copie URL e código do terminal.</Text>
+        <Text color={theme.fgMuted}>{t("ctrlCCancelCopy")}</Text>
       )}
     </Box>
   );
@@ -160,18 +162,18 @@ export function ApprovalPanel({
     <Box width="65%" flexDirection="column" borderStyle="double" paddingX={1} borderColor={riskColor}>
       <Box flexDirection="row" alignItems="center">
         <Text color={riskColor} bold>
-          ⚠ Aprovação necessária
+          ⚠ {t("approvalRequiredTitle")}
         </Text>
         <Text> </Text>
         <Text color={riskColor} bold>[{request.level.toUpperCase()}]</Text>
         {queueLength > 1 && (
-          <Text color={theme.fgMuted}> ({queueLength} na fila)</Text>
+          <Text color={theme.fgMuted}> ({t("countInQueue", { count: queueLength })})</Text>
         )}
       </Box>
 
       {hasCommandPreview && (
         <Box marginTop={1} flexDirection="column">
-          <Text color={theme.fgMuted} bold>Comando:</Text>
+          <Text color={theme.fgMuted} bold>{t("commandLabel")}</Text>
           <CommandPreview
             theme={theme}
             command={request.preview!.command || ""}
@@ -184,7 +186,7 @@ export function ApprovalPanel({
 
       {hasDiff && (
         <Box marginTop={1} flexDirection="column">
-          <Text color={theme.fgMuted} bold>Diferença:</Text>
+          <Text color={theme.fgMuted} bold>{t("diffLabel")}</Text>
           <DiffPreview
             theme={theme}
             before={request.diff!.before}
@@ -196,18 +198,18 @@ export function ApprovalPanel({
 
       {(!hasCommandPreview || details.length > 0) && (
         <Box marginTop={1} flexDirection="column">
-          <Text color={theme.fgMuted} bold>Operação:</Text>
+          <Text color={theme.fgMuted} bold>{t("operationLabel")}</Text>
           <Text color={theme.primary}>{truncate(operation, 900)}</Text>
           {requestPath && (
             <>
-              <Text>Caminho: </Text>
+              <Text>{t("pathLabel")}</Text>
               <Text color={theme.fgMuted}>{truncate(requestPath, 900)}</Text>
             </>
           )}
           {details.length > 0 && (
             <>
               <Text> </Text>
-              <Text color={theme.fgMuted} bold>Detalhes:</Text>
+              <Text color={theme.fgMuted} bold>{t("detailsLabel")}</Text>
               {details.map((line, i) => (
                 <Text key={i} color={theme.fgMuted}>
                   {truncate(line, 120)}
@@ -219,13 +221,13 @@ export function ApprovalPanel({
       )}
 
       <Box flexDirection="row" marginTop={1} gap={2}>
-        <Text backgroundColor={theme.success}> A=Uma vez </Text>
-        <Text backgroundColor={theme.primary}> L=Sempre </Text>
-        <Text backgroundColor={theme.accent}> S=Sessão </Text>
-        <Text backgroundColor={theme.error}> D=Negar </Text>
-        <Text dimColor> Esc=Negar </Text>
+        <Text backgroundColor={theme.success}> {t("approveOnce")} </Text>
+        <Text backgroundColor={theme.primary}> {t("approveAlways")} </Text>
+        <Text backgroundColor={theme.accent}> {t("approveSessionKey")} </Text>
+        <Text backgroundColor={theme.error}> {t("denyKey")} </Text>
+        <Text dimColor> {t("appPanelsEscDeny")} </Text>
       </Box>
-      <Text dimColor>Solicitada: {formatSessionTime(request.createdAt)}</Text>
+      <Text dimColor>{t("requested", { time: formatSessionTime(request.createdAt) })}</Text>
     </Box>
   );
 }
@@ -243,15 +245,15 @@ export function SessionSwitcher({
 }) {
   return (
     <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
-      <Text bold>Sessões</Text>
-      {sessions.length === 0 && <Text color={theme.fgMuted}>Nenhuma sessão salva.</Text>}
+      <Text bold>{t("sessions")}</Text>
+      {sessions.length === 0 && <Text color={theme.fgMuted}>{t("noSavedSessions")}</Text>}
       {sessions.slice(0, 12).map((item, index) => {
         const selected = index === selectedIndex;
         const active = item.id === activeId;
         return (
           <Text key={item.id} color={selected ? theme.primary : active ? theme.success : undefined}>
             {selected ? "> " : "  "}
-            {item.id} {active ? "*" : " "} {item.status} {item.messages.length} msgs{" "}
+            {item.id} {active ? "*" : " "} {item.status} {item.messages.length} {t("appPanelsMsgs")}{" "}
             {formatSessionTime(item.updatedAt)}
           </Text>
         );
@@ -276,8 +278,8 @@ export function ConfigEditor({
   theme: ThemeColors;
 }) {
   const config = redactSecrets(runtime.config, {
-    secretPlaceholder: "[set]",
-    emptySecretPlaceholder: "[empty]",
+    secretPlaceholder: t("appPanelsSet"),
+    emptySecretPlaceholder: t("appPanelsEmpty"),
   }) as Record<string, unknown>;
   const providers = runtime.config.providers;
   const configuredModels = PROVIDER_IDS.map((providerId) => ({
@@ -296,23 +298,23 @@ export function ConfigEditor({
 
   return (
     <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
-      <Text bold>Configuração (editável)</Text>
-      <Text color={theme.fgMuted}>Provider padrão: {String(config.defaultProvider)}</Text>
+      <Text bold>{t("configEditable")}</Text>
+      <Text color={theme.fgMuted}>{t("defaultProvider", { provider: String(config.defaultProvider) })}</Text>
       <Text color={theme.fgMuted}>
-        Modelo ativo: {String(resolveConfiguredModelForProvider(runtime.config, runtime.config.defaultProvider) ?? "não configurado")}
+        {t("activeModel", { model: String(resolveConfiguredModelForProvider(runtime.config, runtime.config.defaultProvider) ?? t("notConfigured")) })}
       </Text>
-      <Text color={theme.fgMuted}>PLAN: {planSelection ? formatModelSelection(planSelection) : "não configurado"}</Text>
-      <Text color={theme.fgMuted}>BUILD: {buildSelection ? formatModelSelection(buildSelection) : "não configurado"}</Text>
+      <Text color={theme.fgMuted}>{t("appPanelsPlanMode")}{planSelection ? formatModelSelection(planSelection) : t("notConfigured")}</Text>
+      <Text color={theme.fgMuted}>{t("appPanelsBuildMode")}{buildSelection ? formatModelSelection(buildSelection) : t("notConfigured")}</Text>
       <Text> </Text>
-      <Text bold>Modelos por provider</Text>
+      <Text bold>{t("modelsByProvider")}</Text>
       {configuredModels.map(({ providerId, label, model, isDefault }) => (
         <Text key={providerId} color={isDefault ? theme.warning : theme.fgMuted}>
-          {label}: {model && model.trim().length > 0 ? model : "—"}
-          {isDefault ? " | provider padrão" : ""}
+          {label}: {model && model.trim().length > 0 ? model : "\u2014"}
+          {isDefault ? ` | ${t("defaultProviderLabel")}` : ""}
         </Text>
       ))}
       <Text> </Text>
-      <Text bold>Campos editáveis</Text>
+      <Text bold>{t("editableFields")}</Text>
       {CONFIG_FIELDS.map((field, index) => {
         const selected = index === selectedIndex;
         const currentValue = getConfigValue(runtime.config, field.key);
@@ -320,12 +322,12 @@ export function ConfigEditor({
         const displayValue =
           field.type === "toggle"
             ? currentValue
-              ? "enabled"
-              : "disabled"
+              ? t("appPanelsEnabled")
+              : t("appPanelsDisabled")
             : isApiKey
               ? currentValue
-                ? "[set]"
-                : "[empty]"
+                ? t("appPanelsSet")
+                : t("appPanelsEmpty")
               : serializeConfigDisplayValue(currentValue);
 
         return (
@@ -344,21 +346,21 @@ export function ConfigEditor({
       })}
       <Text> </Text>
       {saveStatus && (
-        <Text color={saveStatus.startsWith("Erro") ? theme.error : theme.success}>{saveStatus}</Text>
+        <Text color={saveStatus.startsWith(t("configError")) ? theme.error : theme.success}>{saveStatus}</Text>
       )}
       <Text color={theme.fgMuted}>
-        {editing ? "Enter salva | Esc cancela" : "Enter/i edita | ↑/↓ ou j/k navega | Esc volta"}
+        {editing ? t("enterSavesEscCancels") : t("enterEditNavigateEscBack")}
       </Text>
-      <Text color={theme.fgMuted}>Campos marcados como JSON aceitam arrays como ["pnpm test"]</Text>
+      <Text color={theme.fgMuted}>{t("jsonFieldsHint")}</Text>
       <Text> </Text>
-      <Text bold>Providers</Text>
+      <Text bold>{t("providers")}</Text>
       {Object.entries(providers).map(([name, provider]) => (
         <Text key={name} color={provider.apiKey ? theme.success : theme.fgMuted}>
-          {PROVIDER_LABELS[name as ProviderId] ?? name}: {provider.apiKey ? "apiKey [set]" : "apiKey missing"}
+          {PROVIDER_LABELS[name as ProviderId] ?? name}: {provider.apiKey ? t("appPanelsApiKeySet") : t("appPanelsApiKeyMissing")}
           {provider.baseUrl ? ` | ${provider.baseUrl}` : ""}
         </Text>
       ))}
-      <Text>GitHub: {runtime.config.github.token ? "token [set]" : "token missing"}</Text>
+      <Text>{runtime.config.github.token ? t("appPanelsGithubTokenSet") : t("appPanelsGithubTokenMissing")}</Text>
     </Box>
   );
 }
@@ -366,32 +368,32 @@ export function ConfigEditor({
 export function HelpView({ theme }: { theme: ThemeColors }) {
   return (
     <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
-      <Text bold>Ajuda</Text>
+      <Text bold>{t("help")}</Text>
       <Text> </Text>
-      <Text bold>Comandos</Text>
-      <Text>/help abre ajuda</Text>
-      <Text>/clear limpa a tela sem apagar sessão</Text>
-      <Text>/new cria uma sessão real</Text>
-      <Text>/sessions abre seletor de sessões</Text>
-      <Text>/config abre editor de configuração</Text>
+      <Text bold>{t("commands")}</Text>
+      <Text>{t("helpCommand")}</Text>
+      <Text>{t("clearCommand")}</Text>
+      <Text>{t("newCommand")}</Text>
+      <Text>{t("sessionsCommand")}</Text>
+      <Text>{t("configCommand")}</Text>
       <Text> </Text>
-      <Text bold>Atalhos gerais</Text>
-      <Text>Ctrl+O sessões | Ctrl+N nova sessão</Text>
-      <Text>Ctrl+H ajuda | Ctrl+T telemetria | Ctrl+C cancela | Ctrl+Q sai</Text>
-      <Text>1-4 mudam abas laterais quando o prompt está vazio</Text>
+      <Text bold>{t("generalShortcuts")}</Text>
+      <Text>{t("ctrlShortcuts")}</Text>
+      <Text>{t("ctrlHelpTelemetry")}</Text>
+      <Text>{t("numberTabs")}</Text>
       <Text> </Text>
-      <Text bold>Vim bindings (chat)</Text>
-      <Text>i / a entra modo insert | Esc volta modo normal</Text>
+      <Text bold>{t("vimBindingsChat")}</Text>
+      <Text>{t("vimInsertMode")}</Text>
       <Text> </Text>
-      <Text bold>Vim bindings (config)</Text>
-      <Text>j / k navega | i / e edita | Enter salva | Esc volta</Text>
+      <Text bold>{t("vimBindingsConfig")}</Text>
+      <Text>{t("vimConfigNav")}</Text>
       <Text> </Text>
-      <Text bold>Aprovações</Text>
-      <Text>A aprova | L aprova sempre (permanente) | S aprova sessão | D nega | Esc volta/nega</Text>
+      <Text bold>{t("approvals")}</Text>
+      <Text>{t("approvalKeys")}</Text>
       <Text> </Text>
-      <Text bold>Temas disponíveis</Text>
+      <Text bold>{t("availableThemes")}</Text>
       <Text>{themeNames.join(", ")}</Text>
-      <Text>Altere via /config → Theme ou tui.theme no config</Text>
+      <Text>{t("changeThemeHint")}</Text>
     </Box>
   );
 }
@@ -416,32 +418,32 @@ export function EmptyChatState({
   return (
     <Box flexDirection="column">
       <Text color={theme.fgMuted}>
-        Nenhuma mensagem ainda nesta sessão.
+        {t("noMessagesYet")}
       </Text>
       <Text color={theme.fgMuted}>
-        Target ativo: {activeTarget ?? "não configurado"}
+        {t("activeTarget")} {activeTarget ?? t("notConfigured")}
       </Text>
       <Text color={theme.fgMuted}>
-        Status: {status}
+        {t("statusLabel")} {formatAgentStatus(status)}
       </Text>
       <Text color={theme.fgMuted}>
-        PLAN: {planSelection ? formatModelSelection(planSelection) : "não configurado"}
+        {t("appPanelsPlanMode")}{planSelection ? formatModelSelection(planSelection) : t("notConfigured")}
       </Text>
       <Text color={theme.fgMuted}>
-        BUILD: {buildSelection ? formatModelSelection(buildSelection) : "não configurado"}
+        {t("appPanelsBuildMode")}{buildSelection ? formatModelSelection(buildSelection) : t("notConfigured")}
       </Text>
       <Text color={theme.fgMuted}>
-        Aprovações pendentes: {approvalCount}
+        {t("pendingApprovals", { count: approvalCount })}
       </Text>
       <Text> </Text>
-      <Text color={theme.primary}>Atalhos úteis</Text>
-      <Text color={theme.fgMuted}>Ctrl+P providers • Ctrl+M modelos • Ctrl+O sessões</Text>
-      <Text color={theme.fgMuted}>/provider • /model • /config • /help</Text>
+      <Text color={theme.primary}>{t("usefulShortcuts")}</Text>
+      <Text color={theme.fgMuted}>{t("appPanelsShortcutsHint")}</Text>
+      <Text color={theme.fgMuted}>{t("emptyChatSlashHint")}</Text>
       <Text> </Text>
-      <Text color={theme.primary}>Sessão</Text>
-      <Text color={theme.fgMuted}>ID: {session.id}</Text>
-      <Text color={theme.fgMuted}>Criada: {formatSessionTime(session.createdAt)}</Text>
-      <Text color={theme.fgMuted}>Atualizada: {formatSessionTime(session.updatedAt)}</Text>
+      <Text color={theme.primary}>{t("sessionLabel")}</Text>
+      <Text color={theme.fgMuted}>{t("appPanelsIdLabel")}{session.id}</Text>
+      <Text color={theme.fgMuted}>{t("appPanelsCreatedLabel")}{formatSessionTime(session.createdAt)}</Text>
+      <Text color={theme.fgMuted}>{t("appPanelsUpdatedLabel")}{formatSessionTime(session.updatedAt)}</Text>
     </Box>
   );
 }

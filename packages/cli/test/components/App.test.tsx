@@ -45,7 +45,7 @@ describe("App component", () => {
     expect(session.messages[0]?.role).toBe("assistant");
     expect(session.messages[0]?.source).toBe("ui");
     expect(session.messages[0]?.content).toBe(
-      "Erro ao executar a tarefa: All configured providers failed: [redacted]",
+      "Error executing task: All configured providers failed: [redacted]",
     );
     expect(runtime.sessions.persist).toHaveBeenCalledWith(session.id);
   });
@@ -217,8 +217,8 @@ describe("App component", () => {
 
     expect(getChatPreflightIssue(runtime.config, session)).toEqual({
       message:
-        "Nenhum provider com credenciais está configurado. Abra o menu de providers com Ctrl+P ou use /provider para definir uma credencial antes de enviar mensagens.",
-      notice: "Nenhum provider configurado. Abra Ctrl+P ou use /provider.",
+        "No provider with credentials is configured. Open the provider menu with Ctrl+P or use /provider to set a credential before sending messages.",
+      notice: "No provider configured. Open Ctrl+P or use /provider.",
       modal: "provider",
     });
   });
@@ -351,7 +351,7 @@ describe("App component", () => {
     );
 
     expect(formatAgentRunError(runtime, session, error)).toBe(
-      "OpenRouter está sem API key. Abra Ctrl+P ou use /provider para configurar a credencial.",
+      "OpenRouter is missing an API key. Open Ctrl+P or use /provider to configure the credential.",
     );
   });
 
@@ -469,7 +469,7 @@ describe("App component", () => {
     expect(isFreeModel(paid)).toBe(false);
     expect(formatModelPricing(paid)).toBe("$0.001/1k in • $0.002/1k out");
     expect(isFreeModel(unknown)).toBe(false);
-    expect(formatModelPricing(unknown)).toBe("preço n/d");
+    expect(formatModelPricing(unknown)).toBe("price n/a");
   });
 
   it("extracts a persisted task plan only when session metadata matches the runtime schema", () => {

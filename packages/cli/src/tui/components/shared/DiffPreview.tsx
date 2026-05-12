@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { ThemeColors } from "../../themes.js";
+import { t } from "../../i18n/index.js";
 
 export interface DiffPreviewProps {
   theme: ThemeColors;
@@ -48,10 +49,13 @@ export function DiffPreview({
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={theme.border} paddingX={1}>
       <Text bold color={theme.primary}>
-        Diff: {filePath}
+        {t("diffPreviewLabel")}{filePath}
       </Text>
       <Text color={theme.fgMuted}>
-        {beforeLines.length} linhas → {afterLines.length} linhas
+        {t("diffPreviewLinesChange", { before: beforeLines.length, after: afterLines.length })}
+      </Text>
+      <Text color={theme.fgMuted}>
+        {t("diffPreviewLinesChange", { before: beforeLines.length, after: afterLines.length })}
       </Text>
       <Text> </Text>
 
@@ -72,7 +76,7 @@ export function DiffPreview({
 
       {diffLines.length >= maxLines && (
         <Text color={theme.fgMuted} dimColor>
-          ... (truncado, use editor para ver completo)
+          {t("diffPreviewTruncated")}
         </Text>
       )}
     </Box>

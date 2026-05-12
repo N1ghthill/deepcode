@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text, useInput } from "ink";
 import type { ThemeColors } from "../../themes.js";
+import { t } from "../../i18n/index.js";
 
 export interface InputPreviewProps {
   theme: ThemeColors;
@@ -40,16 +41,16 @@ export function InputPreview({
       paddingX={1}
     >
       <Text bold color={theme.primary}>
-        Preview da Mensagem
+        {t("inputPreviewTitle")}
       </Text>
       <Text color={theme.fgMuted}>
-        Enter envia | Esc cancela | e edita
+        {t("inputPreviewHint")}
       </Text>
       <Text> </Text>
 
       {estimatedTokens !== undefined && (
         <Text color={theme.accent}>
-          Tokens estimados: ~{estimatedTokens}
+          {t("inputPreviewEstimatedTokens", { count: estimatedTokens })}
         </Text>
       )}
 
@@ -63,7 +64,7 @@ export function InputPreview({
         ))}
         {lines.length > 20 && (
           <Text color={theme.fgMuted} dimColor>
-            ... e mais {lines.length - 20} linhas
+            {t("inputPreviewMoreLines", { count: lines.length - 20 })}
           </Text>
         )}
       </Box>
@@ -72,9 +73,9 @@ export function InputPreview({
       <Text> </Text>
 
       <Box flexDirection="column">
-        <Text color={theme.success}>Enter - Enviar mensagem</Text>
-        <Text color={theme.warning}>e - Voltar para edição</Text>
-        <Text color={theme.error}>Esc - Cancelar</Text>
+        <Text color={theme.success}>{t("inputPreviewSend")}</Text>
+        <Text color={theme.warning}>{t("inputPreviewEdit")}</Text>
+        <Text color={theme.error}>{t("inputPreviewCancel")}</Text>
       </Box>
     </Box>
   );

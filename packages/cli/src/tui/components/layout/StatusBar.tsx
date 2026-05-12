@@ -6,6 +6,8 @@ import {
   formatModelSelection,
   type ModelSelection,
 } from "../../model-selection.js";
+import { t } from "../../i18n/index.js";
+import { formatAgentStatus } from "../../utils/status-format.js";
 
 export interface StatusBarProps {
   theme: ThemeColors;
@@ -83,20 +85,20 @@ export function StatusBar({
       >
         {streaming ? (
           <Text color={theme.warning}>
-            {phase === "planning" ? "⚡ Planejando..." :
-             phase.startsWith("task") ? `⚡ ${phase}` :
-             toolExecuting ? "⚙ Executando ferramentas..." : "⚡ Gerando..."}
+            {phase === "planning" ? t("statusBarPlanning") :
+             phase.startsWith("task") ? `\u26A1 ${phase}` :
+             toolExecuting ? t("statusBarExecutingTools") : t("statusBarGenerating")}
             {iteration.max > 0 && (
               <Text color={theme.fgMuted}> [{iteration.current}/{iteration.max}]</Text>
             )}
             {elapsed > 0 && (
               <Text color={theme.fgMuted}> [{formatElapsed(elapsed)}]</Text>
             )}
-            {' '}<Text color={theme.fgMuted}>(Ctrl+C cancela)</Text>
+            {' '}<Text color={theme.fgMuted}>{t("statusBarCtrlCCancel")}</Text>
           </Text>
         ) : vimMode === "normal" ? (
           <Text color={theme.fgMuted}>
-            -- NORMAL -- pressione i para inserir
+            {t("statusBarNormalMode")}
           </Text>
         ) : (
           <Text>
@@ -106,7 +108,7 @@ export function StatusBar({
 
         <Box gap={2}>
           <Text color={theme.fgMuted}>
-            Status:{" "}
+            {t("statusBarStatusLabel")}
             <Text
               bold
               color={
@@ -117,7 +119,7 @@ export function StatusBar({
                   : theme.success
               }
             >
-              {streaming ? "executing" : status}
+              {streaming ? t("statusBarExecuting") : formatAgentStatus(status)}
             </Text>
           </Text>
 
@@ -143,14 +145,14 @@ export function StatusBar({
         <Box gap={2}>
           <ModeRoute
             active={agentMode === "plan"}
-            label="PLAN"
+            label={t("statusBarPlanLabel")}
             target={planTarget}
             theme={theme}
           />
           <Text color={theme.fgMuted}>|</Text>
           <ModeRoute
             active={agentMode === "build"}
-            label="BUILD"
+            label={t("statusBarBuildLabel")}
             target={buildTarget}
             theme={theme}
           />
@@ -176,7 +178,7 @@ function truncateMiddle(input: string, maxLength: number): string {
 
 function formatRouteTarget(selection?: ModelSelection | null): string {
   if (!selection) {
-    return "não configurado";
+    return t("notConfigured");
   }
 
   return truncateMiddle(formatModelSelection(selection), 32);
@@ -189,7 +191,7 @@ function ModeRoute({
   theme,
 }: {
   active: boolean;
-  label: "PLAN" | "BUILD";
+  label: string;
   target: string;
   theme: ThemeColors;
 }) {

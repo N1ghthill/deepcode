@@ -133,7 +133,7 @@ describe("ProviderModal", () => {
       await settleInk();
 
       expect(onUpdateApiKey).toHaveBeenCalledWith("openrouter", "sk-test-key");
-      expect(lastFrame()).toContain("salvando");
+      expect(lastFrame()).toContain("saving");
 
       stdin.write("\r");
       await settleInk();
@@ -182,10 +182,10 @@ describe("ProviderModal", () => {
     try {
       await settleInk();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("○ status antigo");
-      expect(frame).toContain("Target atual: deepseek/deepseek-v4-flash");
-      expect(frame).toContain("Ultimo teste: deepseek/deepseek-v4-pro");
-      expect(frame).toContain("Ultimo erro: Model not found for DeepSeek: deepseek/deepseek-v4-pro");
+      expect(frame).toContain("○ stale status");
+      expect(frame).toContain("Current target: deepseek/deepseek-v4-flash");
+      expect(frame).toContain("Last test: deepseek/deepseek-v4-pro");
+      expect(frame).toContain("Last error: Model not found for DeepSeek: deepseek/deepseek-v4-pro");
     } finally {
       unmount();
     }

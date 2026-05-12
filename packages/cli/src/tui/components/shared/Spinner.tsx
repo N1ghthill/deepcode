@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Text } from "ink";
 import type { ThemeColors } from "../../themes.js";
+import { t } from "../../i18n/index.js";
 
 interface SpinnerProps {
   theme: ThemeColors;
@@ -15,7 +16,7 @@ const SPINNER_FRAMES = {
   pulse: ["◐", "◓", "◑", "◒"],
 };
 
-export function Spinner({ theme, text = "Carregando", type = "dots" }: SpinnerProps) {
+export function Spinner({ theme, text = t("spinnerLoading"), type = "dots" }: SpinnerProps) {
   const [frame, setFrame] = useState(0);
   const frames = SPINNER_FRAMES[type];
 

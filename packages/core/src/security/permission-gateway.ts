@@ -80,6 +80,13 @@ export class PermissionGateway {
     const mode = this.resolveMode(check);
     if (mode === "deny") {
       await this.audit.log({ operation: check.operation, path: check.path, result: "denied", reason: "config" });
+      this.eventBus.emit("activity", {
+        id: createId("activity"),
+        type: "permission_denied",
+        message: `Permission denied by configuration: ${check.operation} (${check.kind})`,
+        metadata: { operation: check.operation, kind: check.kind, reason: "config_deny" },
+        createdAt: nowIso(),
+      });
       return { allowed: false, reason: configDeniedReason(check) };
     }
 
@@ -109,12 +116,41 @@ export class PermissionGateway {
       return { allowed: true };
     }
 
+    if (mode === "allow" && pathAccess === "outside_whitelist") {
+      if (!this.interactive) {
+        await this.audit.log({
+          operation: check.operation,
+          path: check.path,
+          result: "denied",
+          reason: "path_outside_whitelist",
+        });
+        this.eventBus.emit("activity", {
+          id: createId("activity"),
+          type: "permission_denied",
+          message: `Permission denied (path outside whitelist, non-interactive): ${check.operation} (${check.kind})`,
+          metadata: { operation: check.operation, kind: check.kind, reason: "path_outside_whitelist" },
+          createdAt: nowIso(),
+        });
+        return {
+          allowed: false,
+          reason: outsideWhitelistReason(check),
+        };
+      }
+    }
+
     if (!this.interactive) {
       await this.audit.log({
         operation: check.operation,
         path: check.path,
         result: "denied",
         reason: pathAccess === "outside_whitelist" ? "path_outside_whitelist" : "non_interactive",
+      });
+      this.eventBus.emit("activity", {
+        id: createId("activity"),
+        type: "permission_denied",
+        message: `Permission denied (non-interactive): ${check.operation} (${check.kind})`,
+        metadata: { operation: check.operation, kind: check.kind, reason: pathAccess === "outside_whitelist" ? "path_outside_whitelist" : "non_interactive" },
+        createdAt: nowIso(),
       });
       return {
         allowed: false,

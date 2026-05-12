@@ -180,6 +180,7 @@ async function localToolSmokeCheck(
     directory: worktree,
     abortSignal: new AbortController().signal,
     config: smokeConfig,
+    agentMode: "build" as const,
     cache: runtime.cache,
     permissions,
     pathSecurity,

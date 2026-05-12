@@ -5,6 +5,7 @@ import type { RecentModelSelection } from "../../persistence/ui-state.js";
 import type { ThemeColors } from "../../themes.js";
 import { formatModelSelection, parseModelSelection, type ModelSelection } from "../../model-selection.js";
 import { Spinner } from "../shared/Spinner.js";
+import { t } from "../../i18n/index.js";
 
 const ESCAPE = String.fromCharCode(27);
 const BRACKETED_PASTE_MARKERS = new RegExp(`(?:${ESCAPE})?\\[(?:200|201)~`, "g");
@@ -201,34 +202,34 @@ export function ModelSelector({
   return (
     <Box flexDirection="column" borderStyle="double" borderColor={theme.borderActive} paddingX={1}>
       <Text bold color={theme.primary}>
-        Selecionar Modelo
+        {t("modelSelectorTitle")}
       </Text>
       <Text color={theme.fgMuted}>
         {isManualEntry
-          ? "Modelo manual | Enter usar | Esc cancelar"
+          ? t("modelSelectorManualHint")
           : isFiltering
-            ? `Busca: ${filterText} | Enter selecionar | Esc cancelar`
-            : "↑/↓ navegar | Enter usar | / buscar | m manual | r refresh | f grátis | Esc fechar"}
+            ? t("modelSelectorSearchHint", { filterText })
+            : t("modelSelectorNavHint")}
       </Text>
       <Text> </Text>
 
       {loading ? (
         <Box flexDirection="column" gap={1}>
-          <Spinner theme={theme} text="Carregando catálogo de modelos" type="dots" />
-          <Text color={theme.fgMuted}>Buscando providers configurados...</Text>
+          <Spinner theme={theme} text={t("modelSelectorLoadingCatalog")} type="dots" />
+          <Text color={theme.fgMuted}>{t("modelSelectorFetchingProviders")}</Text>
         </Box>
       ) : null}
 
       {error ? (
-        <Text color={theme.error}>Erro: {error}</Text>
+        <Text color={theme.error}>{t("modelSelectorError", { error })}</Text>
       ) : null}
 
       {!loading && !error && isManualEntry ? (
         <Box flexDirection="column">
-          <Text color={theme.primary}>Modelo manual</Text>
-          <Text>{manualModelId || "[vazio]"}</Text>
+          <Text color={theme.primary}>{t("modelSelectorManualModel")}</Text>
+          <Text>{manualModelId || t("emptyValue")}</Text>
           <Text color={theme.fgMuted}>
-            Use `provider/model` para trocar provider e modelo em um passo.
+            {t("modelSelectorProviderModelHint")}
           </Text>
         </Box>
       ) : null}
@@ -236,16 +237,16 @@ export function ModelSelector({
       {!loading && !error && !isManualEntry ? (
         <Box flexDirection="column">
           <Text color={theme.fgMuted}>
-            {filteredModels.length} modelos
-            {filteredModels.length > 0 ? ` • ${windowStart + 1}-${Math.min(filteredModels.length, windowStart + visibleModels.length)}` : ""}
-            {freeOnly ? " • filtro grátis" : ""}
-            {recentSelections.length > 0 ? ` • ${recentSelections.length} recentes` : ""}
+            {t("modelSelectorModelsCount", { count: filteredModels.length })}
+            {filteredModels.length > 0 ? ` \u2022 ${windowStart + 1}-${Math.min(filteredModels.length, windowStart + visibleModels.length)}` : ""}
+            {freeOnly ? ` \u2022 ${t("modelSelectorFreeFilter")}` : ""}
+            {recentSelections.length > 0 ? ` \u2022 ${recentSelections.length} ${t("modelSelectorRecent")}` : ""}
           </Text>
           <Text> </Text>
 
           {filteredModels.length === 0 ? (
             <Text color={theme.fgMuted}>
-              {normalizedFilter ? `Nenhum modelo encontrado para "${filterText}".` : "Nenhum modelo encontrado."}
+              {normalizedFilter ? t("modelSelectorNoModelsFoundForFilter", { filterText }) : t("modelSelectorNoModelsFound")}
             </Text>
           ) : (
             visibleModels.map((entry, index) => {
@@ -258,15 +259,15 @@ export function ModelSelector({
               return (
                 <Box key={entry.key} flexDirection="column">
                   <Text color={selected ? theme.primary : theme.fgMuted} bold={selected}>
-                    {selected ? "▶ " : "  "}
+                    {selected ? "\u25B6 " : "  "}
                     {entry.info.provider} / {truncateText(entry.info.name || entry.info.id, 34)}
-                    {isCurrent ? <Text color={theme.success}> [atual]</Text> : null}
-                    {!isCurrent && isRecent ? <Text color={theme.warning}> [recente]</Text> : null}
-                    {free ? <Text color={theme.success}> [free]</Text> : null}
+                    {isCurrent ? <Text color={theme.success}> {t("modelSelectorCurrent")}</Text> : null}
+                    {!isCurrent && isRecent ? <Text color={theme.warning}> {t("modelSelectorRecentTag")}</Text> : null}
+                    {free ? <Text color={theme.success}> {t("modelSelectorFreeTag")}</Text> : null}
                   </Text>
                   {selected ? (
                     <Text color={theme.fgMuted}>
-                      {truncateText(entry.key, 52)} • {formatContext(entry.info.contextLength)} • {formatCapabilities(entry.info)} • {formatModelPricing(entry.info)}
+                      {truncateText(entry.key, 52)} \u2022 {formatContext(entry.info.contextLength)} \u2022 {formatCapabilities(entry.info)} \u2022 {formatModelPricing(entry.info)}
                     </Text>
                   ) : null}
                 </Box>
@@ -278,7 +279,7 @@ export function ModelSelector({
 
       <Text> </Text>
       <Text color={theme.fgMuted}>
-        Exemplo: `deepseek/deepseek-chat` ou `openrouter/moonshotai/kimi-k2`
+        {t("modelSelectorExample")}
       </Text>
     </Box>
   );
@@ -300,7 +301,7 @@ function formatCapabilities(model: ModelInfo): string {
     model.capabilities.vision ? "vision" : null,
     model.capabilities.streaming ? "stream" : null,
   ].filter(Boolean);
-  return flags.join(", ") || "basic";
+  return flags.join(", ") || t("modelSelectorBasicCapability");
 }
 
 export function isFreeModel(model: ModelInfo): boolean {
@@ -313,10 +314,10 @@ export function isFreeModel(model: ModelInfo): boolean {
 
 export function formatModelPricing(model: ModelInfo): string {
   if (isFreeModel(model)) {
-    return "free";
+    return t("modelSelectorFree");
   }
   if (!model.pricing) {
-    return "preço n/d";
+    return t("modelSelectorPriceNA");
   }
-  return `$${model.pricing.inputPer1k}/1k in • $${model.pricing.outputPer1k}/1k out`;
+  return `$${model.pricing.inputPer1k}/1k ${t("modelSelectorPricingIn")} \u2022 $${model.pricing.outputPer1k}/1k ${t("modelSelectorPricingOut")}`;
 }

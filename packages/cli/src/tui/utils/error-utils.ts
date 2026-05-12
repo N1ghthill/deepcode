@@ -6,6 +6,7 @@ import {
 import type { Session } from "@deepcode/shared";
 import type { DeepCodeRuntime } from "../../runtime.js";
 import { PROVIDER_LABELS } from "../app-config.js";
+import { t } from "../i18n/index.js";
 
 export async function recordAgentRunError(
   activeRuntime: DeepCodeRuntime,
@@ -17,7 +18,7 @@ export async function recordAgentRunError(
   activeRuntime.sessions.addMessage(activeSession.id, {
     role: "assistant",
     source: "ui",
-    content: `Erro ao executar a tarefa: ${message}`,
+    content: t("errorTaskExecution", { message }),
   });
   try {
     await activeRuntime.sessions.persist(activeSession.id);
@@ -40,19 +41,19 @@ export function formatAgentRunError(
   );
 
   if (messages.some((message) => /missing api key/i.test(message))) {
-    return `${providerName} está sem API key. Abra Ctrl+P ou use /provider para configurar a credencial.`;
+    return t("errorMissingApiKey", { provider: providerName });
   }
 
   if (messages.some((message) => /no model configured/i.test(message))) {
-    return `Nenhum modelo está configurado para ${providerName}. Abra Ctrl+M ou use /model antes de continuar.`;
+    return t("errorNoModelConfigured", { provider: providerName });
   }
 
   if (messages.some((message) => /authentication failed/i.test(message))) {
-    return `${providerName} rejeitou a autenticação. Revise a API key no menu de providers (Ctrl+P ou /provider).`;
+    return t("errorAuthFailed", { provider: providerName });
   }
 
   if (messages.some((message) => /request timed out|network request failed/i.test(message))) {
-    return `${providerName} não respondeu corretamente. Verifique conectividade, base URL e tente novamente.`;
+    return t("errorNetworkFailed", { provider: providerName });
   }
 
   return redactedRawMessage;

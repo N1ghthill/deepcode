@@ -1,6 +1,7 @@
 import type { ProviderId, Session } from "@deepcode/shared";
 import { themeNames } from "./themes.js";
 import type { ModalType } from "./types.js";
+import { t } from "./i18n/index.js";
 
 export type ConfigEditField =
   | "defaultProvider"
@@ -19,6 +20,16 @@ export type ConfigEditField =
   | "permissions.dangerous"
   | "permissions.gitLocal"
   | "permissions.allowShell"
+  | "agentPermissions.build.shell"
+  | "agentPermissions.build.dangerous"
+  | "agentPermissions.build.write"
+  | "agentPermissions.build.read"
+  | "agentPermissions.build.gitLocal"
+  | "agentPermissions.plan.shell"
+  | "agentPermissions.plan.dangerous"
+  | "agentPermissions.plan.write"
+  | "agentPermissions.plan.read"
+  | "agentPermissions.plan.gitLocal"
   | "paths.whitelist"
   | "paths.blacklist"
   | "web.allowlist"
@@ -26,7 +37,8 @@ export type ConfigEditField =
   | "github.oauthClientId"
   | "tui.theme"
   | "tui.compactMode"
-  | "tui.showInputPreview";
+  | "tui.showInputPreview"
+  | "tui.language";
 
 export interface ConfigFieldDef {
   key: ConfigEditField;
@@ -74,16 +86,16 @@ export type InitialSessionSelection =
   | { type: "create"; provider: ProviderId; model?: string };
 
 export const SLASH_COMMANDS: SlashCommandDef[] = [
-  { command: "/github-login", label: "GitHub login", description: "Abre o navegador e autentica GitHub via OAuth" },
-  { command: "/provider", label: "Providers", description: "Configura e testa provider/model/API" },
-  { command: "/model", label: "Modelos", description: "Seleciona o modelo ativo" },
-  { command: "/mode plan", label: "Modo PLAN", description: "Analisa e planeja sem alterar arquivos" },
-  { command: "/mode build", label: "Modo BUILD", description: "Permite editar e validar com permissões" },
-  { command: "/config", label: "Config", description: "Abre editor de configuração" },
-  { command: "/sessions", label: "Sessões", description: "Lista sessões salvas" },
-  { command: "/new", label: "Nova sessão", description: "Cria uma sessão nova" },
-  { command: "/clear", label: "Limpar chat", description: "Limpa a tela sem apagar a sessão" },
-  { command: "/help", label: "Ajuda", description: "Mostra atalhos e comandos" },
+  { command: "/github-login", get label() { return t("slashGithubLoginLabel"); }, get description() { return t("slashGithubLoginDesc"); } },
+  { command: "/provider", get label() { return t("slashProviderLabel"); }, get description() { return t("slashProviderDesc"); } },
+  { command: "/model", get label() { return t("slashModelLabel"); }, get description() { return t("slashModelDesc"); } },
+  { command: "/mode plan", get label() { return t("slashModePlanLabel"); }, get description() { return t("slashModePlanDesc"); } },
+  { command: "/mode build", get label() { return t("slashModeBuildLabel"); }, get description() { return t("slashModeBuildDesc"); } },
+  { command: "/config", get label() { return t("slashConfigLabel"); }, get description() { return t("slashConfigDesc"); } },
+  { command: "/sessions", get label() { return t("slashSessionsLabel"); }, get description() { return t("slashSessionsDesc"); } },
+  { command: "/new", get label() { return t("slashNewLabel"); }, get description() { return t("slashNewDesc"); } },
+  { command: "/clear", get label() { return t("slashClearLabel"); }, get description() { return t("slashClearDesc"); } },
+  { command: "/help", get label() { return t("slashHelpLabel"); }, get description() { return t("slashHelpDesc"); } },
 ];
 
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
@@ -97,32 +109,43 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
 export const PROVIDER_IDS = Object.keys(PROVIDER_LABELS) as ProviderId[];
 
 export const CONFIG_FIELDS: ConfigFieldDef[] = [
-  { key: "defaultProvider", label: "Provider", type: "select", options: ["openrouter", "anthropic", "openai", "deepseek", "opencode"] },
-  { key: "defaultModels.openrouter", label: "OpenRouter model", type: "text" },
-  { key: "defaultModels.anthropic", label: "Anthropic model", type: "text" },
-  { key: "defaultModels.openai", label: "OpenAI model", type: "text" },
-  { key: "defaultModels.deepseek", label: "DeepSeek model", type: "text" },
-  { key: "defaultModels.opencode", label: "OpenCode model", type: "text" },
-  { key: "buildTurnPolicy.mode", label: "Build turn policy", type: "select", options: ["heuristic", "always-tools"] },
-  { key: "providers.openrouter.apiKey", label: "OpenRouter API Key", type: "text" },
-  { key: "providers.anthropic.apiKey", label: "Anthropic API Key", type: "text" },
-  { key: "providers.openai.apiKey", label: "OpenAI API Key", type: "text" },
-  { key: "providers.deepseek.apiKey", label: "DeepSeek API Key", type: "text" },
-  { key: "providers.opencode.apiKey", label: "OpenCode API Key", type: "text" },
-  { key: "cache.enabled", label: "Cache", type: "toggle" },
-  { key: "cache.ttlSeconds", label: "Cache TTL (s)", type: "number" },
-  { key: "permissions.read", label: "Read perm", type: "select", options: ["allow", "ask", "deny"] },
-  { key: "permissions.write", label: "Write perm", type: "select", options: ["allow", "ask", "deny"] },
-  { key: "permissions.shell", label: "Shell perm", type: "select", options: ["allow", "ask", "deny"] },
-  { key: "permissions.dangerous", label: "Dangerous perm", type: "select", options: ["allow", "ask", "deny"] },
-  { key: "permissions.gitLocal", label: "Git local perm", type: "select", options: ["allow", "ask", "deny"] },
-  { key: "permissions.allowShell", label: "Shell allowlist (JSON)", type: "text" },
-  { key: "paths.whitelist", label: "Paths whitelist (JSON)", type: "text" },
-  { key: "paths.blacklist", label: "Paths blacklist (JSON)", type: "text" },
-  { key: "web.allowlist", label: "Web allowlist (JSON)", type: "text" },
-  { key: "web.blacklist", label: "Web blacklist (JSON)", type: "text" },
-  { key: "github.oauthClientId", label: "GitHub OAuth Client ID", type: "text" },
-  { key: "tui.theme", label: "Theme", type: "select", options: themeNames },
-  { key: "tui.compactMode", label: "Compact mode", type: "toggle" },
-  { key: "tui.showInputPreview", label: "Show input preview", type: "toggle" },
+  { key: "defaultProvider", get label() { return t("configFieldDefaultProvider"); }, type: "select", options: ["openrouter", "anthropic", "openai", "deepseek", "opencode"] },
+  { key: "defaultModels.openrouter", get label() { return t("configFieldOpenRouterModel"); }, type: "text" },
+  { key: "defaultModels.anthropic", get label() { return t("configFieldAnthropicModel"); }, type: "text" },
+  { key: "defaultModels.openai", get label() { return t("configFieldOpenAIModel"); }, type: "text" },
+  { key: "defaultModels.deepseek", get label() { return t("configFieldDeepSeekModel"); }, type: "text" },
+  { key: "defaultModels.opencode", get label() { return t("configFieldOpenCodeModel"); }, type: "text" },
+  { key: "buildTurnPolicy.mode", get label() { return t("configFieldBuildTurnPolicy"); }, type: "select", options: ["heuristic", "always-tools"] },
+  { key: "providers.openrouter.apiKey", get label() { return t("configFieldOpenRouterApiKey"); }, type: "text" },
+  { key: "providers.anthropic.apiKey", get label() { return t("configFieldAnthropicApiKey"); }, type: "text" },
+  { key: "providers.openai.apiKey", get label() { return t("configFieldOpenAIApiKey"); }, type: "text" },
+  { key: "providers.deepseek.apiKey", get label() { return t("configFieldDeepSeekApiKey"); }, type: "text" },
+  { key: "providers.opencode.apiKey", get label() { return t("configFieldOpenCodeApiKey"); }, type: "text" },
+  { key: "cache.enabled", get label() { return t("configFieldCache"); }, type: "toggle" },
+  { key: "cache.ttlSeconds", get label() { return t("configFieldCacheTtl"); }, type: "number" },
+  { key: "permissions.read", get label() { return t("configFieldReadPerm"); }, type: "select", options: ["allow", "ask", "deny"] },
+  { key: "permissions.write", get label() { return t("configFieldWritePerm"); }, type: "select", options: ["allow", "ask", "deny"] },
+  { key: "permissions.shell", get label() { return t("configFieldShellPerm"); }, type: "select", options: ["allow", "ask", "deny"] },
+  { key: "permissions.dangerous", get label() { return t("configFieldDangerousPerm"); }, type: "select", options: ["allow", "ask", "deny"] },
+  { key: "permissions.gitLocal", get label() { return t("configFieldGitLocalPerm"); }, type: "select", options: ["allow", "ask", "deny"] },
+  { key: "permissions.allowShell", get label() { return t("configFieldShellAllowlist"); }, type: "text" },
+  { key: "agentPermissions.build.shell", get label() { return t("configFieldBuildShellPerm"); }, type: "select", options: ["allow", "ask", "deny"] },
+  { key: "agentPermissions.build.dangerous", get label() { return t("configFieldBuildDangerousPerm"); }, type: "select", options: ["ask", "allow", "deny"] },
+  { key: "agentPermissions.build.write", get label() { return t("configFieldBuildWritePerm"); }, type: "select", options: ["ask", "allow", "deny"] },
+  { key: "agentPermissions.build.read", get label() { return t("configFieldBuildReadPerm"); }, type: "select", options: ["allow", "ask", "deny"] },
+  { key: "agentPermissions.build.gitLocal", get label() { return t("configFieldBuildGitLocalPerm"); }, type: "select", options: ["allow", "ask", "deny"] },
+  { key: "agentPermissions.plan.shell", get label() { return t("configFieldPlanShellPerm"); }, type: "select", options: ["ask", "deny", "allow"] },
+  { key: "agentPermissions.plan.dangerous", get label() { return t("configFieldPlanDangerousPerm"); }, type: "select", options: ["deny", "ask", "allow"] },
+  { key: "agentPermissions.plan.write", get label() { return t("configFieldPlanWritePerm"); }, type: "select", options: ["deny", "ask", "allow"] },
+  { key: "agentPermissions.plan.read", get label() { return t("configFieldPlanReadPerm"); }, type: "select", options: ["allow", "ask", "deny"] },
+  { key: "agentPermissions.plan.gitLocal", get label() { return t("configFieldPlanGitLocalPerm"); }, type: "select", options: ["ask", "allow", "deny"] },
+  { key: "paths.whitelist", get label() { return t("configFieldPathsWhitelist"); }, type: "text" },
+  { key: "paths.blacklist", get label() { return t("configFieldPathsBlacklist"); }, type: "text" },
+  { key: "web.allowlist", get label() { return t("configFieldWebAllowlist"); }, type: "text" },
+  { key: "web.blacklist", get label() { return t("configFieldWebBlacklist"); }, type: "text" },
+  { key: "github.oauthClientId", get label() { return t("configFieldGithubOAuthClientId"); }, type: "text" },
+  { key: "tui.theme", get label() { return t("configFieldTheme"); }, type: "select", options: themeNames },
+  { key: "tui.compactMode", get label() { return t("configFieldCompactMode"); }, type: "toggle" },
+  { key: "tui.showInputPreview", get label() { return t("configFieldShowInputPreview"); }, type: "toggle" },
+  { key: "tui.language", get label() { return t("configFieldLanguage"); }, type: "select", options: ["en", "pt-BR"] },
 ];

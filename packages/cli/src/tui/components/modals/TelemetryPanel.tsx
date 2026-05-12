@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import { Box, Text, useInput } from "ink";
 import type { ThemeColors } from "../../themes.js";
 import type { SessionStats } from "@deepcode/core";
+import { t } from "../../i18n/index.js";
 
 export interface TelemetryPanelProps {
   theme: ThemeColors;
@@ -89,10 +90,10 @@ export function TelemetryPanel({
         paddingX={1}
       >
         <Text bold color={theme.primary}>
-          Telemetria
+          {t("telemetryTitle")}
         </Text>
         <Text color={theme.fgMuted}>
-          Nenhuma estatística disponível para esta sessão.
+          {t("telemetryNoStats")}
         </Text>
       </Box>
     );
@@ -106,64 +107,64 @@ export function TelemetryPanel({
       paddingX={1}
     >
       <Text bold color={theme.primary}>
-        Telemetria da Sessão
+        {t("telemetrySessionTitle")}
       </Text>
       <Text color={theme.fgMuted}>
-        Esc para fechar{hasHistory ? " | ← → navegar" : ""} | E para exportar
+        {t("telemetryEscClose")}{hasHistory ? t("telemetryNavigateHistory") : ""}{t("telemetryExportKey")}
       </Text>
 
       {hasHistory && (
         <Text color={theme.fgMuted}>
-          Sessão {navigateIndex + 1}/{allSessions.length}
+          {t("telemetrySessionOf", { index: navigateIndex + 1, total: allSessions.length })}
         </Text>
       )}
 
       <Text> </Text>
 
       <Box flexDirection="column">
-        <Text bold>Resumo</Text>
+        <Text bold>{t("telemetrySummary")}</Text>
         <Text color={theme.fgMuted}>
-          Sessão: {displayStats.sessionId.slice(0, 12)}...
+          {t("telemetrySessionLabel")}{displayStats.sessionId.slice(0, 12)}...
         </Text>
         <Text color={theme.fgMuted}>
-          Provider: {displayStats.provider}
+          {t("telemetryProviderLabel")}{displayStats.provider}
         </Text>
         <Text color={theme.fgMuted}>
-          Modelo: {displayStats.model || "não configurado"}
+          {t("telemetryModelLabel")}{displayStats.model || t("notConfigured")}
         </Text>
         <Text color={theme.fgMuted}>
-          Duração: {formatDuration(displayStats.duration)}
+          {t("telemetryDurationLabel")}{formatDuration(displayStats.duration)}
         </Text>
         <Text> </Text>
 
-        <Text bold>Uso de Tokens</Text>
+        <Text bold>{t("telemetryTokenUsage")}</Text>
         <Text color={theme.accent}>
-          Input:  {formatTokens(displayStats.inputTokens)} tokens
+          {t("telemetryInputLabel")}{formatTokens(displayStats.inputTokens)}{t("telemetryTokensSuffix")}
         </Text>
         <Text color={theme.accent}>
-          Output: {formatTokens(displayStats.outputTokens)} tokens
+          {t("telemetryOutputLabel")}{formatTokens(displayStats.outputTokens)}{t("telemetryTokensSuffix")}
         </Text>
         <Text color={theme.accent}>
-          Total:  {formatTokens(displayStats.inputTokens + displayStats.outputTokens)} tokens
+          {t("totalLabel")} {formatTokens(displayStats.inputTokens + displayStats.outputTokens)}{t("telemetryTokensSuffix")}
         </Text>
         <Text> </Text>
 
-        <Text bold>Custo Estimado</Text>
+        <Text bold>{t("telemetryEstimatedCost")}</Text>
         <Text color={theme.success} bold>
           ${(displayStats.estimatedCost ?? 0).toFixed(4)}
         </Text>
         <Text> </Text>
 
-        <Text bold>Tool Calls</Text>
+        <Text bold>{t("telemetryToolCalls")}</Text>
         <Text color={theme.fgMuted}>
-          Total: {displayStats.toolCalls}
+          {t("totalLabel")}{displayStats.toolCalls}
         </Text>
         {displayStats.errorCount > 0 && (
           <>
             <Text> </Text>
-            <Text bold color={theme.error}>Erros</Text>
+            <Text bold color={theme.error}>{t("telemetryErrors")}</Text>
             <Text color={theme.error}>
-              Total: {displayStats.errorCount}
+              {t("totalLabel")}{displayStats.errorCount}
             </Text>
           </>
         )}
@@ -181,19 +182,19 @@ export function TelemetryPanel({
 
       <Text> </Text>
       <Text color={theme.fgMuted} dimColor>
-        * Custo estimado baseado no pricing do modelo
+        {t("telemetryCostDisclaimer")}
       </Text>
 
       <Text> </Text>
-      <Text bold>Exportação</Text>
+      <Text bold>{t("telemetryExportSection")}</Text>
       {exportStatus === 'exporting' ? (
-        <Text color={theme.warning}>Exportando...</Text>
+        <Text color={theme.warning}>{t("telemetryExporting")}</Text>
       ) : exportStatus === 'success' ? (
-        <Text color={theme.success}>Exportado para: {lastExportPath}</Text>
+        <Text color={theme.success}>{t("telemetryExportedTo", { path: lastExportPath ?? "" })}</Text>
       ) : exportStatus === 'error' ? (
-        <Text color={theme.error}>Erro ao exportar</Text>
+        <Text color={theme.error}>{t("telemetryExportError")}</Text>
       ) : (
-        <Text color={theme.fgMuted}>Pressione E para exportar JSON</Text>
+        <Text color={theme.fgMuted}>{t("telemetryPressEToExport")}</Text>
       )}
     </Box>
   );

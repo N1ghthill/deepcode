@@ -66,6 +66,7 @@ describe("classifyShellCommand", () => {
           directory: tempDir,
           abortSignal: new AbortController().signal,
           config,
+          agentMode: "build",
           cache: new ToolCache(tempDir, config),
           permissions: new PermissionGateway(
             config,
@@ -123,6 +124,7 @@ describe("classifyShellCommand", () => {
             directory: tempDir,
             abortSignal: new AbortController().signal,
             config,
+            agentMode: "build",
             cache: new ToolCache(tempDir, config),
             permissions: new PermissionGateway(
               config,

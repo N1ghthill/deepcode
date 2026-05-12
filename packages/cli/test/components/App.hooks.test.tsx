@@ -9,7 +9,7 @@ describe("App Component - Hooks Validation", () => {
     const frame = lastFrame();
     
     expect(frame).toBeTruthy();
-    expect(frame).toContain("Carregando DeepCode...");
+    expect(frame).toContain("Loading DeepCode...");
   });
 
   it("should not violate React hooks rules", () => {

@@ -34,7 +34,7 @@ describe("TelemetryPanel", () => {
     try {
       await settleInk();
       const frame = lastFrame() ?? "";
-      expect(frame).toContain("Nenhuma estatística disponível para esta sessão.");
+      expect(frame).toContain("No statistics available for this session.");
     } finally {
       unmount();
     }
@@ -50,7 +50,7 @@ describe("TelemetryPanel", () => {
       await settleInk();
       const frame = lastFrame() ?? "";
       expect(frame).toContain("Provider: openrouter");
-      expect(frame).toContain("Modelo: qwen/qwen3-coder");
+      expect(frame).toContain("Model: qwen/qwen3-coder");
     } finally {
       unmount();
     }
@@ -191,9 +191,9 @@ describe("TelemetryPanel", () => {
     }
 
     const cases: Array<{ status: "exporting" | "success" | "error"; expected: string }> = [
-      { status: "exporting", expected: "Exportando..." },
-      { status: "success", expected: "Exportado para:" },
-      { status: "error", expected: "Erro ao exportar" },
+      { status: "exporting", expected: "Exporting..." },
+      { status: "success", expected: "Exported to:" },
+      { status: "error", expected: "Export error" },
     ];
 
     for (const { status, expected } of cases) {

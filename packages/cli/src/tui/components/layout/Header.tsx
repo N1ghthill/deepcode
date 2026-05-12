@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import type { ThemeColors } from "../../themes.js";
 import type { ProviderStatus } from "../../hooks/useProviderStatus.js";
 import type { ProviderId, AgentMode } from "@deepcode/shared";
+import { t } from "../../i18n/index.js";
 
 export interface HeaderProps {
   provider: ProviderId;
@@ -24,7 +25,7 @@ export function Header({
       ? { symbol: "●", color: theme.success }
       : { symbol: "○", color: theme.error }
     : { symbol: "○", color: theme.fgMuted };
-  const activeTarget = model ? `${provider}/${model}` : `${provider}/não configurado`;
+  const activeTarget = model ? `${provider}/${model}` : `${provider}/${t("notConfigured")}`;
 
   return (
     <Box
@@ -43,7 +44,7 @@ export function Header({
 
       <Box gap={2}>
         <Box>
-          <Text color={theme.fgMuted}>Target: </Text>
+          <Text color={theme.fgMuted}>{t("sidebarTarget")}</Text>
           <Text color={statusIndicator.color}>
             {statusIndicator.symbol}{" "}
           </Text>
@@ -53,13 +54,13 @@ export function Header({
         </Box>
 
         <Box>
-          <Text color={theme.fgMuted}>Mode: </Text>
+          <Text color={theme.fgMuted}>{t("headerMode")}</Text>
           <Text
             bold
             backgroundColor={agentMode === "build" ? theme.success : theme.primary}
             color={agentMode === "build" ? "black" : "black"}
           >
-            {agentMode === "build" ? " BUILD " : " PLAN "}
+            {agentMode === "build" ? t("headerBuild") : t("headerPlan")}
           </Text>
         </Box>
       </Box>

@@ -3,8 +3,10 @@ import { Box, Text, useInput } from "ink";
 import type { ThemeColors } from "../../themes.js";
 import type { Session, Activity } from "@deepcode/shared";
 import type { ApprovalRequest, SessionStats, TaskPlan } from "@deepcode/core";
+import { t } from "../../i18n/index.js";
 import { TelemetrySidebar } from "../shared/TelemetrySidebar.js";
 import { truncate } from "../../utils/truncate.js";
+import { formatAgentStatus } from "../../utils/status-format.js";
 
 export type SidebarTab = "sessions" | "activities" | "telemetry" | "approvals" | "plan";
 
@@ -64,41 +66,41 @@ export function Sidebar({
     >
       <Box flexDirection="column" marginBottom={1}>
         <Text color={theme.fgMuted}>
-          Sessão: {truncate(activeSessionId, 14)}
+          {t("sidebarSession")}{truncate(activeSessionId, 14)}
         </Text>
         <Text color={theme.fgMuted}>
-          Status: <Text color={status === "error" ? theme.error : theme.success}>{status ?? "idle"}</Text>
+          {t("statusLabel")}<Text color={status === "error" ? theme.error : theme.success}>{formatAgentStatus(status ?? "idle")}</Text>
         </Text>
         <Text color={theme.fgMuted}>
-          Target: {truncate(activeTarget ?? "não configurado", 22)}
+          {t("sidebarTarget")}{truncate(activeTarget ?? t("notConfigured"), 22)}
         </Text>
         <Text color={theme.fgMuted}>
-          Msgs: {messageCount} • Tools: {toolCalls.length}
-          {approvalCount > 0 ? ` • Aprovações: ${approvalCount}` : ""}
+          {t("sidebarMsgs")}{messageCount} \u2022 {t("sidebarTools")}{toolCalls.length}
+          {approvalCount > 0 ? ` \u2022 ${t("sidebarApprovals")}${approvalCount}` : ""}
         </Text>
       </Box>
 
       <Box>
         <TabButton
-          label="1:Ses"
+          label={t("sidebarTabSessions")}
           active={activeTab === "sessions"}
           theme={theme}
         />
         <Text> </Text>
         <TabButton
-          label="2:Act"
+          label={t("sidebarTabActivities")}
           active={activeTab === "activities"}
           theme={theme}
         />
         <Text> </Text>
         <TabButton
-          label="3:Tel"
+          label={t("sidebarTabTelemetry")}
           active={activeTab === "telemetry"}
           theme={theme}
         />
         <Text> </Text>
         <TabButton
-          label={`4:Aprov${approvalCount > 0 ? `(${approvalCount})` : ""}`}
+          label={`${t("sidebarTabApprovals")}${approvalCount > 0 ? `(${approvalCount})` : ""}`}
           active={activeTab === "approvals"}
           theme={theme}
         />
@@ -106,7 +108,7 @@ export function Sidebar({
           <>
             <Text> </Text>
             <TabButton
-              label="5:Plan"
+              label={t("sidebarTabPlan")}
               active={activeTab === "plan"}
               theme={theme}
             />
@@ -202,7 +204,7 @@ function PlanList({
         {plan.objective.slice(0, 40)}...
       </Text>
       <Text color={theme.fgMuted}>
-        Progress: {progress}/{total} ({percentage}%)
+        {t("sidebarProgress")}{progress}/{total} ({percentage}%)
       </Text>
       <Text> </Text>
       {plan.tasks.map((task) => (
@@ -241,7 +243,7 @@ function SessionsList({
   }, [visibleSessions, activeSessionId]);
 
   if (sessions.length === 0) {
-    return <Text color={theme.fgMuted}>Nenhuma sessão.</Text>;
+    return <Text color={theme.fgMuted}>{t("sidebarNoSessions")}</Text>;
   }
 
   return (
@@ -263,12 +265,12 @@ function SessionsList({
             {isFocused ? "▸ " : isActive ? "▶ " : "  "}
             {isDeleted ? "☠ " : ""}
             <Text dimColor>[{msgCount}m]</Text> {timeStr} {providerStr}
-            {isDeleted ? " [deleted]" : ` ${session.status}`}
+            {isDeleted ? ` ${t("sidebarDeleted")}` : ` ${session.status}`}
           </Text>
         );
       })}
       <Text> </Text>
-      <Text color={theme.fgMuted}>Ctrl+O abre o seletor de sessões completo.</Text>
+      <Text color={theme.fgMuted}>{t("sidebarCtrlOHint")}</Text>
     </Box>
   );
 }
@@ -279,7 +281,7 @@ function formatSessionTime(value: string): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return "agora";
+  if (diffMin < 1) return t("sidebarNow");
   if (diffMin < 60) return `${diffMin}m`;
   const diffH = Math.floor(diffMin / 60);
   if (diffH < 24) return `${diffH}h`;
@@ -306,12 +308,12 @@ function ActivitiesList({
   return (
     <Box flexDirection="column">
       {activities.length === 0 && toolCalls.length === 0 && (
-        <Text color={theme.fgMuted}>Sem atividade.</Text>
+        <Text color={theme.fgMuted}>{t("sidebarNoActivity")}</Text>
       )}
 
       {toolCalls.length > 0 && (
         <Box flexDirection="column">
-          <Text bold color={theme.accent}>Tool Calls</Text>
+          <Text bold color={theme.accent}>{t("sidebarToolCallsLabel")}</Text>
           {toolCalls.slice(-5).map((tc) => (
             <Text key={tc.id} color={theme.fgMuted}>
               → {tc.name}
@@ -322,7 +324,7 @@ function ActivitiesList({
 
       {activities.length > 0 && (
         <Box flexDirection="column">
-          <Text bold>Recent</Text>
+          <Text bold>{t("sidebarRecent")}</Text>
           {activities.slice(-8).map((activity) => (
             <Text key={activity.id} color={theme.fgMuted}>
               {icon(activity.type)} {activity.message.slice(0, 50)}
@@ -344,7 +346,7 @@ function ApprovalList({
   onApprovalAction?: (requestId: string, allowed: boolean, scope: "once" | "session" | "always") => void;
 }) {
   if (approvals.length === 0) {
-    return <Text color={theme.fgMuted}>Nenhuma aprovação pendente.</Text>;
+    return <Text color={theme.fgMuted}>{t("sidebarNoPendingApprovals")}</Text>;
   }
 
   const riskColor = (level: string): string => {
@@ -357,7 +359,7 @@ function ApprovalList({
 
   return (
     <Box flexDirection="column">
-      <Text bold color={theme.warning}>Aprovações Pendentes ({approvals.length})</Text>
+      <Text bold color={theme.warning}>{t("sidebarPendingApprovals", { count: approvals.length })}</Text>
       <Text> </Text>
       {approvals.map((req, idx) => (
         <Box key={req.id} flexDirection="column" marginBottom={1}>
@@ -379,33 +381,29 @@ function ApprovalList({
               <Text
                 color={theme.success}
                 bold
-                onPress={() => onApprovalAction(req.id, true, "once")}
               >
-                [A]provar
+                {t("approveAction")}
               </Text>
               <Text> </Text>
               <Text
                 color={theme.primary}
                 bold
-                onPress={() => onApprovalAction(req.id, true, "always")}
               >
-                [L]sempre
+                {t("approveAlwaysAction")}
               </Text>
               <Text> </Text>
               <Text
                 color={theme.accent}
                 bold
-                onPress={() => onApprovalAction(req.id, true, "session")}
               >
-                [S]sessão
+                {t("approveSessionAction")}
               </Text>
               <Text> </Text>
               <Text
                 color={theme.error}
                 bold
-                onPress={() => onApprovalAction(req.id, false)}
               >
-                [D]negar
+                {t("denyAction")}
               </Text>
             </Box>
           )}

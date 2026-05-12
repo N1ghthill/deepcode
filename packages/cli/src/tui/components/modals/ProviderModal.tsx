@@ -8,6 +8,7 @@ import {
   type ProviderStatus,
 } from "../../hooks/useProviderStatus.js";
 import { InlineSpinner } from "../shared/InlineSpinner.js";
+import { t } from "../../i18n/index.js";
 
 const ESCAPE = String.fromCharCode(27);
 const BRACKETED_PASTE_MARKERS = new RegExp(`(?:${ESCAPE})?\\[(?:200|201)~`, "g");
@@ -149,12 +150,12 @@ export function ProviderModal({
       paddingX={1}
     >
       <Text bold color={theme.primary}>
-        Gerenciar Providers
+        {t("providerModalTitle")}
       </Text>
       <Text color={theme.fgMuted}>
         {editingProvider 
-          ? `${editField === "apiKey" ? "Cole ou digite a API key" : "Cole ou digite o caminho do arquivo da API key"} | Enter salvar | Esc cancelar | Ctrl+T visibilidade`
-          : "↑/↓ navegar | s usar provider | Enter testar | e API key | f arquivo de key | Esc fechar"}
+          ? `${editField === "apiKey" ? t("providerModalEditApiKey") : t("providerModalEditApiKeyFile")} ${t("providerModalEditSaveCancelHint")}`
+          : t("providerModalNavHint")}
       </Text>
       <Text> </Text>
 
@@ -179,32 +180,32 @@ export function ProviderModal({
               color={selected ? theme.primary : theme.fgMuted}
               bold={selected}
             >
-              {selected ? "▶ " : "  "}
+              {selected ? "\u25B6 " : "  "}
               {provider.name}{" "}
-              {isCurrent && <Text color={theme.success}>[ativo] </Text>}
+              {isCurrent && <Text color={theme.success}>{t("providerModalActive")} </Text>}
               {scopedStatus?.online ? (
                 <Text color={theme.success}>
-                  ● conectado ({scopedStatus.latency}ms)
+                  {t("providerModalConnected", { latency: scopedStatus.latency ?? 0 })}
                 </Text>
               ) : scopedStatus?.error ? (
                 <Text color={theme.error}>
-                  ○ erro: {scopedStatus.error.slice(0, 60)}
+                  {t("providerModalError", { error: scopedStatus.error.slice(0, 60) })}
                 </Text>
               ) : staleStatus ? (
                 <Text color={theme.fgMuted}>
-                  ○ status antigo
+                  {t("providerModalStaleStatus")}
                 </Text>
               ) : (
-                <Text color={theme.fgMuted}>○ não testado</Text>
+                <Text color={theme.fgMuted}>{t("providerModalNotTested")}</Text>
               )}
               {isTesting && (
                 <Text color={theme.warning}>
-                  {" "}<InlineSpinner theme={theme} /> testando...
+                  {" "}<InlineSpinner theme={theme} /> {t("providerModalTesting")}
                 </Text>
               )}
               {isSaving && (
                 <Text color={theme.warning}>
-                  {" "}<InlineSpinner theme={theme} /> salvando...
+                  {" "}<InlineSpinner theme={theme} /> {t("providerModalSaving")}
                 </Text>
               )}
             </Text>
@@ -212,35 +213,34 @@ export function ProviderModal({
             {selected && !isEditing && (
               <Box paddingLeft={2} flexDirection="column">
                 <Text color={theme.fgMuted}>
-                  API Key: {provider.hasApiKey ? "[set]" : "[missing]"}
+                  {t("providerModalApiKeyLabel")}{provider.hasApiKey ? t("providerModalSet") : t("providerModalMissing")}
                 </Text>
                 <Text color={theme.fgMuted}>
-                  API Key file: {provider.hasApiKeyFile ? "[set]" : "[not set]"}
+                  {t("providerModalApiKeyFileLabel")}{provider.hasApiKeyFile ? t("providerModalSet") : t("providerModalNotSet")}
                 </Text>
                 {provider.expectedTarget && (
                   <Text color={theme.fgMuted}>
-                    Target atual: {provider.expectedTarget}
+                    {t("providerModalCurrentTarget", { target: provider.expectedTarget })}
                   </Text>
                 )}
                 <Text color={theme.fgMuted}>
-                  Last checked:{" "}
-                  {provider.status.lastChecked
+                  {t("providerModalLastChecked", { time: provider.status.lastChecked
                     ? provider.status.lastChecked.toLocaleTimeString()
-                    : "never"}
+                    : t("providerModalNever") })}
                 </Text>
                 {staleStatus && provider.status.checkedTarget && (
                   <Text color={theme.fgMuted}>
-                    Ultimo teste: {provider.status.checkedTarget}
+                    {t("providerModalLastTest", { target: provider.status.checkedTarget })}
                   </Text>
                 )}
                 {scopedStatus?.error && (
                   <Text color={theme.error}>
-                    Erro completo: {scopedStatus.error}
+                    {t("providerModalFullError", { error: scopedStatus.error })}
                   </Text>
                 )}
                 {staleStatus && provider.status.error && (
                   <Text color={theme.fgMuted}>
-                    Ultimo erro: {provider.status.error}
+                    {t("providerModalLastError", { error: provider.status.error })}
                   </Text>
                 )}
               </Box>
@@ -249,17 +249,17 @@ export function ProviderModal({
             {isEditing && (
               <Box paddingLeft={2} flexDirection="column">
                 <Text color={theme.primary}>
-                  {editField === "apiKey" ? "Editar API Key:" : "Editar arquivo da API Key:"}
+                  {editField === "apiKey" ? t("providerModalEditApiKeyLabel") : t("providerModalEditApiKeyFileLabel")}
                 </Text>
                 <Text color={theme.fgMuted}>
                   {editField === "apiKey" && !showPassword
-                    ? '•'.repeat(editInput.length) || '[vazio]'
-                    : editInput || '[vazio]'}
+                    ? '\u2022'.repeat(editInput.length) || t("emptyValue")
+                    : editInput || t("emptyValue")}
                 </Text>
                 <Text color={theme.fgMuted}>
                   {savingProvider === provider.id
-                    ? "Salvando credencial..."
-                    : "(Ctrl+T: alterna visibilidade)"}
+                    ? t("providerModalSavingCredential")
+                    : t("providerModalToggleVisibility")}
                 </Text>
               </Box>
             )}
@@ -269,10 +269,10 @@ export function ProviderModal({
 
       <Text> </Text>
       <Text color={theme.fgMuted}>
-        Tudo aqui salva na configuração do app. Segredos não são exibidos depois de salvos.
+        {t("providerModalDisclaimer")}
       </Text>
       <Text color={theme.fgMuted}>
-        Arquivo de key permite apontar para um arquivo local fora do repositório.
+        {t("providerModalKeyFileDisclaimer")}
       </Text>
     </Box>
   );

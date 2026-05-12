@@ -1,4 +1,3 @@
-import type { ProviderId } from "@deepcode/shared";
 import type { RecentModelSelection } from "../persistence/ui-state.js";
 import { formatModelSelection } from "../model-selection.js";
 

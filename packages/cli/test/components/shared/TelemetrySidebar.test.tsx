@@ -33,7 +33,7 @@ describe("TelemetrySidebar", () => {
 
     try {
       await settleInk();
-      expect(lastFrame()).toContain("Sem dados de telemetria");
+      expect(lastFrame()).toContain("No telemetry data.");
     } finally {
       unmount();
     }
@@ -49,7 +49,7 @@ describe("TelemetrySidebar", () => {
       await settleInk();
       const frame = lastFrame() ?? "";
       expect(frame).toContain("Provider: openrouter");
-      expect(frame).toContain("Modelo: qwen/qwen3-coder");
+      expect(frame).toContain("Model: qwen/qwen3-coder");
     } finally {
       unmount();
     }

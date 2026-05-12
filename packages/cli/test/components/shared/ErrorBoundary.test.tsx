@@ -32,7 +32,7 @@ describe("ErrorBoundary", () => {
       )
     );
     
-    expect(lastFrame()).toContain("⚠️ Erro no componente");
+    expect(lastFrame()).toContain("Component error");
     expect(lastFrame()).toContain("Test error");
   });
   
@@ -49,6 +49,6 @@ describe("ErrorBoundary", () => {
       )
     );
     
-    expect(lastFrame()).toContain("Pressione 'r' para tentar novamente");
+    expect(lastFrame()).toContain("Press 'r' to try again");
   });
 });

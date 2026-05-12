@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import type { ProviderId } from "@deepcode/shared";
+import { t } from "../i18n/index.js";
 
 export interface ProviderStatus {
   online: boolean;
@@ -101,7 +102,7 @@ export function useProviderStatus(): UseProviderStatusResult {
         : {
             online: false,
             latency,
-            error: "Connection test failed.",
+            error: t("providerConnectionTestFailed"),
             lastChecked: new Date(),
             checkedTarget: provider.modelUnderTest ?? null,
           };
@@ -113,7 +114,7 @@ export function useProviderStatus(): UseProviderStatusResult {
       const nextStatus: ProviderStatus = {
         online: false,
         latency,
-        error: err instanceof Error ? err.message : "Unknown error",
+        error: err instanceof Error ? err.message : t("providerUnknownError"),
         lastChecked: new Date(),
         checkedTarget: provider.modelUnderTest ?? null,
       };

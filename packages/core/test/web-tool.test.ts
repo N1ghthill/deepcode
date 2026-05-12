@@ -134,6 +134,7 @@ function createContext(
     directory: worktree,
     abortSignal: new AbortController().signal,
     config,
+    agentMode: "build" as const,
     cache: new ToolCache(worktree, config),
     permissions: new PermissionGateway(
       config,

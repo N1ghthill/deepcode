@@ -170,7 +170,8 @@ describe("OpenAICompatibleProvider", () => {
     }
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"));
+    const callArgs = fetchSpy.mock.calls[0] as [string, RequestInit] | undefined;
+    const body = JSON.parse(String(callArgs?.[1]?.body ?? "{}"));
     expect(body.thinking).toEqual({ type: "disabled" });
   });
 
@@ -199,7 +200,8 @@ describe("OpenAICompatibleProvider", () => {
     }
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"));
+    const callArgs = fetchSpy.mock.calls[0] as [string, RequestInit] | undefined;
+    const body = JSON.parse(String(callArgs?.[1]?.body ?? "{}"));
     expect(body.model).toBe("kimi-k2.6");
   });
 });

@@ -4,7 +4,6 @@ import type {
   DeepCodeConfig,
   Message,
   Model,
-  ProviderId,
 } from "@deepcode/shared";
 import { ProviderManager } from "../src/providers/provider-manager.js";
 import type {
@@ -159,7 +158,7 @@ class OpenCodeValidationProvider implements LLMProvider {
   }
 }
 
-function createConfig(overrides: Partial<DeepCodeConfig> = {}): DeepCodeConfig {
+function createConfig(overrides: { providers?: Record<string, { apiKey?: string; apiKeyFile?: string; baseUrl?: string }> } & Omit<Partial<DeepCodeConfig>, "providers"> = {}): DeepCodeConfig {
   const { providers: overrideProviders, ...restOverrides } = overrides;
 
   const providers = {
@@ -194,7 +193,7 @@ function createConfig(overrides: Partial<DeepCodeConfig> = {}): DeepCodeConfig {
     web: { allowlist: [], blacklist: [] },
     lsp: { servers: [] },
     github: { oauthScopes: [] },
-    tui: { theme: "dark", compactMode: false, showInputPreview: true },
+    tui: { theme: "dark", compactMode: false, showInputPreview: true, language: "en" },
     buildTurnPolicy: {
       mode: "heuristic",
       conversationalPhrases: ["oi"],

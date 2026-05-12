@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text, useInput } from "ink";
 import type { ThemeColors } from "../../themes.js";
+import { t } from "../../i18n/index.js";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -60,19 +61,31 @@ function ErrorFallback({ error, theme, onReset }: ErrorFallbackProps) {
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={theme.error} paddingX={1}>
       <Text color={theme.error} bold>
-        ⚠️ Erro no componente
+        {t("errorBoundaryTitle")}
       </Text>
       <Text color={theme.fgMuted}>
         {error?.message}
       </Text>
       {onReset && (
         <Text color={theme.primary}>
-          Pressione <Text bold>'r'</Text> para tentar novamente
+          {t("errorBoundaryPressRetry")}
         </Text>
       )}
       <Text> </Text>
       <Text color={theme.fgMuted}>
-        O aplicativo continuará funcionando normalmente.
+        {t("errorBoundaryContinue")}
+      </Text>
+      <Text color={theme.fgMuted}>
+        {error?.message}
+      </Text>
+      {onReset && (
+        <Text color={theme.primary}>
+          {t("errorBoundaryPressRetry")}
+        </Text>
+      )}
+      <Text> </Text>
+      <Text color={theme.fgMuted}>
+        {t("errorBoundaryContinue")}
       </Text>
     </Box>
   );

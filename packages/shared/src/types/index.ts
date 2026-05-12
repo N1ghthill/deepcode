@@ -391,6 +391,7 @@ export const DeepCodeConfigSchema = z
         theme: z.enum(["dark", "light", "high-contrast", "nord", "dracula"]).default("dark"),
         compactMode: z.boolean().default(false),
         showInputPreview: z.boolean().default(true),
+        language: z.enum(["en", "pt-BR"]).default("en"),
       })
       .strict()
       .default({}),
@@ -599,6 +600,16 @@ export type ConfigEditField =
   | "permissions.dangerous"
   | "permissions.gitLocal"
   | "permissions.allowShell"
+  | "agentPermissions.build.shell"
+  | "agentPermissions.build.dangerous"
+  | "agentPermissions.build.write"
+  | "agentPermissions.build.read"
+  | "agentPermissions.build.gitLocal"
+  | "agentPermissions.plan.shell"
+  | "agentPermissions.plan.dangerous"
+  | "agentPermissions.plan.write"
+  | "agentPermissions.plan.read"
+  | "agentPermissions.plan.gitLocal"
   | "paths.whitelist"
   | "paths.blacklist"
   | "web.allowlist"
@@ -606,7 +617,8 @@ export type ConfigEditField =
   | "github.oauthClientId"
   | "tui.theme"
   | "tui.compactMode"
-  | "tui.showInputPreview";
+  | "tui.showInputPreview"
+  | "tui.language";
 
 export interface SlashCommandDef {
   command: string;

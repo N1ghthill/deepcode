@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { ThemeColors } from "../../themes.js";
+import { t } from "../../i18n/index.js";
 
 export interface CommandPreviewProps {
   theme: ThemeColors;
@@ -22,13 +23,13 @@ export function CommandPreview({
   return (
     <Box flexDirection="column" borderStyle="single" borderColor={theme.border} paddingX={1}>
       <Text bold color={theme.primary}>
-        Preview do Comando
+        {t("commandPreviewTitle")}
       </Text>
       <Text> </Text>
 
       {workingDir && (
         <Text color={theme.fgMuted}>
-          Diretório: {workingDir}
+          {t("commandPreviewDirectory")}{workingDir}
         </Text>
       )}
 
@@ -44,12 +45,12 @@ export function CommandPreview({
           estimatedRisk === 'medium' ? theme.warning :
           theme.success
         }>
-          Risco estimado: {estimatedRisk === 'high' ? 'ALTO' : estimatedRisk === 'medium' ? 'MÉDIO' : 'BAIXO'}
+          {t("commandPreviewEstimatedRisk")}{estimatedRisk === 'high' ? t("commandPreviewRiskHigh") : estimatedRisk === 'medium' ? t("commandPreviewRiskMedium") : t("commandPreviewRiskLow")}
         </Text>
       )}
 
       <Text color={theme.fgMuted}>
-        Args: {args.map((a, i) => `[${i}] "${a}"`).join(', ')}
+        {t("commandPreviewArgs")}{args.map((a, i) => `[${i}] "${a}"`).join(', ')}
       </Text>
     </Box>
   );

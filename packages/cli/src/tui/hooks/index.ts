@@ -8,3 +8,8 @@ export {
   isProviderStatusStale,
 } from "./useProviderStatus.js";
 export type { ProviderStatus } from "./useProviderStatus.js";
+export { useGithubOAuth } from "./useGithubOAuth.js";
+export { useApprovalFlow } from "./useApprovalFlow.js";
+export { useConfigEditor } from "./useConfigEditor.js";
+export { useSessionManager } from "./useSessionManager.js";
+export { useLiveMetrics } from "./useLiveMetrics.js";
