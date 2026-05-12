@@ -1,4 +1,5 @@
 import { URLSearchParams } from "node:url";
+import { execFile } from "node:child_process";
 import { z } from "zod";
 
 const DeviceCodeResponseSchema = z
@@ -43,6 +44,8 @@ export interface GitHubOAuthToken {
 
 export interface GitHubOAuthDeviceFlowOptions {
   enterpriseUrl?: string;
+  openBrowser?: boolean | ((url: string) => Promise<void>);
+  onBrowserOpenError?: (error: Error) => void;
   signal?: AbortSignal;
 }
 
@@ -66,6 +69,13 @@ export class GitHubOAuthDeviceFlow {
       scopes: options.scopes ?? [],
     });
     options.onVerification?.(code);
+    if (this.options.openBrowser) {
+      void openVerificationUrl(code.verificationUri, this.options.openBrowser).catch((error) => {
+        this.options.onBrowserOpenError?.(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      });
+    }
     return this.pollAccessToken({
       clientId: options.clientId,
       deviceCode: code.deviceCode,
@@ -109,9 +119,15 @@ export class GitHubOAuthDeviceFlow {
     const expiresAt = Date.now() + input.expiresIn * 1000;
 
     while (Date.now() < expiresAt) {
+      if (this.options.signal?.aborted) {
+        throw new Error("GitHub OAuth device flow was cancelled.");
+      }
       attempt += 1;
       input.onPoll?.({ attempt, nextIntervalSeconds: interval });
       await delay(interval * 1000, this.options.signal);
+      if (this.options.signal?.aborted) {
+        throw new Error("GitHub OAuth device flow was cancelled.");
+      }
 
       const body = new URLSearchParams({
         client_id: input.clientId,
@@ -148,18 +164,67 @@ export class GitHubOAuthDeviceFlow {
         continue;
       }
       if (error.data.error === "expired_token" || error.data.error === "token_expired") {
-        throw new Error("GitHub device authorization expired. Start login again.");
+        throw new Error(
+          "Código expirado (válido por 15 minutos).\n" +
+          "Dica: Pressione R para tentar novamente."
+        );
       }
       if (error.data.error === "access_denied") {
-        throw new Error("GitHub device authorization was denied.");
+        throw new Error(
+          "Acesso negado no GitHub.\n" +
+          "Você clicou em 'Cancelar' na página de autorização?\n" +
+          "Dica: Pressione R para tentar novamente."
+        );
       }
       throw new Error(
-        `GitHub OAuth device flow failed: ${error.data.error_description ?? error.data.error}`,
+        `Erro no GitHub OAuth: ${error.data.error_description ?? error.data.error}\n` +
+        "Dica: Pressione R para tentar novamente."
       );
     }
 
-    throw new Error("GitHub device authorization timed out. Start login again.");
+    throw new Error(
+      "Tempo esgotado aguardando autorização (15 minutos).\n" +
+      "Dica: Pressione R para tentar novamente."
+    );
   }
+}
+
+async function openVerificationUrl(
+  url: string,
+  opener: true | ((url: string) => Promise<void>),
+): Promise<void> {
+  if (typeof opener === "function") {
+    await opener(url);
+    return;
+  }
+  await openExternalUrl(url);
+}
+
+export function openExternalUrl(url: string): Promise<void> {
+  const command =
+    process.platform === "darwin"
+      ? "open"
+      : process.platform === "win32"
+        ? "cmd"
+        : "xdg-open";
+  const args =
+    process.platform === "win32"
+      ? ["/c", "start", "", url]
+      : [url];
+
+  return new Promise((resolve, reject) => {
+    const child = execFile(command, args, {
+      windowsHide: true,
+      timeout: 10_000,
+    }, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+    child.unref();
+  });
 }
 
 export function normalizeGitHubWebBase(enterpriseUrl?: string): string {
