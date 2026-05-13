@@ -44,16 +44,33 @@ export function useChatInput({
       if (!runtime || !session) return;
       if (streaming) return;
 
-      // Vim mode toggle
+      // Vim normal mode — only handle mode transitions and input editing
       if (vimMode === "normal") {
-        if (inputChar?.toLowerCase() === "i" || inputChar?.toLowerCase() === "a") {
+        if (inputChar === "i" || inputChar === "a") {
           setVimMode("insert");
+          return;
+        }
+        if (inputChar === "A") {
+          // Append at end: switch to insert keeping existing input
+          setVimMode("insert");
+          return;
+        }
+        if (inputChar === "d" || inputChar === "D") {
+          // dd / D — clear input
+          setInput("");
+          setNotice("Input cleared");
+          return;
+        }
+        if (inputChar === "0") {
+          // Go to start of line (clear and re-enter)
+          setInput("");
           return;
         }
         if (key.escape) {
           setVimMode("normal");
           return;
         }
+        // All other keys (j/k/G/gg/Ctrl+d/Ctrl+u) are handled by useVirtualScroll
         return;
       }
 

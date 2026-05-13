@@ -1212,6 +1212,7 @@ export function App(props: AppProps) {
                       streaming={streaming}
                       runtime={runtime}
                       theme={theme}
+                      vimMode={vimMode}
                     />
                     {approvals.length > 0 && activeApproval && (
                       <ChatApprovalIndicator request={activeApproval} theme={theme} />
