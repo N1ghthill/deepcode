@@ -32,7 +32,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
-        run: pnpm --filter @deepcode/core test && pnpm --filter @deepcode/cli test --passWithNoTests
+        run: pnpm --filter @deepcode/core test && pnpm --filter @deepcode/cli run test -- --passWithNoTests
 
       - name: Build all packages
         run: pnpm build

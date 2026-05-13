@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 import React, { useEffect, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import {

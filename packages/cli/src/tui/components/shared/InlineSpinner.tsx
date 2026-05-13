@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 import React, { useState, useEffect } from "react";
 import { Text } from "ink";
 import type { ThemeColors } from "../../themes.js";

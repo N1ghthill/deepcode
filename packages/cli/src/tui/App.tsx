@@ -73,7 +73,6 @@ import {
   ChatApprovalIndicator,
   ConfigEditor,
   EmptyChatState,
-  GithubOAuthPanel,
   HelpView,
   SessionSwitcher,
   SlashCommandMenu,
@@ -401,7 +400,7 @@ export function App(props: AppProps) {
     } else {
       closePreview();
     }
-  }, [firstApproval?.id, firstApproval?.diff]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [firstApproval?.id, firstApproval?.diff]); // intentionally omits openPreview/closePreview from deps
 
   useEffect(() => {
     useAgentStore.getState().setSelectedSlashCommandIndex(0);

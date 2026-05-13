@@ -25,6 +25,8 @@ export default [
         Response: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
         TextDecoder: "readonly"
       }
     },

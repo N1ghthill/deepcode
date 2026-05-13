@@ -22,7 +22,7 @@ export function ParallelTaskView({
   const { stdout } = useStdout();
   const terminalWidth = stdout.columns ?? 120;
   const [laneOffset, setLaneOffset] = useState(0);
-  const [focusedLane, setFocusedLane] = useState(0);
+  const [_focusedLane, setFocusedLane] = useState(0);
 
   const allBuffers = Object.values(taskBuffers);
   const visibleBuffers = allBuffers.slice(laneOffset, laneOffset + MAX_LANES);
@@ -61,7 +61,7 @@ export function ParallelTaskView({
 
       {/* Lanes */}
       <Box flexDirection="row">
-        {visibleBuffers.map((buffer, idx) => (
+        {visibleBuffers.map((buffer, _idx) => (
           <TaskLane
             key={buffer.taskId}
             buffer={buffer}

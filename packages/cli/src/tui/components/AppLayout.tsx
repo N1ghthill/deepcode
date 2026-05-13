@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { Box, useInput, useStdout } from "ink";
 import { useUIStore, type PanelId } from "../store/ui-store.js";
 import type { ThemeColors } from "../themes.js";
@@ -30,7 +30,7 @@ export function AppLayout({
   const activePanel = useUIStore((s) => s.activePanel);
   const togglePanel = useUIStore((s) => s.togglePanel);
   const resizePanel = useUIStore((s) => s.resizePanel);
-  const setActivePanel = useUIStore((s) => s.setActivePanel);
+  const _setActivePanel = useUIStore((s) => s.setActivePanel);
 
   useInput((inputChar, key) => {
     // Panel toggle: Ctrl+1, Ctrl+2, Ctrl+3
