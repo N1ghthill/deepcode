@@ -19,6 +19,7 @@ export interface SubagentResult {
 
 export interface SubagentManagerOptions {
   concurrency?: number;
+  onTaskComplete?: (result: SubagentResult) => void;
 }
 
 export class SubagentManager {
@@ -27,13 +28,14 @@ export class SubagentManager {
     private readonly sessions: SessionManager,
     private readonly defaultProvider: ProviderId,
     private readonly defaultModel?: string,
+    private readonly defaultConcurrency: number = 4,
   ) {}
 
   async runParallel(
     tasks: SubagentTask[],
     options: SubagentManagerOptions & { signal?: AbortSignal } = {},
   ): Promise<SubagentResult[]> {
-    const concurrency = Math.max(1, options.concurrency ?? Math.min(tasks.length, 4));
+    const concurrency = Math.max(1, options.concurrency ?? Math.min(tasks.length, this.defaultConcurrency));
     const results: SubagentResult[] = [];
     let cursor = 0;
 
@@ -42,7 +44,9 @@ export class SubagentManager {
         const task = tasks[cursor];
         cursor += 1;
         if (!task) continue;
-        results.push(await this.runOne(task, options.signal));
+        const result = await this.runOne(task, options.signal);
+        results.push(result);
+        options.onTaskComplete?.(result);
       }
     });
 

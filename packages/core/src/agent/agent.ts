@@ -42,6 +42,7 @@ export interface AgentRunOptions {
   provider?: ProviderId;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
+  onChunkForTask?: (taskId: string, text: string) => void;
   onUsage?: (inputTokens: number, outputTokens: number) => void;
   onIteration?: (iteration: number, maxIterations: number) => void;
   onTaskUpdate?: (task: Task, plan: TaskPlan) => void;
@@ -151,7 +152,7 @@ export class Agent {
   }
 
   /**
-   * Execute tasks from plan sequentially
+   * Execute tasks from plan in parallel rounds, respecting dependencies
    */
   private async executePlan(
     plan: TaskPlan,
@@ -160,64 +161,74 @@ export class Agent {
     options: AgentRunOptions,
   ): Promise<string> {
     let finalText = `Executing plan: ${plan.objective}\n\n`;
-    let iterations = 0;
-    const maxIterations = this.config.maxIterations;
+    let rounds = 0;
+    const maxRounds = this.config.maxIterations;
 
-    while (iterations < maxIterations) {
-      const nextTask = this.planner.getNextTask(plan);
+    while (rounds < maxRounds) {
+      const runnableTasks = this.planner.getRunnableTasks(plan);
 
-      if (!nextTask) {
+      if (runnableTasks.length === 0) {
         if (this.planner.hasFailures(plan)) {
           const failedTasks = plan.tasks.filter((t) => t.status === "failed");
           finalText += `\n✗ Execution stopped due to failed tasks: ${failedTasks.map((t) => t.id).join(", ")}`;
-          break;
-        }
-        if (this.planner.isComplete(plan)) {
+        } else if (this.planner.isComplete(plan)) {
           finalText += "\n✓ All tasks completed successfully!";
-          break;
+        } else {
+          finalText += "\n⚠ Plan contained no runnable tasks.";
         }
-        // No runnable tasks but not complete (circular dependency?)
-        finalText += "\n⚠ Plan contained no runnable tasks.";
         break;
       }
 
-      // Update task status
-      this.planner.updateTaskStatus(plan, nextTask.id, "running");
-      plan.currentTaskId = nextTask.id;
-      options.onTaskUpdate?.(nextTask, plan);
-
-      const progress = this.planner.getProgress(plan);
-      const taskPrompt = this.buildTaskPrompt(plan, nextTask, progress);
-
-      try {
-        const taskResult = await this.executeTaskWithLLM(
-          taskPrompt,
-          session,
-          mode,
-          options,
-        );
-
-        this.planner.updateTaskStatus(plan, nextTask.id, "completed", taskResult);
-        finalText += `[${progress.completed + 1}/${progress.total}] ✓ ${nextTask.description}\n`;
-        options.onTaskUpdate?.(nextTask, plan);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        this.planner.updateTaskStatus(plan, nextTask.id, "failed", undefined, errorMessage);
-        finalText += `[${progress.completed + 1}/${progress.total}] ✗ ${nextTask.description} - Error: ${errorMessage}\n`;
-        options.onTaskUpdate?.(nextTask, plan);
-
-        // Stop on task failure in strict mode
-        if (this.config.strictMode) {
-          break;
-        }
+      for (const task of runnableTasks) {
+        this.planner.updateTaskStatus(plan, task.id, "running");
+        options.onTaskUpdate?.(task, plan);
       }
 
-      iterations++;
-      options.onIteration?.(iterations, maxIterations);
+      const progress = this.planner.getProgress(plan);
+      const parallel = runnableTasks.length > 1;
+      const taskLines = await Promise.all(
+        runnableTasks.map(async (task) => {
+          const taskPrompt = this.buildTaskPrompt(plan, task, progress);
+          const executionSession = parallel ? this.createChildSession(session, task.id) : session;
+          const maxAttempts = 1 + this.config.taskRetries;
+          let lastError: string | undefined;
+
+          const taskOptions = options.onChunkForTask
+            ? { ...options, onChunk: (text: string) => options.onChunkForTask!(task.id, text) }
+            : options;
+          for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const prompt = lastError
+              ? `${taskPrompt}\n\nPrevious attempt failed: ${lastError}\nTry a different approach.`
+              : taskPrompt;
+            try {
+              const result = await this.executeTaskWithLLM(prompt, executionSession, mode, taskOptions, task.type);
+              this.planner.updateTaskStatus(plan, task.id, "completed", result);
+              options.onTaskUpdate?.(task, plan);
+              return `[${progress.completed + 1}/${progress.total}] ✓ ${task.description}`;
+            } catch (error) {
+              lastError = error instanceof Error ? error.message : String(error);
+            }
+          }
+
+          this.planner.updateTaskStatus(plan, task.id, "failed", undefined, lastError);
+          options.onTaskUpdate?.(task, plan);
+          return `[${progress.completed + 1}/${progress.total}] ✗ ${task.description} — ${lastError}`;
+        }),
+      );
+
+      finalText += `${taskLines.join("\n")}\n`;
+      rounds++;
+      options.onIteration?.(rounds, maxRounds);
+
+      if (this.planner.hasFailures(plan) && this.config.strictMode) break;
+      if (this.planner.isComplete(plan)) {
+        finalText += "\n✓ All tasks completed successfully!";
+        break;
+      }
     }
 
-    if (iterations >= maxIterations) {
-      finalText += "\n⚠ Reached maximum iterations limit. Some tasks may not have been executed.";
+    if (rounds >= maxRounds) {
+      finalText += "\n⚠ Reached maximum rounds limit. Some tasks may not have been executed.";
     }
 
     return finalText;
@@ -228,8 +239,9 @@ export class Agent {
    */
   private buildTaskPrompt(plan: TaskPlan, task: Task, progress: { completed: number; total: number; percentage: number }): string {
     const completedTasks = plan.tasks.filter((t) => t.status === "completed");
+    const contextLimit = (t: Task) => t.type === "research" ? 800 : 200;
     const context = completedTasks.length > 0
-      ? `\n\nContext from completed tasks:\n${completedTasks.map((t) => `- ${t.description}: ${t.result?.slice(0, 200) || "Done"}...`).join("\n")}`
+      ? `\n\nContext from completed tasks:\n${completedTasks.map((t) => `- ${t.description}: ${t.result?.slice(0, contextLimit(t)) || "Done"}...`).join("\n")}`
       : "";
 
     return `You are working on the following objective: "${plan.objective}"
@@ -253,12 +265,13 @@ Execute this task using the available tools. Return a summary of what was done.`
     session: Session,
     mode: AgentMode,
     options: AgentRunOptions,
+    taskType?: Task["type"],
   ): Promise<string> {
     const taskPrompt = this.createInternalPromptMessage(prompt);
-    const allowedToolNames = this.allowedToolNamesForMode(mode);
+    const allowedToolNames = this.allowedToolNamesForTaskType(mode, taskType);
     const resolvedModel = session.model ?? resolveConfiguredModelForProvider(this.config, session.provider);
     const toolProfile = resolveModelExecutionProfile(session.provider, resolvedModel);
-    const toolDefinitions = this.toolDefinitions(mode, toolProfile.toolSchemaMode);
+    const toolDefinitions = this.toolDefinitionsForNames(allowedToolNames, toolProfile.toolSchemaMode);
     const textToolFallbackEnabled = toolDefinitions.length > 0 && toolProfile.toolCallStrategy !== "native";
     const maxTaskIterations = 10; // Prevent infinite loops
     let taskIterations = 0;
@@ -615,6 +628,34 @@ Execute this task using the available tools. Return a summary of what was done.`
     return new Set(
       this.tools.list().filter((tool) => this.isToolAllowed(tool.name, mode)).map((tool) => tool.name),
     );
+  }
+
+  private allowedToolNamesForTaskType(mode: AgentMode, taskType?: Task["type"]): Set<string> {
+    if (taskType === "research") return new Set([...PLAN_ALLOWED_TOOLS]);
+    if (taskType === "verify") return new Set(["read_file", "analyze_code", "search_text"]);
+    return this.allowedToolNamesForMode(mode);
+  }
+
+  private toolDefinitionsForNames(names: Set<string>, schemaMode: ToolSchemaMode = "full"): Array<Record<string, unknown>> {
+    return this.tools.list().filter((tool) => names.has(tool.name)).map((tool) => ({
+      type: "function",
+      function: {
+        name: tool.name,
+        description: compactToolDescription(tool.description, schemaMode),
+        parameters: simplifyToolSchema(
+          zodToJsonSchema(tool.parameters, { target: "openApi3" }),
+          schemaMode,
+        ),
+      },
+    }));
+  }
+
+  private createChildSession(parent: Session, taskId: string): Session {
+    const child = this.sessions.create({ provider: parent.provider, model: parent.model });
+    child.worktree = parent.worktree;
+    child.metadata = { parentSessionId: parent.id, taskId };
+    this.sessions.save(child);
+    return child;
   }
 
   private systemPromptForMode(mode: AgentMode): string {

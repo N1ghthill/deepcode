@@ -398,6 +398,8 @@ export const DeepCodeConfigSchema = z
     buildTurnPolicy: BuildTurnPolicySchema,
     agentMode: AgentModeSchema,
     strictMode: z.boolean().default(false).describe("When true, stop execution on first task failure"),
+    taskRetries: z.number().int().min(0).max(3).default(1).describe("Number of retry attempts per task on failure"),
+    subagentConcurrency: z.number().int().positive().max(16).default(4).describe("Maximum parallel sub-agents when running tasks"),
     telemetry: z
       .object({
         enabled: z.boolean().default(true),

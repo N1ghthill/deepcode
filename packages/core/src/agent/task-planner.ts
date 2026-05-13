@@ -104,11 +104,18 @@ Task:
    * Get the next task that can be executed (all dependencies completed)
    */
   getNextTask(plan: TaskPlan): Task | undefined {
+    return this.getRunnableTasks(plan)[0];
+  }
+
+  /**
+   * Get all tasks that can be executed in parallel (dependencies satisfied, status pending)
+   */
+  getRunnableTasks(plan: TaskPlan): Task[] {
     const completedIds = new Set(
       plan.tasks.filter((t) => t.status === "completed").map((t) => t.id)
     );
 
-    return plan.tasks.find((task) => {
+    return plan.tasks.filter((task) => {
       if (task.status !== "pending") return false;
       return task.dependencies.every((dep) => completedIds.has(dep));
     });

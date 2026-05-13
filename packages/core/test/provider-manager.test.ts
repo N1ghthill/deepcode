@@ -203,6 +203,8 @@ function createConfig(overrides: { providers?: Record<string, { apiKey?: string;
     },
     agentMode: "build",
     strictMode: false,
+    taskRetries: 1,
+    subagentConcurrency: 4,
     telemetry: { enabled: true, persistHistory: true },
     ...restOverrides,
   };

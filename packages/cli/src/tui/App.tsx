@@ -1,12 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import {
   resolveConfiguredModelForProvider,
   resolveUsableProviderTarget,
-  type Activity,
-  type Message,
-  type Session,
   type AgentMode,
+  type Session,
   type ProviderId,
 } from "@deepcode/shared";
 import {
@@ -68,7 +66,6 @@ import {
   getModelPricing,
   getRenderableChatMessages,
   getSlashCommandSuggestions,
-  getSlashMenuAction,
   isSidebarHotkeysEnabled,
   isSlashCommandInput,
   recordAgentRunError,
@@ -82,84 +79,167 @@ import {
   EmptyChatState,
   GithubOAuthPanel,
   HelpView,
-  PlanProgressBar,
   SessionSwitcher,
   SlashCommandMenu,
 } from "./components/views/AppPanels.js";
+import { MessageList } from "./components/chat/MessageList.js";
+import { InputField } from "./components/chat/InputField.js";
+import { ParallelTasksPanel } from "./components/tasks/ParallelTasksPanel.js";
+import { ProgressMatrix } from "./components/tasks/ProgressMatrix.js";
+import { useAgentStore } from "./store/agent-store.js";
+import { useAgentBridge } from "./hooks/useAgentBridge.js";
+import { useChatInput } from "./hooks/useChatInput.js";
+import { useSessionInput } from "./hooks/useSessionInput.js";
+import { useConfigInput } from "./hooks/useConfigInput.js";
 import { t, setLanguage } from "./i18n/index.js";
 
 export function App(props: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
 
-  const [runtime, setRuntime] = useState<DeepCodeRuntime | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [streaming, setStreaming] = useState(false);
-  const [assistantDraft, setAssistantDraft] = useState("");
-  const [status, setStatus] = useState("loading");
-  const [notice, setNotice] = useState(t("initialNotice"));
-  const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("chat");
-  const [selectedSessionIndex, setSelectedSessionIndex] = useState(0);
-  const [history, setHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
-  const [vimMode, setVimMode] = useState<VimMode>("insert");
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("sessions");
-  const [activeModal, setActiveModal] = useState<ModalType>(null);
-  const [agentMode, setAgentMode] = useState<AgentMode>("build");
-  const [showInputPreview, setShowInputPreview] = useState(false);
-  const [pendingInput, setPendingInput] = useState("");
-  const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
-  const [currentPlan, setCurrentPlan] = useState<TaskPlan | undefined>();
-  const [recentModels, setRecentModels] = useState<RecentModelSelection[]>([]);
+  // ── Store slices ──────────────────────────────────────────────────────────
+  const runtime = useAgentStore((s) => s.runtime);
+  const session = useAgentStore((s) => s.session);
+  const input = useAgentStore((s) => s.input);
+  const messages = useAgentStore((s) => s.messages);
+  const activities = useAgentStore((s) => s.activities);
+  const streaming = useAgentStore((s) => s.streaming);
+  const assistantDraft = useAgentStore((s) => s.assistantDraft);
+  const status = useAgentStore((s) => s.status);
+  const notice = useAgentStore((s) => s.notice);
+  const error = useAgentStore((s) => s.error);
+  const viewMode = useAgentStore((s) => s.viewMode);
+  const selectedSessionIndex = useAgentStore((s) => s.selectedSessionIndex);
+  const vimMode = useAgentStore((s) => s.vimMode);
+  const sidebarTab = useAgentStore((s) => s.sidebarTab);
+  const activeModal = useAgentStore((s) => s.activeModal);
+  const agentMode = useAgentStore((s) => s.agentMode);
+  const showInputPreview = useAgentStore((s) => s.showInputPreview);
+  const pendingInput = useAgentStore((s) => s.pendingInput);
+  const currentPlan = useAgentStore((s) => s.currentPlan);
+  const taskBuffers = useAgentStore((s) => s.taskBuffers);
+  const toolCalls = useAgentStore((s) => s.toolCalls);
+  const toolExecuting = useAgentStore((s) => s.toolExecuting);
+  const phase = useAgentStore((s) => s.phase);
+  const iteration = useAgentStore((s) => s.iteration);
+  const recentModels = useAgentStore((s) => s.recentModels);
+  const telemetryExportStatus = useAgentStore((s) => s.telemetryExportStatus);
+  const lastExportPath = useAgentStore((s) => s.lastExportPath);
+
+  const setRuntime = useAgentStore((s) => s.setRuntime);
+  const setSession = useAgentStore((s) => s.setSession);
+  const setInput = useAgentStore((s) => s.setInput);
+  const setMessages = useAgentStore((s) => s.setMessages);
+  const setActivities = useAgentStore((s) => s.setActivities);
+  const setStatus = useAgentStore((s) => s.setStatus);
+  const setNotice = useAgentStore((s) => s.setNotice);
+  const setError = useAgentStore((s) => s.setError);
+  const setViewMode = useAgentStore((s) => s.setViewMode);
+  const setVimMode = useAgentStore((s) => s.setVimMode);
+  const setSidebarTab = useAgentStore((s) => s.setSidebarTab);
+  const setActiveModal = useAgentStore((s) => s.setActiveModal);
+  const setAgentMode = useAgentStore((s) => s.setAgentMode);
+  const setShowInputPreview = useAgentStore((s) => s.setShowInputPreview);
+  const setPendingInput = useAgentStore((s) => s.setPendingInput);
+  const setCurrentPlan = useAgentStore((s) => s.setCurrentPlan);
+  const setToolCalls = useAgentStore((s) => s.setToolCalls);
+  const setRecentModels = useAgentStore((s) => s.setRecentModels);
+  const setTelemetryExportStatus = useAgentStore((s) => s.setTelemetryExportStatus);
+  const setLastExportPath = useAgentStore((s) => s.setLastExportPath);
+  const dispatch = useAgentStore((s) => s.dispatch);
+
+  // ── Refs ──────────────────────────────────────────────────────────────────
   const abortRef = useRef<AbortController | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const telemetryRef = useRef<TelemetryCollector | null>(null);
   const uiStateRef = useRef<UIStateManager | null>(null);
-  const [toolCalls, setToolCalls] = useState<Array<{ id: string; name: string; args: string; result?: string }>>([]);
-  const [toolExecuting, setToolExecuting] = useState(false);
-  const [phase, setPhase] = useState("");
-  const [iteration, setIteration] = useState({ current: 0, max: 0 });
-  const [telemetryCollector, setTelemetryCollector] = useState<TelemetryCollector | null>(null);
-  const [telemetryExportStatus, setTelemetryExportStatus] = useState<"idle" | "exporting" | "success" | "error">("idle");
-  const [lastExportPath, setLastExportPath] = useState<string | null>(null);
 
-  const applyUpdatedConfig = useCallback((activeRuntime: DeepCodeRuntime, updatedConfig: DeepCodeRuntime["config"]) => {
-    Object.assign(activeRuntime.config, updatedConfig);
-    activeRuntime.providers.reload(activeRuntime.config);
-    setRuntime((prev) => (prev ? { ...prev, config: activeRuntime.config } : prev));
-  }, []);
+  // ── Telemetry / providers / models ───────────────────────────────────────
+  const [telemetryCollector, setTelemetryCollector] = React.useState<TelemetryCollector | null>(null);
 
-  const handleSessionUpdate = useCallback((next: Session, extras?: {
-    messages?: Message[];
-    activities?: Activity[];
-    toolCalls?: Array<{ id: string; name: string; args: string; result?: string }>;
-    status?: string;
-    currentPlan?: TaskPlan | undefined;
-    viewMode?: ViewMode;
-    vimMode?: VimMode;
-    assistantDraft?: string;
-  }) => {
-    setSession(next);
-    if (extras?.messages !== undefined) setMessages(extras.messages);
-    if (extras?.activities !== undefined) setActivities(extras.activities);
-    if (extras?.toolCalls !== undefined) setToolCalls(extras.toolCalls);
-    if (extras?.status !== undefined) setStatus(extras.status);
-    if (extras?.currentPlan !== undefined) setCurrentPlan(extras.currentPlan);
-    if (extras?.viewMode !== undefined) setViewMode(extras.viewMode);
-    if (extras?.vimMode !== undefined) setVimMode(extras.vimMode);
-    if (extras?.assistantDraft !== undefined) setAssistantDraft(extras.assistantDraft);
-  }, []);
+  const applyUpdatedConfig = useCallback(
+    (activeRuntime: DeepCodeRuntime, updatedConfig: DeepCodeRuntime["config"]) => {
+      Object.assign(activeRuntime.config, updatedConfig);
+      activeRuntime.providers.reload(activeRuntime.config);
+      setRuntime(activeRuntime ? { ...activeRuntime, config: activeRuntime.config } : null);
+    },
+    [setRuntime],
+  );
 
-  const { githubOAuth, abortRef: githubOAuthAbortRef, startGithubLogin, cancelOAuth } = useGithubOAuth({ cwd: props.cwd, configPath: props.config, setNotice, applyUpdatedConfig });
+  const handleSessionUpdate = useCallback(
+    (next: Session, extras?: {
+      messages?: typeof messages;
+      activities?: typeof activities;
+      toolCalls?: typeof toolCalls;
+      status?: string;
+      currentPlan?: TaskPlan | undefined;
+      viewMode?: ViewMode;
+      vimMode?: VimMode;
+      assistantDraft?: string;
+    }) => {
+      setSession(next);
+      if (extras?.messages !== undefined) setMessages(extras.messages);
+      if (extras?.activities !== undefined) setActivities(extras.activities);
+      if (extras?.toolCalls !== undefined) setToolCalls(extras.toolCalls);
+      if (extras?.status !== undefined) setStatus(extras.status);
+      if (extras?.currentPlan !== undefined) setCurrentPlan(extras.currentPlan);
+      if (extras?.viewMode !== undefined) setViewMode(extras.viewMode);
+      if (extras?.vimMode !== undefined) setVimMode(extras.vimMode);
+    },
+    [setSession, setMessages, setActivities, setToolCalls, setStatus, setCurrentPlan, setViewMode, setVimMode],
+  );
+
+  const { githubOAuth, abortRef: githubOAuthAbortRef, startGithubLogin, cancelOAuth } =
+    useGithubOAuth({ cwd: props.cwd, configPath: props.config, setNotice, applyUpdatedConfig });
   const { approvals, setApprovals, resolveApproval } = useApprovalFlow();
-  const { configEditIndex, setConfigEditIndex, configEditValue, setConfigEditValue, editingConfig, setEditingConfig, configSaveStatus, saveConfigEdit, saveConfigPatch, resetEditor } = useConfigEditor({ cwd: props.cwd, configPath: props.config, applyUpdatedConfig });
-  const { activateTelemetrySession, createNewSession, switchSession } = useSessionManager({ telemetryRef, activeSessionIdRef, onUpdateSession: handleSessionUpdate });
+  const {
+    configEditIndex,
+    setConfigEditIndex,
+    configEditValue,
+    setConfigEditValue,
+    editingConfig,
+    setEditingConfig,
+    configSaveStatus,
+    saveConfigEdit,
+    saveConfigPatch,
+    resetEditor,
+  } = useConfigEditor({ cwd: props.cwd, configPath: props.config, applyUpdatedConfig });
+  const { activateTelemetrySession, createNewSession, switchSession } = useSessionManager({
+    telemetryRef,
+    activeSessionIdRef,
+    onUpdateSession: handleSessionUpdate,
+  });
   const { liveTokens, elapsed, resetMetrics, recordTokenUsage } = useLiveMetrics(streaming);
 
+  // ── Agent bridge (replaces inline agent.run + all state mutations) ────────
+  const providerEntries = useMemo(() => {
+    if (!runtime) return [];
+    return PROVIDER_IDS.map((providerId) => ({
+      id: providerId,
+      provider: {
+        listModels: async (options?: { signal?: AbortSignal }) =>
+          runtime.providers.get(providerId).listModels(options),
+      },
+      enabled: Boolean(
+        runtime.config.providers[providerId]?.apiKey ||
+        runtime.config.providers[providerId]?.apiKeyFile,
+      ),
+    }));
+  }, [runtime]);
+
+  const { models, loading: modelsLoading, error: modelsError, refresh: refreshModels } =
+    useModelCatalog(providerEntries);
+
+  const { runAgent } = useAgentBridge({
+    models,
+    telemetryRef,
+    activeSessionIdRef,
+    abortRef,
+    recordTokenUsage,
+    resetMetrics,
+  });
+
+  // ── Runtime initialization ────────────────────────────────────────────────
   useEffect(() => {
     if (!stdout.isTTY) return;
     stdout.write("\x1b[?1049h\x1b[?25l");
@@ -171,6 +251,7 @@ export function App(props: AppProps) {
   useEffect(() => {
     let mounted = true;
     let cleanupRuntime: (() => void) | undefined;
+
     createRuntime({ cwd: props.cwd, configPath: props.config, interactive: true })
       .then(async (created) => {
         if (!mounted) return;
@@ -186,8 +267,8 @@ export function App(props: AppProps) {
           setSidebarTab(savedState.sidebarTab);
           setAgentMode(savedState.agentMode);
           setVimMode(savedState.vimMode);
-          setSelectedSessionIndex(savedState.selectedSessionIndex);
-          setHistory(savedState.inputHistory);
+          useAgentStore.getState().setSelectedSessionIndex(savedState.selectedSessionIndex);
+          useAgentStore.getState().setHistory(savedState.inputHistory);
           setRecentModels(savedState.modals.recentModels ?? []);
         }
 
@@ -210,10 +291,10 @@ export function App(props: AppProps) {
         activateTelemetrySession(active, false);
 
         const offActivity = created.events.on("activity", (activity) => {
-          setActivities((current) => [...current.slice(-10), activity]);
+          dispatch({ type: "ACTIVITY", activity });
           const meta = activity.metadata;
           if (meta && meta.tool) {
-            setToolExecuting(true);
+            useAgentStore.getState().setToolExecuting(true);
             setToolCalls((current) => [
               ...current.slice(-8),
               {
@@ -222,24 +303,30 @@ export function App(props: AppProps) {
                 args: meta.args ? JSON.stringify(meta.args) : "",
               },
             ]);
-            telemetryRef.current?.recordToolCall(activeSessionIdRef.current ?? active.id, String(meta.tool));
+            telemetryRef.current?.recordToolCall(
+              activeSessionIdRef.current ?? active.id,
+              String(meta.tool),
+            );
           }
         });
         const offApproval = created.events.on("approval:request", (request) => {
           setApprovals((current) => [...current, request]);
           setStatus("awaiting approval");
           setNotice(
-            t("approvalPending", { operation: redactText(request.operation, collectSecretValues(created.config)) }),
+            t("approvalPending", {
+              operation: redactText(request.operation, collectSecretValues(created.config)),
+            }),
           );
         });
-        const offError = created.events.on("app:error", ({ error }) => {
-          setNotice(redactText(error.message, collectSecretValues(created.config)));
+        const offError = created.events.on("app:error", ({ error: err }) => {
+          setNotice(redactText(err.message, collectSecretValues(created.config)));
           telemetryRef.current?.recordError(
             activeSessionIdRef.current ?? active.id,
             "agent_error",
-            error.message,
+            err.message,
           );
         });
+
         cleanupRuntime = () => {
           offActivity();
           offApproval();
@@ -255,23 +342,54 @@ export function App(props: AppProps) {
         setRuntime(created);
         setSession(active);
         setMessages(active.messages);
-        setActivities(active.activities.slice(-10));
+        setActivities(active.activities.slice(-100));
         setStatus(active.status);
         setCurrentPlan(extractTaskPlanFromSession(active));
+        setNotice(t("initialNotice"));
       })
       .catch((err: unknown) =>
         setError(redactText(err instanceof Error ? err.message : String(err))),
       );
+
     return () => {
       mounted = false;
       cleanupRuntime?.();
     };
-  }, [activateTelemetrySession, props.cwd, props.config, setApprovals]);
+  }, [activateTelemetrySession, props.cwd, props.config, setApprovals, dispatch]);
 
-  const theme = useMemo(() => (runtime ? getTheme(runtime.config.tui.theme) : getTheme("dark")), [runtime?.config.tui.theme]);
+  // ── Sidebar plan tab cleanup ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentPlan && sidebarTab === "plan") {
+      setSidebarTab("activities");
+    }
+  }, [currentPlan, sidebarTab, setSidebarTab]);
+
+  useEffect(() => {
+    useAgentStore.getState().setSelectedSlashCommandIndex(0);
+  }, [input]);
+
+  // ── Theme / derived values ─────────────────────────────────────────────────
+  const theme = useMemo(
+    () => (runtime ? getTheme(runtime.config.tui.theme) : getTheme("dark")),
+    [runtime?.config.tui.theme],
+  );
+
   const { statuses, checkStatus } = useProviderStatus();
+  const telemetry = useTelemetry(session?.id ?? "", telemetryCollector);
+  const sessionList = runtime ? runtime.sessions.list() : [];
+  const visibleMessages = useMemo(() => getRenderableChatMessages(messages), [messages]);
+  const estimatedTokens = useTokenEstimate(pendingInput);
+  const slashCommandSuggestions = useMemo(
+    () => getSlashCommandSuggestions(input),
+    [input],
+  );
 
-  const provider = runtime ? runtime.providers : null;
+  const activeProviderId: ProviderId = useMemo(() => {
+    if (!runtime || !session) return "openrouter";
+    const activeModeSelection = resolveEffectiveModeSelection(runtime.config, session, agentMode);
+    return activeModeSelection?.provider ?? resolveEffectiveModeProvider(runtime.config, session, agentMode);
+  }, [runtime, session, agentMode]);
+
   const activeModeSelection = runtime && session
     ? resolveEffectiveModeSelection(runtime.config, session, agentMode)
     : null;
@@ -281,52 +399,12 @@ export function App(props: AppProps) {
   const buildModeSelection = runtime && session
     ? resolveEffectiveModeSelection(runtime.config, session, "build")
     : null;
-  const currentProviderId = runtime && session
-    ? resolveEffectiveModeProvider(runtime.config, session, agentMode)
-    : runtime
-      ? resolveUsableProviderTarget(runtime.config, [runtime.config.defaultProvider]).provider
-      : "openrouter";
-  const activeProviderId: ProviderId = activeModeSelection?.provider ?? currentProviderId;
-  const activeTarget = activeModeSelection
-    ? formatModelSelection(activeModeSelection)
-    : undefined;
+  const activeTarget = activeModeSelection ? formatModelSelection(activeModeSelection) : undefined;
   const activeProviderStatus = getScopedProviderStatus(
     statuses[activeProviderId],
     activeTarget,
   );
-  const providerEntries = useMemo(() => {
-    if (!provider || !runtime) {
-      return [];
-    }
 
-    return PROVIDER_IDS.map((providerId) => ({
-      id: providerId,
-      provider: {
-        listModels: async (options?: { signal?: AbortSignal }) => provider.get(providerId).listModels(options),
-      },
-      enabled: Boolean(
-        runtime.config.providers[providerId]?.apiKey ||
-        runtime.config.providers[providerId]?.apiKeyFile,
-      ),
-    }));
-  }, [provider, runtime]);
-  const { models, loading: modelsLoading, error: modelsError, refresh: refreshModels } = useModelCatalog(
-    providerEntries,
-  );
-
-  const telemetry = useTelemetry(session?.id ?? "", telemetryCollector);
-
-  const sessionList = runtime ? runtime.sessions.list() : [];
-  const visibleMessages = useMemo(
-    () => getRenderableChatMessages(messages),
-    [messages],
-  );
-
-  const estimatedTokens = useTokenEstimate(pendingInput);
-  const slashCommandSuggestions = useMemo(
-    () => getSlashCommandSuggestions(input),
-    [input],
-  );
   const showSlashMenu =
     viewMode === "chat" &&
     vimMode === "insert" &&
@@ -335,6 +413,7 @@ export function App(props: AppProps) {
     !showInputPreview &&
     slashCommandSuggestions.length > 0 &&
     isSlashCommandInput(input);
+
   const sidebarHotkeysEnabled = isSidebarHotkeysEnabled({
     viewMode,
     vimMode,
@@ -346,34 +425,27 @@ export function App(props: AppProps) {
     oauthActive: githubOAuth.status !== "idle",
   });
 
-  useEffect(() => {
-    setSelectedSlashCommandIndex(0);
-  }, [input]);
-
-  useEffect(() => {
-    if (!currentPlan && sidebarTab === "plan") {
-      setSidebarTab("activities");
-    }
-  }, [currentPlan, sidebarTab]);
-
+  // ── Save UI state ──────────────────────────────────────────────────────────
   const saveUIState = useCallback(() => {
     if (!uiStateRef.current || !session) return;
+    const s = useAgentStore.getState();
     const stateToSave: UIState = {
       lastActiveSessionId: session.id,
       lastSessionTimestamp: Date.now(),
-      viewMode,
-      sidebarTab,
-      agentMode,
-      vimMode,
-      selectedSessionIndex,
-      inputHistory: history,
-      modals: { providerExpanded: false, modelFilter: "", recentModels },
+      viewMode: s.viewMode,
+      sidebarTab: s.sidebarTab,
+      agentMode: s.agentMode,
+      vimMode: s.vimMode,
+      selectedSessionIndex: s.selectedSessionIndex,
+      inputHistory: s.history,
+      modals: { providerExpanded: false, modelFilter: "", recentModels: s.recentModels },
       version: 1,
       savedAt: new Date().toISOString(),
     };
     void uiStateRef.current.save(stateToSave);
-  }, [session, viewMode, sidebarTab, agentMode, vimMode, selectedSessionIndex, history, recentModels]);
+  }, [session]);
 
+  // ── Global input handler (Ctrl shortcuts, OAuth, modal dismiss, approvals) ─
   useInput((inputChar, key) => {
     if (key.ctrl && inputChar === "q") {
       saveUIState();
@@ -382,13 +454,11 @@ export function App(props: AppProps) {
       exit();
       return;
     }
-
     if (key.ctrl && inputChar === "c") {
       if (githubOAuth.status !== "idle") {
         cancelOAuth();
       } else if (streaming) {
         abortRef.current?.abort();
-        setStreaming(false);
         setStatus("cancelled");
         setNotice(t("executionCancelled"));
       } else {
@@ -399,11 +469,9 @@ export function App(props: AppProps) {
 
     if (!runtime || !session) return;
 
+    // OAuth mode
     if (githubOAuthAbortRef.current || githubOAuth.status === "waiting") {
-      if (key.escape) {
-        cancelOAuth();
-        return;
-      }
+      if (key.escape) { cancelOAuth(); return; }
       if (inputChar?.toLowerCase() === "r") {
         void startGithubLogin("/github-login", runtime, session);
         return;
@@ -411,15 +479,13 @@ export function App(props: AppProps) {
       return;
     }
 
+    // Modal dismiss
     if (activeModal) {
-      if (key.escape) {
-        setActiveModal(null);
-        setNotice(t("modalClosed"));
-        return;
-      }
+      if (key.escape) { setActiveModal(null); setNotice(t("modalClosed")); }
       return;
     }
 
+    // Approval keys
     if (approvals.length > 0) {
       if (inputChar?.toLowerCase() === "a") {
         resolveApproval(runtime, approvals[0], true, "once", { setNotice, setStatus });
@@ -433,117 +499,20 @@ export function App(props: AppProps) {
         resolveApproval(runtime, approvals[0], true, "session", { setNotice, setStatus });
         return;
       }
-      if (inputChar?.toLowerCase() === "d" || inputChar?.toLowerCase() === "n") {
-        resolveApproval(runtime, approvals[0], false, "once", { setNotice, setStatus });
-        return;
-      }
-      if (key.escape) {
+      if (inputChar?.toLowerCase() === "d" || inputChar?.toLowerCase() === "n" || key.escape) {
         resolveApproval(runtime, approvals[0], false, "once", { setNotice, setStatus });
         return;
       }
       return;
     }
 
+    // Input preview
     if (showInputPreview) {
-      if (key.escape || key.return) {
-        setShowInputPreview(false);
-        return;
-      }
+      if (key.escape || key.return) { setShowInputPreview(false); }
       return;
     }
 
-    if (viewMode === "sessions") {
-      const sessionList = runtime.sessions.list();
-      if (key.upArrow) {
-        setSelectedSessionIndex((current) => Math.max(0, current - 1));
-        return;
-      }
-      if (key.downArrow) {
-        setSelectedSessionIndex((current) =>
-          Math.min(Math.max(0, sessionList.length - 1), current + 1),
-        );
-        return;
-      }
-      if (key.return) {
-        const selected = sessionList[selectedSessionIndex];
-        if (selected) {
-          switchSession(selected, runtime);
-          setApprovals([]);
-          setNotice(t("activeSession", { id: selected.id }));
-        }
-        return;
-      }
-      if (key.escape) {
-        setViewMode("chat");
-        setVimMode("insert");
-        setNotice(t("chatActive"));
-        return;
-      }
-      return;
-    }
-
-    if (viewMode === "config") {
-      if (editingConfig) {
-        const field = CONFIG_FIELDS[configEditIndex];
-        if (key.escape) {
-          setEditingConfig(false);
-          setConfigEditValue("");
-          return;
-        }
-        if (key.return) {
-          if (field) {
-            void saveConfigEdit(runtime, field, configEditValue);
-          }
-          return;
-        }
-        if (field?.type === "toggle") {
-          if (inputChar?.toLowerCase() === "y" || inputChar?.toLowerCase() === "t" || inputChar?.toLowerCase() === "1") {
-            setConfigEditValue("true");
-          } else if (inputChar?.toLowerCase() === "n" || inputChar?.toLowerCase() === "f" || inputChar?.toLowerCase() === "0") {
-            setConfigEditValue("false");
-          }
-          return;
-        }
-        if (key.backspace || key.delete) {
-          setConfigEditValue((current) => current.slice(0, -1));
-          return;
-        }
-        if (inputChar && !key.ctrl && !key.meta) {
-          setConfigEditValue((current) => current + inputChar);
-          return;
-        }
-        return;
-      }
-
-      if (key.upArrow || inputChar?.toLowerCase() === "k") {
-        setConfigEditIndex((current) => Math.max(0, current - 1));
-        return;
-      }
-      if (key.downArrow || inputChar?.toLowerCase() === "j") {
-        setConfigEditIndex((current) =>
-          Math.min(CONFIG_FIELDS.length - 1, current + 1),
-        );
-        return;
-      }
-      if (key.return || inputChar?.toLowerCase() === "i" || inputChar?.toLowerCase() === "e") {
-        const field = CONFIG_FIELDS[configEditIndex];
-        if (field) {
-          const currentValue = getConfigValue(runtime.config, field.key);
-          setConfigEditValue(serializeConfigEditValue(currentValue));
-          setEditingConfig(true);
-          if (inputChar?.toLowerCase() === "i") setVimMode("insert");
-        }
-        return;
-      }
-      if (key.escape) {
-        setViewMode("chat");
-        setVimMode("insert");
-        setNotice(t("chatActive"));
-        return;
-      }
-      return;
-    }
-
+    // Help view
     if (viewMode === "help") {
       if (key.escape || key.return || inputChar?.toLowerCase() === "q") {
         setViewMode("chat");
@@ -553,50 +522,38 @@ export function App(props: AppProps) {
       return;
     }
 
+    // Global navigation shortcuts
     if (key.ctrl && inputChar === "h") {
-      setViewMode("help");
-      setVimMode("normal");
-      setNotice(t("helpOpenedEscapeToReturn"));
-      return;
+      setViewMode("help"); setVimMode("normal");
+      setNotice(t("helpOpenedEscapeToReturn")); return;
     }
-
     if (key.ctrl && inputChar === "o") {
-      setSelectedSessionIndex(0);
-      setViewMode("sessions");
-      setVimMode("normal");
-      setNotice(t("selectSessionEscapeToReturn"));
-      return;
+      useAgentStore.getState().setSelectedSessionIndex(0);
+      setViewMode("sessions"); setVimMode("normal");
+      setNotice(t("selectSessionEscapeToReturn")); return;
     }
-
     if (key.ctrl && inputChar === "n") {
       const newSession = createNewSession(runtime, agentMode);
-      setApprovals([]);
-      setNotice(t("newSession", { id: newSession.id }));
-      return;
+      setApprovals([]); setNotice(t("newSession", { id: newSession.id })); return;
     }
-
     if (key.ctrl && inputChar === "p") {
-      setActiveModal("provider");
-      setNotice(t("providerModalOpenedEscapeToClose"));
-      return;
+      setActiveModal("provider"); setNotice(t("providerModalOpenedEscapeToClose")); return;
     }
-
     if (key.ctrl && inputChar === "m") {
       setActiveModal("model");
-      setNotice(t("modelSelectorOpenedEscapeToClose", { mode: agentMode.toUpperCase() }));
-      return;
+      setNotice(t("modelSelectorOpenedEscapeToClose", { mode: agentMode.toUpperCase() })); return;
     }
-
     if (key.ctrl && inputChar === "t") {
-      setActiveModal("telemetry");
-      setNotice(t("appTelemetryPanelOpened"));
-      return;
+      setActiveModal("telemetry"); setNotice(t("appTelemetryPanelOpened")); return;
     }
 
+    // Tab toggle mode
     if (key.tab && !key.ctrl && !showSlashMenu) {
       setAgentMode((current) => {
-        const next = current === "build" ? "plan" : "build";
-        const nextSelection = runtime && session ? resolveEffectiveModeSelection(runtime.config, session, next) : null;
+        const next: AgentMode = current === "build" ? "plan" : "build";
+        const nextSelection = runtime && session
+          ? resolveEffectiveModeSelection(runtime.config, session, next)
+          : null;
         setNotice(
           nextSelection
             ? t("modeChangedWithModel", { mode: next.toUpperCase(), model: formatModelSelection(nextSelection) })
@@ -606,263 +563,104 @@ export function App(props: AppProps) {
       });
       return;
     }
-
-    if (streaming) return;
-
-    if (viewMode === "chat" && vimMode === "normal") {
-      if (inputChar?.toLowerCase() === "i") {
-        setVimMode("insert");
-        return;
-      }
-      if (inputChar?.toLowerCase() === "a") {
-        setVimMode("insert");
-        return;
-      }
-      if (key.escape) {
-        setVimMode("normal");
-        return;
-      }
-      return;
-    }
-
-    if (viewMode === "chat" && vimMode === "insert" && key.escape && !showSlashMenu) {
-      setVimMode("normal");
-      setNotice(
-        input.trim().length === 0
-          ? t("normalModeActiveInsert")
-          : t("normalModeActiveContinueEditing"),
-      );
-      return;
-    }
-
-    const slashMenuAction = getSlashMenuAction({
-      showSlashMenu,
-      slashCommandSuggestions,
-      selectedSlashCommandIndex,
-      input,
-      inputChar,
-      key,
-    });
-    if (slashMenuAction) {
-      if (slashMenuAction.type === "move") {
-        setSelectedSlashCommandIndex(slashMenuAction.selectedIndex);
-      } else if (slashMenuAction.type === "close") {
-        setInput("");
-        setNotice(t("commandCancelled"));
-      } else {
-        setInput("");
-        handleCommand(slashMenuAction.command, runtime);
-      }
-      return;
-    }
-
-    if (key.return || inputChar === "\r" || inputChar === "\n") {
-      const trimmedInput = input.trim();
-      if (isSlashCommandInput(trimmedInput)) {
-        void submitInput(trimmedInput, runtime, session);
-        return;
-      }
-      if (runtime?.config.tui.showInputPreview && !showInputPreview) {
-        setPendingInput(input);
-        setShowInputPreview(true);
-        return;
-      }
-      void submitInput(input.trim(), runtime, session);
-      return;
-    }
-
-    if (key.upArrow) {
-      if (history.length === 0) return;
-      const nextIndex = historyIndex === null ? history.length - 1 : Math.max(0, historyIndex - 1);
-      setHistoryIndex(nextIndex);
-      setInput(history[nextIndex] ?? "");
-      return;
-    }
-
-    if (key.downArrow) {
-      if (historyIndex === null) return;
-      const nextIndex = historyIndex + 1;
-      if (nextIndex >= history.length) {
-        setHistoryIndex(null);
-        setInput("");
-      } else {
-        setHistoryIndex(nextIndex);
-        setInput(history[nextIndex] ?? "");
-      }
-      return;
-    }
-
-    if (key.backspace || key.delete) {
-      setInput((current) => current.slice(0, -1));
-      return;
-    }
-
-    if (inputChar && !key.ctrl && !key.meta) {
-      setInput((current) => current + inputChar);
-    }
   });
 
-  async function submitInput(
-    prompt: string,
-    activeRuntime: DeepCodeRuntime,
-    activeSession: Session,
-  ): Promise<void> {
-    if (!prompt) return;
+  // ── Per-mode input handlers ────────────────────────────────────────────────
+  useChatInput({
+    isActive: viewMode === "chat" && !activeModal && approvals.length === 0 && !showInputPreview && githubOAuth.status === "idle",
+    runtime,
+    session,
+    showSlashMenu,
+    slashCommandSuggestions,
+    onSubmit: (prompt) => void handleSubmit(prompt),
+    onCommand: (command) => handleCommand(command, runtime!),
+  });
+
+  useSessionInput({
+    isActive: viewMode === "sessions",
+    runtime,
+    onSwitchSession: (idx, rt) => {
+      const selected = rt.sessions.list()[idx];
+      if (selected) {
+        switchSession(selected, rt);
+        setApprovals([]);
+        setNotice(t("activeSession", { id: selected.id }));
+      }
+    },
+    onClearApprovals: () => setApprovals([]),
+  });
+
+  useConfigInput({
+    isActive: viewMode === "config",
+    runtime,
+    configEditIndex,
+    setConfigEditIndex,
+    editingConfig,
+    setEditingConfig,
+    configEditValue,
+    setConfigEditValue,
+    onSave: (field, value) => void saveConfigEdit(runtime!, field, value),
+  });
+
+  // ── Submit + command handlers ──────────────────────────────────────────────
+  async function handleSubmit(prompt: string): Promise<void> {
+    if (!prompt || !runtime || !session) return;
 
     if (isSlashCommandInput(prompt)) {
-      handleCommand(prompt, activeRuntime);
+      handleCommand(prompt, runtime);
       setInput("");
       return;
     }
 
-    const preflightIssue = getChatPreflightIssue(activeRuntime.config, activeSession, agentMode);
+    const preflightIssue = getChatPreflightIssue(runtime.config, session, agentMode);
     if (preflightIssue) {
       setNotice(preflightIssue.notice);
-      if (preflightIssue.modal) {
-        setActiveModal(preflightIssue.modal);
-      }
-      activeRuntime.sessions.addMessage(activeSession.id, {
+      if (preflightIssue.modal) setActiveModal(preflightIssue.modal);
+      runtime.sessions.addMessage(session.id, {
         role: "assistant",
         source: "ui",
         content: preflightIssue.message,
       });
-      setMessages([...activeSession.messages]);
+      setMessages([...session.messages]);
       return;
     }
 
-    setInput("");
-    setHistory((current) => [...current, prompt].slice(-50));
-    setHistoryIndex(null);
-    setStreaming(true);
-    setAssistantDraft("");
-    setStatus("executing");
-    setNotice(t("executingTask"));
-    setToolCalls([]);
-    setCurrentPlan(undefined);
-    setToolExecuting(false);
-    setPhase("planning");
-    setIteration({ current: 0, max: 0 });
-    resetMetrics();
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-    void telemetryRef.current?.createSession(
-      activeSession.id,
-      activeSession.provider,
-      activeSession.model || "unknown",
-    );
-
-    const modelPricing = getModelPricing(models, activeSession.provider, activeSession.model || "");
-    const promise = activeRuntime.agent.run({
-      session: activeSession,
-      input: prompt,
-      mode: agentMode,
-      signal: controller.signal,
-      onChunk: (text) => {
-        setToolExecuting(false);
-        setAssistantDraft(
-          (current) => current + redactText(text, collectSecretValues(activeRuntime.config)),
-        );
-        setMessages([...activeSession.messages]);
-      },
-      onUsage: (inputTokens, outputTokens) => {
-        const cost = (inputTokens / 1000) * modelPricing.inputPer1k + (outputTokens / 1000) * modelPricing.outputPer1k;
-        recordTokenUsage(inputTokens, outputTokens, cost);
-        telemetryRef.current?.recordTokenUsage(
-          activeSession.id,
-          inputTokens,
-          outputTokens,
-          modelPricing.inputPer1k,
-          modelPricing.outputPer1k,
-        );
-      },
-      onIteration: (current, max) => {
-        setIteration({ current, max });
-        setPhase("executing");
-      },
-      onTaskUpdate: (_task, plan) => {
-        const nextPlan = cloneTaskPlan(plan);
-        activeSession.metadata.plan = nextPlan;
-        setCurrentPlan(nextPlan);
-        const progress = plan.tasks.filter((task) => task.status === "completed").length;
-        setPhase(`task ${progress + 1}/${plan.tasks.length}`);
-        setIteration({ current: progress + 1, max: plan.tasks.length });
-      },
-    });
-    setMessages([...activeSession.messages]);
-
-    try {
-      await promise;
-      setMessages([...activeSession.messages]);
-      setActivities(activeSession.activities.slice(-10));
-      setStatus(activeSession.status);
-      setCurrentPlan(extractTaskPlanFromSession(activeSession));
-      const planError = activeSession.metadata?.planError as string | undefined;
-      if (planError && !currentPlan) {
-        setNotice(t("planningFailed", { error: planError }));
-      } else {
-        setNotice(t("taskCompleted"));
-      }
-    } catch (err) {
-      const message = await recordAgentRunError(activeRuntime, activeSession, err);
-      setMessages([...activeSession.messages]);
-      setActivities(activeSession.activities.slice(-10));
-      setStatus("error");
-      setCurrentPlan(extractTaskPlanFromSession(activeSession));
-      setNotice(t("error", { message }));
-    } finally {
-      setStreaming(false);
-      setAssistantDraft("");
-      setToolExecuting(false);
-      setPhase("");
-      setIteration({ current: 0, max: 0 });
-      abortRef.current = null;
+    if (runtime.config.tui.showInputPreview && !showInputPreview) {
+      setPendingInput(prompt);
+      setShowInputPreview(true);
+      return;
     }
+
+    void runAgent(runtime, session, prompt, agentMode);
   }
 
   function handleCommand(command: string, activeRuntime: DeepCodeRuntime): void {
     const [name] = command.split(/\s+/, 1);
     if (name === "/help") {
-      setViewMode("help");
-      setVimMode("normal");
-      setNotice(t("helpOpened"));
-      return;
+      setViewMode("help"); setVimMode("normal"); setNotice(t("helpOpened")); return;
     }
     if (name === "/clear") {
-      setMessages([]);
-      setAssistantDraft("");
-      setNotice(t("screenCleared"));
-      return;
+      setMessages([]); setNotice(t("screenCleared")); return;
     }
     if (name === "/new") {
       const newSession = createNewSession(activeRuntime, agentMode);
-      setApprovals([]);
-      setNotice(t("newSession", { id: newSession.id }));
-      return;
+      setApprovals([]); setNotice(t("newSession", { id: newSession.id })); return;
     }
     if (name === "/sessions") {
-      setSelectedSessionIndex(0);
-      setViewMode("sessions");
-      setVimMode("normal");
-      setNotice(t("selectSessionEscapeToReturn"));
-      return;
+      useAgentStore.getState().setSelectedSessionIndex(0);
+      setViewMode("sessions"); setVimMode("normal");
+      setNotice(t("selectSessionEscapeToReturn")); return;
     }
     if (name === "/config") {
-      resetEditor();
-      setViewMode("config");
-      setVimMode("normal");
-      setNotice(t("configNavigateEdit"));
-      return;
+      resetEditor(); setViewMode("config"); setVimMode("normal");
+      setNotice(t("configNavigateEdit")); return;
     }
     if (name === "/provider" || name === "/providers") {
-      setActiveModal("provider");
-      setNotice(t("providerModalOpened"));
-      return;
+      setActiveModal("provider"); setNotice(t("providerModalOpened")); return;
     }
     if (name === "/model" || name === "/models") {
       setActiveModal("model");
-      setNotice(t("modelSelectorOpenedEscapeToClose", { mode: agentMode.toUpperCase() }));
-      return;
+      setNotice(t("modelSelectorOpenedEscapeToClose", { mode: agentMode.toUpperCase() })); return;
     }
     if (name === "/mode") {
       const [, value] = command.trim().split(/\s+/, 2);
@@ -878,8 +676,7 @@ export function App(props: AppProps) {
         );
         return;
       }
-      setNotice(t("modeUsage"));
-      return;
+      setNotice(t("modeUsage")); return;
     }
     if (name === "/github-login" || command.startsWith("/github login")) {
       void startGithubLogin(command, activeRuntime, session);
@@ -888,9 +685,9 @@ export function App(props: AppProps) {
     setNotice(t("unknownCommand", { command }));
   }
 
+  // ── Telemetry export ───────────────────────────────────────────────────────
   async function handleExportTelemetry(): Promise<void> {
     if (!telemetryCollector || !session) return;
-
     setTelemetryExportStatus("exporting");
     try {
       const exportPath = await telemetryCollector.exportToJson(session.id);
@@ -905,10 +702,11 @@ export function App(props: AppProps) {
     }
   }
 
+  // ── Input preview callbacks ────────────────────────────────────────────────
   function handleConfirmInput(): void {
     if (!runtime || !session) return;
     setShowInputPreview(false);
-    void submitInput(pendingInput.trim(), runtime, session);
+    void runAgent(runtime, session, pendingInput.trim(), agentMode);
     setPendingInput("");
   }
 
@@ -923,12 +721,11 @@ export function App(props: AppProps) {
     setPendingInput("");
   }
 
+  // ── Error state ────────────────────────────────────────────────────────────
   if (error) {
     return (
       <Box flexDirection="column">
-        <Text color={theme.error} bold>
-          {t("appDeepCodeError")}
-        </Text>
+        <Text color={theme.error} bold>{t("appDeepCodeError")}</Text>
         <Text>{error}</Text>
       </Box>
     );
@@ -939,13 +736,14 @@ export function App(props: AppProps) {
   }
 
   const activeApproval = approvals[0];
+  const hasParallelTasks = Object.keys(taskBuffers).length > 1;
 
   return (
     <Layout
       height={stdout.rows}
       header={
         <Header
-          provider={activeModeSelection?.provider ?? currentProviderId}
+          provider={activeModeSelection?.provider ?? activeProviderId}
           model={activeModeSelection?.model || t("notConfigured")}
           agentMode={agentMode}
           theme={theme}
@@ -966,8 +764,14 @@ export function App(props: AppProps) {
           approvalCount={approvals.length}
           currentApprovals={approvals}
           onTabChange={setSidebarTab}
-          onApprovalAction={(requestId: string, allowed: boolean, scope: "once" | "session" | "always") => {
-            resolveApproval(runtime, approvals.find(a => a.id === requestId), allowed, scope, { setNotice, setStatus });
+          onApprovalAction={(requestId, allowed, scope) => {
+            resolveApproval(
+              runtime,
+              approvals.find((a) => a.id === requestId),
+              allowed,
+              scope,
+              { setNotice, setStatus },
+            );
           }}
           telemetryStats={telemetry.stats}
           telemetryBreakdown={telemetry.toolBreakdown}
@@ -1003,7 +807,7 @@ export function App(props: AppProps) {
           <ErrorBoundary theme={theme} onReset={() => setActiveModal(null)}>
             <ProviderModal
               theme={theme}
-              currentProvider={currentProviderId}
+              currentProvider={activeProviderId}
               providers={Object.entries(runtime.config.providers).map(([id, provider]) => ({
                 id: id as ProviderId,
                 name: PROVIDER_LABELS[id as ProviderId] ?? id,
@@ -1011,12 +815,7 @@ export function App(props: AppProps) {
                 hasApiKey: Boolean(provider.apiKey),
                 hasApiKeyFile: Boolean(provider.apiKeyFile),
                 expectedTarget: session
-                  ? formatExpectedProviderTarget(
-                      runtime.config,
-                      session,
-                      id as ProviderId,
-                      agentMode,
-                    )
+                  ? formatExpectedProviderTarget(runtime.config, session, id as ProviderId, agentMode)
                   : undefined,
               }))}
               onClose={() => setActiveModal(null)}
@@ -1028,11 +827,8 @@ export function App(props: AppProps) {
                     const defaults = ((mutable.defaultModels ?? {}) as Record<string, unknown>);
                     const providerDefault = typeof defaults[providerId] === "string" ? defaults[providerId] : undefined;
                     modeOverride.provider = providerId;
-                    if (providerDefault) {
-                      modeOverride.model = providerDefault;
-                    } else {
-                      delete modeOverride.model;
-                    }
+                    if (providerDefault) modeOverride.model = providerDefault;
+                    else delete modeOverride.model;
                     modeDefaults[agentMode] = modeOverride;
                     mutable.modeDefaults = modeDefaults;
                   });
@@ -1049,9 +845,7 @@ export function App(props: AppProps) {
                   setSession(runtime.sessions.get(session.id));
                   if (!next.model) {
                     setActiveModal("model");
-                    setNotice(
-                      t("providerForModeActiveChooseModel", { mode: agentMode.toUpperCase(), provider: providerId }),
-                    );
+                    setNotice(t("providerForModeActiveChooseModel", { mode: agentMode.toUpperCase(), provider: providerId }));
                   } else {
                     setNotice(t("providerForModeActive", { mode: agentMode.toUpperCase(), provider: providerId }));
                   }
@@ -1063,7 +857,6 @@ export function App(props: AppProps) {
                 const healthCheck = buildProviderHealthCheck(runtime, session, providerId, agentMode);
                 const result = await checkStatus(providerId, healthCheck);
                 const label = PROVIDER_LABELS[providerId] ?? providerId;
-
                 setNotice(
                   result.online
                     ? healthCheck.modelUnderTest
@@ -1076,9 +869,9 @@ export function App(props: AppProps) {
                 try {
                   await saveConfigPatch(runtime, (mutable) => {
                     const providers = (mutable.providers ?? {}) as Record<string, unknown>;
-                    const provider = (providers[providerId] ?? {}) as Record<string, unknown>;
-                    provider.apiKey = apiKey;
-                    providers[providerId] = provider;
+                    const prov = (providers[providerId] ?? {}) as Record<string, unknown>;
+                    prov.apiKey = apiKey;
+                    providers[providerId] = prov;
                     mutable.providers = providers;
                   });
                   setNotice(t("apiKeyUpdated", { provider: providerId }));
@@ -1090,10 +883,10 @@ export function App(props: AppProps) {
                 try {
                   await saveConfigPatch(runtime, (mutable) => {
                     const providers = (mutable.providers ?? {}) as Record<string, unknown>;
-                    const provider = (providers[providerId] ?? {}) as Record<string, unknown>;
-                    provider.apiKeyFile = apiKeyFile;
-                    delete provider.apiKey;
-                    providers[providerId] = provider;
+                    const prov = (providers[providerId] ?? {}) as Record<string, unknown>;
+                    prov.apiKeyFile = apiKeyFile;
+                    delete prov.apiKey;
+                    providers[providerId] = prov;
                     mutable.providers = providers;
                   });
                   setNotice(t("apiKeyFileConfigured", { provider: providerId }));
@@ -1113,7 +906,7 @@ export function App(props: AppProps) {
               loading={modelsLoading}
               error={modelsError}
               currentSelection={activeModeSelection}
-              currentProvider={currentProviderId}
+              currentProvider={activeProviderId}
               recentSelections={recentModels}
               onSelect={(selection) => {
                 void (async () => {
@@ -1123,10 +916,7 @@ export function App(props: AppProps) {
                       defaults[selection.provider] = selection.model;
                       mutable.defaultModels = defaults;
                       const modeDefaults = ((mutable.modeDefaults ?? {}) as Record<string, unknown>);
-                      modeDefaults[agentMode] = {
-                        provider: selection.provider,
-                        model: selection.model,
-                      };
+                      modeDefaults[agentMode] = { provider: selection.provider, model: selection.model };
                       mutable.modeDefaults = modeDefaults;
                       if (selection.provider === runtime.config.defaultProvider) {
                         mutable.defaultModel = selection.model;
@@ -1185,16 +975,13 @@ export function App(props: AppProps) {
         {showSlashMenu && slashCommandSuggestions.length > 0 && (
           <SlashCommandMenu
             commands={slashCommandSuggestions}
-            selectedIndex={selectedSlashCommandIndex}
+            selectedIndex={useAgentStore.getState().selectedSlashCommandIndex}
             theme={theme}
           />
         )}
 
         {githubOAuth.status !== "idle" && (
-          <GithubOAuthPanel
-            state={githubOAuth}
-            theme={theme}
-          />
+          <GithubOAuthPanel state={githubOAuth} theme={theme} />
         )}
 
         {!activeModal && activeApproval && (
@@ -1237,14 +1024,24 @@ export function App(props: AppProps) {
             paddingX={1}
           >
             <Box marginBottom={1}>
-              <Text bold color={theme.primary}>
-                {t("appChatLabel")}
-              </Text>
-              <Text color={theme.fgMuted}> {" "}{session.id}</Text>
+              <Text bold color={theme.primary}>{t("appChatLabel")}</Text>
+              <Text color={theme.fgMuted}> {session.id}</Text>
             </Box>
-            {currentPlan && streaming && (
-              <PlanProgressBar plan={currentPlan} theme={theme} />
+
+            {/* Parallel tasks panel — visible when 2+ tasks running */}
+            {hasParallelTasks && (
+              <ParallelTasksPanel
+                taskBuffers={taskBuffers}
+                streaming={streaming}
+                theme={theme}
+              />
             )}
+
+            {/* Progress matrix replaces the old single-task bar */}
+            {currentPlan && streaming && (
+              <ProgressMatrix plan={currentPlan} theme={theme} />
+            )}
+
             <Box flexDirection="column" flexGrow={1}>
               {visibleMessages.length === 0 && !streaming ? (
                 <EmptyChatState
@@ -1258,33 +1055,38 @@ export function App(props: AppProps) {
                 />
               ) : (
                 <>
-                  {visibleMessages.map((msg) => (
-                    <Box key={msg.id} flexDirection="column">
-                      <Text color={msg.role === "user" ? theme.userMsg : theme.assistantMsg} bold>
-                        {msg.role === "user" ? t("you") : t("deepCodeLabel")}
-                      </Text>
-                      <Text>{redactText(msg.content, collectSecretValues(runtime.config))}</Text>
-                      <Text> </Text>
-                    </Box>
-                  ))}
+                  <MessageList
+                    messages={visibleMessages}
+                    assistantDraft={assistantDraft}
+                    streaming={streaming}
+                    runtime={runtime}
+                    theme={theme}
+                  />
                   {approvals.length > 0 && activeApproval && (
                     <ChatApprovalIndicator request={activeApproval} theme={theme} />
                   )}
-                  {streaming && assistantDraft && (
+                  {streaming && assistantDraft && !hasParallelTasks && (
                     <Box flexDirection="column">
                       <Box gap={1}>
-                        <Text color={theme.assistantMsg} bold>
-                          {t("deepCodeDraft")}
-                        </Text>
+                        <Text color={theme.assistantMsg} bold>{t("deepCodeDraft")}</Text>
                         <TypingIndicator theme={theme} />
                       </Box>
-                      <Text dimColor>{assistantDraft}</Text>
-                      <Text> </Text>
                     </Box>
                   )}
                 </>
               )}
             </Box>
+
+            {/* Input field with real cursor */}
+            <InputField
+              value={input}
+              onChange={setInput}
+              onSubmit={(v) => void handleSubmit(v)}
+              vimMode={vimMode}
+              streaming={streaming}
+              focused={viewMode === "chat" && !activeModal && !showInputPreview}
+              theme={theme}
+            />
           </Box>
         )}
       </Box>
