@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
+import type { DetailContent } from "./types.js";
 import {
   resolveConfiguredModelForProvider,
   type AgentMode,
@@ -37,6 +38,9 @@ import {
   useConfigEditor,
   useSessionManager,
   useLiveMetrics,
+  useGitStatus,
+  useFileTree,
+  useAutocomplete,
 } from "./hooks/index.js";
 import { UIStateManager, type UIState } from "./persistence/ui-state.js";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary.js";
@@ -77,6 +81,12 @@ import { MessageList } from "./components/chat/MessageList.js";
 import { InputField } from "./components/chat/InputField.js";
 import { ParallelTasksPanel } from "./components/tasks/ParallelTasksPanel.js";
 import { ProgressMatrix } from "./components/tasks/ProgressMatrix.js";
+import { TaskProgress } from "./components/TaskProgress.js";
+import { HistorySearch } from "./components/HistorySearch.js";
+import { SessionTimeline } from "./components/SessionTimeline.js";
+import { OAuthWizard } from "./components/OAuthWizard.js";
+import { CommandSuggestions } from "./components/CommandSuggestions.js";
+import { useExecutionStore } from "./store/execution-store.js";
 import { useAgentStore } from "./store/agent-store.js";
 import { useAgentBridge } from "./hooks/useAgentBridge.js";
 import { useChatInput } from "./hooks/useChatInput.js";
@@ -119,6 +129,8 @@ export function App(props: AppProps) {
   const lastExportPath = useAgentStore((s) => s.lastExportPath);
   const slashMenuDismissed = useAgentStore((s) => s.slashMenuDismissed);
   const selectedSlashCommandIndex = useAgentStore((s) => s.selectedSlashCommandIndex);
+  const showHistorySearch = useAgentStore((s) => s.showHistorySearch);
+  const detailContent = useAgentStore((s) => s.detailContent);
 
   const setRuntime = useAgentStore((s) => s.setRuntime);
   const setSession = useAgentStore((s) => s.setSession);
@@ -141,7 +153,12 @@ export function App(props: AppProps) {
   const setRecentModels = useAgentStore((s) => s.setRecentModels);
   const setTelemetryExportStatus = useAgentStore((s) => s.setTelemetryExportStatus);
   const setLastExportPath = useAgentStore((s) => s.setLastExportPath);
+  const setShowHistorySearch = useAgentStore((s) => s.setShowHistorySearch);
+  const setDetailContent = useAgentStore((s) => s.setDetailContent);
   const dispatch = useAgentStore((s) => s.dispatch);
+
+  // Execution store (for TaskProgress)
+  const executionTasks = useExecutionStore((s) => s.tasks);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const abortRef = useRef<AbortController | null>(null);
@@ -204,6 +221,9 @@ export function App(props: AppProps) {
     onUpdateSession: handleSessionUpdate,
   });
   const { liveTokens, elapsed, resetMetrics, recordTokenUsage } = useLiveMetrics(streaming);
+  const gitStatus = useGitStatus(props.cwd);
+  const fileTree = useFileTree(props.cwd);
+  const autocompleteSuggestions = useAutocomplete(input, fileTree);
 
   // ── Agent bridge (replaces inline agent.run + all state mutations) ────────
   const providerEntries = useMemo(() => {
@@ -546,6 +566,23 @@ export function App(props: AppProps) {
       setSidebarVisible((v) => !v);
       return;
     }
+    // History search (Ctrl+R)
+    if (key.ctrl && inputChar === "r" && !streaming && vimMode === "insert") {
+      setShowHistorySearch(true);
+      return;
+    }
+    // Timeline (Ctrl+L)
+    if (key.ctrl && inputChar === "l") {
+      const nextDetail: DetailContent = detailContent === "timeline" ? "none" : "timeline";
+      setDetailContent(nextDetail);
+      setSidebarVisible(nextDetail !== "none");
+      return;
+    }
+    // Close history search or detail panel
+    if (showHistorySearch && key.escape) {
+      setShowHistorySearch(false);
+      return;
+    }
 
     // Tab toggle mode
     if (key.tab && !key.ctrl && !showSlashMenu) {
@@ -682,6 +719,31 @@ export function App(props: AppProps) {
       void startGithubLogin(command, activeRuntime, session);
       return;
     }
+    if (name === "/undo") {
+      // Undo: show notice (actual undo would need integration with file tool history)
+      const lastWrite = activities.slice().reverse().find((a) => {
+        const tool = String(a.metadata?.tool ?? "");
+        return tool === "write_file" || tool === "edit_file";
+      });
+      if (!lastWrite) {
+        setNotice(t("undoNotAvailable"));
+      } else {
+        setNotice(`Undo: last change was to ${String(lastWrite.metadata?.path ?? "unknown")}`);
+      }
+      return;
+    }
+    if (name === "/diff") {
+      setDetailContent("diff");
+      setSidebarVisible(true);
+      setNotice(t("slashDiffDesc"));
+      return;
+    }
+    if (name === "/timeline") {
+      setDetailContent("timeline");
+      setSidebarVisible(true);
+      setNotice(t("slashTimelineDesc"));
+      return;
+    }
     setNotice(t("unknownCommand", { command }));
   }
 
@@ -752,33 +814,42 @@ export function App(props: AppProps) {
         />
       }
       sidebar={
-        <Sidebar
-          theme={theme}
-          activeTab={sidebarTab}
-          sessions={sessionList}
-          activities={activities}
-          toolCalls={toolCalls}
-          activeSessionId={session.id}
-          status={status}
-          activeTarget={activeTarget}
-          messageCount={visibleMessages.length}
-          approvalCount={approvals.length}
-          currentApprovals={approvals}
-          onTabChange={setSidebarTab}
-          onApprovalAction={(requestId, allowed, scope) => {
-            resolveApproval(
-              runtime,
-              approvals.find((a) => a.id === requestId),
-              allowed,
-              scope,
-              { setNotice, setStatus },
-            );
-          }}
-          telemetryStats={telemetry.stats}
-          telemetryBreakdown={telemetry.toolBreakdown}
-          currentPlan={currentPlan}
-          hotkeysEnabled={sidebarHotkeysEnabled}
-        />
+        detailContent === "timeline" ? (
+          <SessionTimeline
+            activities={activities}
+            theme={theme}
+            isActive={sidebarVisible && detailContent === "timeline" && !activeModal}
+            onClose={() => { setDetailContent("none"); setSidebarVisible(false); }}
+          />
+        ) : (
+          <Sidebar
+            theme={theme}
+            activeTab={sidebarTab}
+            sessions={sessionList}
+            activities={activities}
+            toolCalls={toolCalls}
+            activeSessionId={session.id}
+            status={status}
+            activeTarget={activeTarget}
+            messageCount={visibleMessages.length}
+            approvalCount={approvals.length}
+            currentApprovals={approvals}
+            onTabChange={setSidebarTab}
+            onApprovalAction={(requestId, allowed, scope) => {
+              resolveApproval(
+                runtime,
+                approvals.find((a) => a.id === requestId),
+                allowed,
+                scope,
+                { setNotice, setStatus },
+              );
+            }}
+            telemetryStats={telemetry.stats}
+            telemetryBreakdown={telemetry.toolBreakdown}
+            currentPlan={currentPlan}
+            hotkeysEnabled={sidebarHotkeysEnabled}
+          />
+        )
       }
       statusBar={
         <StatusBar
@@ -973,7 +1044,7 @@ export function App(props: AppProps) {
         )}
 
         {githubOAuth.status !== "idle" && (
-          <GithubOAuthPanel state={githubOAuth} theme={theme} />
+          <OAuthWizard state={githubOAuth} theme={theme} />
         )}
 
         {!activeModal && activeApproval && (
@@ -1013,6 +1084,17 @@ export function App(props: AppProps) {
             flexGrow={1}
             paddingX={1}
           >
+            {/* History search popup — appears when Ctrl+R is pressed */}
+            {showHistorySearch && (
+              <HistorySearch
+                history={useAgentStore.getState().history}
+                theme={theme}
+                isActive={showHistorySearch}
+                onSelect={(entry) => setInput(entry)}
+                onClose={() => setShowHistorySearch(false)}
+              />
+            )}
+
             {/* Parallel tasks panel — visible when 2+ tasks running */}
             {hasParallelTasks && (
               <ParallelTasksPanel
@@ -1020,6 +1102,11 @@ export function App(props: AppProps) {
                 streaming={streaming}
                 theme={theme}
               />
+            )}
+
+            {/* Execution task progress — shows individual tool/task steps */}
+            {executionTasks.length > 0 && (
+              <TaskProgress tasks={executionTasks} theme={theme} />
             )}
 
             {/* Progress matrix replaces the old single-task bar */}
@@ -1058,6 +1145,16 @@ export function App(props: AppProps) {
               <SlashCommandMenu
                 commands={slashCommandSuggestions}
                 selectedIndex={selectedSlashCommandIndex}
+                theme={theme}
+              />
+            )}
+
+            {/* Contextual autocomplete — file paths, test files */}
+            {!showSlashMenu && !showHistorySearch && autocompleteSuggestions.length > 0 && (
+              <CommandSuggestions
+                commands={[]}
+                fileSuggestions={autocompleteSuggestions}
+                selectedIndex={0}
                 theme={theme}
               />
             )}
