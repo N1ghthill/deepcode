@@ -14,13 +14,16 @@ export interface UIStoreState {
   setActivePanel: (p: PanelId) => void;
   setPanelWidth: (id: PanelId, pct: number) => void;
   togglePanel: (id: PanelId) => void;
+  openPanel: (id: PanelId) => void;
+  closePanel: (id: PanelId) => void;
   resizePanel: (direction: "left" | "right") => void;
 }
 
+// Detail panel is hidden by default — revealed by /timeline, /diff, Ctrl+L
 const DEFAULT_PANELS: Record<PanelId, UIPanelState> = {
-  context: { widthPercent: 25, collapsed: false },
-  execution: { widthPercent: 50, collapsed: false },
-  detail: { widthPercent: 25, collapsed: false },
+  context: { widthPercent: 28, collapsed: false },
+  execution: { widthPercent: 44, collapsed: false },
+  detail: { widthPercent: 28, collapsed: true },
 };
 
 const MIN_WIDTH = 15;
@@ -46,6 +49,16 @@ export const useUIStore = create<UIStoreState>()((set) => ({
         ...state.panels,
         [id]: { ...state.panels[id], collapsed: !state.panels[id].collapsed },
       },
+    })),
+
+  openPanel: (id) =>
+    set((state) => ({
+      panels: { ...state.panels, [id]: { ...state.panels[id], collapsed: false } },
+    })),
+
+  closePanel: (id) =>
+    set((state) => ({
+      panels: { ...state.panels, [id]: { ...state.panels[id], collapsed: true } },
     })),
 
   resizePanel: (direction) =>

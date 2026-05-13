@@ -13,6 +13,7 @@ import {
 } from "@deepcode/shared";
 import type { DeepCodeRuntime } from "../../runtime.js";
 import { useAgentStore } from "../store/agent-store.js";
+import { useExecutionStore, type ExecutionTask } from "../store/execution-store.js";
 import { cloneTaskPlan, extractTaskPlanFromSession, getModelPricing, recordAgentRunError } from "../app-utils.js";
 import { t } from "../i18n/index.js";
 
@@ -64,6 +65,7 @@ export function useAgentBridge(options: AgentBridgeOptions) {
       setHistory((current) => [...current, prompt].slice(-50));
       setHistoryIndex(null);
       dispatch({ type: "STREAM_START" });
+      useExecutionStore.getState().clearTasks();
       setStatus("executing");
       setNotice(t("executingTask"));
       setToolCalls([]);
@@ -132,6 +134,7 @@ export function useAgentBridge(options: AgentBridgeOptions) {
             activeSession.metadata.plan = nextPlan;
             dispatch({ type: "PLAN_UPDATE", plan: nextPlan });
 
+            const execStore = useExecutionStore.getState();
             if (task.status === "running") {
               dispatch({
                 type: "TASK_START",
@@ -140,8 +143,17 @@ export function useAgentBridge(options: AgentBridgeOptions) {
                 taskType: task.type,
                 attempt: 0,
               });
+              const execTask: ExecutionTask = {
+                id: task.id,
+                description: task.description,
+                type: (task.type as ExecutionTask["type"]) ?? "tool",
+                status: "running",
+                startedAt: Date.now(),
+              };
+              execStore.addTask(execTask);
             } else if (task.status === "completed") {
               dispatch({ type: "TASK_COMPLETE", taskId: task.id });
+              execStore.completeTask(task.id);
             } else if (task.status === "failed") {
               dispatch({
                 type: "TASK_FAIL",
@@ -149,6 +161,7 @@ export function useAgentBridge(options: AgentBridgeOptions) {
                 error: task.error ?? "unknown",
                 willRetry: false,
               });
+              execStore.failTask(task.id, task.error ?? "unknown");
             }
 
             const progress = plan.tasks.filter((t) => t.status === "completed").length;

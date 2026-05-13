@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Box, useInput, useStdout } from "ink";
 import { useUIStore, type PanelId } from "../store/ui-store.js";
+import type { ThemeColors } from "../themes.js";
 
 interface AppLayoutProps {
   contextPanel: React.ReactNode;
@@ -8,9 +9,8 @@ interface AppLayoutProps {
   detailPanel: React.ReactNode;
   header: React.ReactNode;
   statusBar: React.ReactNode;
+  theme?: ThemeColors;
   height?: number;
-  /** Allow external code to toggle panels via ctrl+1/2/3 */
-  onPanelToggle?: (id: PanelId) => void;
 }
 
 export function AppLayout({
@@ -19,6 +19,7 @@ export function AppLayout({
   detailPanel,
   header,
   statusBar,
+  theme,
   height,
 }: AppLayoutProps) {
   const { stdout } = useStdout();
@@ -68,7 +69,7 @@ export function AppLayout({
             flexShrink={0}
             flexDirection="column"
             borderStyle="round"
-            borderColor={activePanel === "context" ? "blue" : undefined}
+            borderColor={activePanel === "context" ? (theme?.borderActive ?? "blue") : (theme?.border ?? undefined)}
           >
             {contextPanel}
           </Box>
@@ -80,7 +81,7 @@ export function AppLayout({
             flexGrow={1}
             flexDirection="column"
             borderStyle="round"
-            borderColor={activePanel === "execution" ? "blue" : undefined}
+            borderColor={activePanel === "execution" ? (theme?.borderActive ?? "blue") : (theme?.border ?? undefined)}
           >
             {executionPanel}
           </Box>
@@ -93,7 +94,7 @@ export function AppLayout({
             flexShrink={0}
             flexDirection="column"
             borderStyle="round"
-            borderColor={activePanel === "detail" ? "blue" : undefined}
+            borderColor={activePanel === "detail" ? (theme?.borderActive ?? "blue") : (theme?.border ?? undefined)}
           >
             {detailPanel}
           </Box>
