@@ -492,3 +492,201 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   if (chunks.length === 0) return undefined;
   return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
 }
+
+// ── LLM mock server (OpenAI-compatible SSE) ───────────────────────────────────
+
+interface LLMTestServer {
+  url: string;
+  calls: Array<{ model: string; messages: unknown[]; hasTools: boolean }>;
+  queueText: (text: string) => void;
+  queueToolCall: (name: string, args: Record<string, unknown>) => void;
+  queueError: (status: number, message: string) => void;
+  close: () => Promise<void>;
+}
+
+async function startLLMTestServer(): Promise<LLMTestServer> {
+  const calls: LLMTestServer["calls"] = [];
+  const responseQueue: Array<(response: ServerResponse) => void> = [];
+
+  const server = createServer(async (request, response) => {
+    if (request.url === "/v1/models" && request.method === "GET") {
+      sendJson(response, { object: "list", data: [{ id: "test-model", object: "model" }] });
+      return;
+    }
+    if (request.url === "/v1/chat/completions" && request.method === "POST") {
+      const body = await readJsonBody(request) as Record<string, unknown>;
+      calls.push({
+        model: String(body.model ?? ""),
+        messages: (body.messages as unknown[]) ?? [],
+        hasTools: Array.isArray(body.tools) && body.tools.length > 0,
+      });
+      const responder = responseQueue.shift();
+      if (responder) {
+        responder(response);
+      } else {
+        response.writeHead(500, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { message: "No response queued" } }));
+      }
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("LLM server bind failed");
+
+  function sseEvent(data: unknown): string {
+    return `data: ${JSON.stringify(data)}\n\n`;
+  }
+
+  function sendSse(response: ServerResponse, events: unknown[]): void {
+    response.writeHead(200, { "content-type": "text/event-stream", "transfer-encoding": "chunked" });
+    for (const event of events) {
+      response.write(sseEvent(event));
+    }
+    response.write("data: [DONE]\n\n");
+    response.end();
+  }
+
+  const baseChunk = { id: "chatcmpl-test", object: "chat.completion.chunk", created: 1_700_000_000, model: "test-model" };
+
+  return {
+    url: `http://127.0.0.1:${address.port}/v1`,
+    calls,
+
+    queueText(text: string) {
+      responseQueue.push((response) => {
+        sendSse(response, [
+          { ...baseChunk, choices: [{ index: 0, delta: { role: "assistant", content: text }, finish_reason: null }] },
+          { ...baseChunk, choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 20, completion_tokens: 10 } },
+        ]);
+      });
+    },
+
+    queueToolCall(name: string, args: Record<string, unknown>) {
+      responseQueue.push((response) => {
+        sendSse(response, [
+          { ...baseChunk, choices: [{ index: 0, delta: { role: "assistant", content: null, tool_calls: [{ index: 0, id: "call_e2e", type: "function", function: { name, arguments: "" } }] }, finish_reason: null }] },
+          { ...baseChunk, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }, finish_reason: null }] },
+          { ...baseChunk, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }], usage: { prompt_tokens: 30, completion_tokens: 15 } },
+        ]);
+      });
+    },
+
+    queueError(status: number, message: string) {
+      responseQueue.push((response) => {
+        response.writeHead(status, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { message } }));
+      });
+    },
+
+    close: () => new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
+  };
+}
+
+async function configureLLM(tempDir: string, serverUrl: string): Promise<void> {
+  await runCli(["--cwd", tempDir, "config", "set", "defaultProvider", "openrouter"]);
+  await runCli(["--cwd", tempDir, "config", "set", "defaultModel", "test-model"]);
+  await runCli(["--cwd", tempDir, "config", "set", "providers.openrouter.apiKey", "fake-e2e-key"]);
+  await runCli(["--cwd", tempDir, "config", "set", "providers.openrouter.baseUrl", serverUrl]);
+  // Allow reads and writes without interactive approval prompts
+  await runCli(["--cwd", tempDir, "config", "set", "permissions.read", "allow"]);
+  await runCli(["--cwd", tempDir, "config", "set", "permissions.write", "allow"]);
+}
+
+// ── deepcode run E2E tests ────────────────────────────────────────────────────
+
+describe("deepcode run with mock LLM", () => {
+  it("streams a direct text response and exits 0", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLM(tempDir, llm.url);
+      llm.queueText("The answer is forty-two.");
+
+      const result = await runCli(["--cwd", tempDir, "run", "what is the answer?", "--yes"]);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("forty-two");
+      expect(llm.calls).toHaveLength(1);
+      expect(llm.calls[0]?.hasTools).toBe(true);
+    } finally {
+      await llm.close();
+    }
+  }, 20_000);
+
+  it("executes a read_file tool call and includes result in follow-up", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLM(tempDir, llm.url);
+      // The agent's planning phase makes one extra LLM call for inputs that reference
+      // files (the .ts extension triggers workspace detection → shouldPlan=true).
+      // Queue a non-JSON response so planning fails gracefully and falls back to the
+      // traditional tool-call loop.
+      llm.queueText("Analyzing the request.");
+      // Turn 1: LLM asks to read the file
+      llm.queueToolCall("read_file", { path: "src/index.ts" });
+      // Turn 2: LLM synthesizes after seeing file content
+      llm.queueText("The file exports an add function.");
+
+      const result = await runCli(["--cwd", tempDir, "run", "read src/index.ts", "--yes"]);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("add function");
+      // Three LLM calls: planning + tool-call iteration + synthesis after tool result
+      expect(llm.calls).toHaveLength(3);
+      // Third call must include the tool result in messages
+      const thirdMessages = llm.calls[2]?.messages as Array<{ role: string }>;
+      expect(thirdMessages.some((m) => m.role === "tool")).toBe(true);
+    } finally {
+      await llm.close();
+    }
+  }, 20_000);
+
+  it("executes a write_file tool call and persists the file", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLM(tempDir, llm.url);
+      // Planning phase makes one extra call for workspace requests (file extension detected).
+      llm.queueText("Writing the requested file.");
+      llm.queueToolCall("write_file", { path: "src/generated.ts", content: "export const ANSWER = 42;\n" });
+      llm.queueText("Done. Created src/generated.ts.");
+
+      const result = await runCli(["--cwd", tempDir, "run", "create src/generated.ts", "--yes"]);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Done");
+      const written = await readFile(path.join(tempDir, "src", "generated.ts"), "utf8");
+      expect(written).toContain("ANSWER = 42");
+    } finally {
+      await llm.close();
+    }
+  }, 20_000);
+
+  it("exits non-zero and prints error when provider returns 500", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLM(tempDir, llm.url);
+      llm.queueError(500, "Internal server error from mock");
+
+      const result = await runCli(["--cwd", tempDir, "run", "anything", "--yes"]);
+
+      expect(result.exitCode).not.toBe(0);
+    } finally {
+      await llm.close();
+    }
+  }, 20_000);
+});
