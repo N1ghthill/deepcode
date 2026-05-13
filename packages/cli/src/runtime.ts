@@ -65,6 +65,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
     sessions,
     defaultTarget.provider,
     defaultTarget.model,
+    config.subagentConcurrency,
   );
   return { config, events, sessions, cache, providers, agent, subagents, permissions };
 }
