@@ -17,6 +17,8 @@ export interface ToolContext {
   permissions: PermissionGateway;
   pathSecurity: PathSecurity;
   logActivity(activity: Omit<Activity, "id" | "createdAt">): void;
+  /** Called by file-mutating tools before overwriting so the agent can undo. */
+  snapshotForUndo?(path: string): Promise<void>;
 }
 
 export interface ToolDefinition<TSchema extends z.ZodTypeAny = z.ZodTypeAny, TResult = unknown> {

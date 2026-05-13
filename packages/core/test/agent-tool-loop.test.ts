@@ -23,6 +23,8 @@ import {
   ToolRegistry,
   defineTool,
   listDirTool,
+  writeFileTool,
+  editFileTool,
   toOpenAICompatibleMessages,
   type ProviderChatOptions,
   type LLMProvider,
@@ -646,6 +648,77 @@ describe("Agent tool loop", () => {
       "Error running broken_tool",
     );
   });
+
+  it("undo reverts a write_file operation and returns null when the stack is empty", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agent-"));
+    const config = createConfig();
+    const events = new EventBus();
+    const providers = new ProviderManager(config);
+    providers.register(new WriteFileThenDoneProvider());
+    const tools = new ToolRegistry();
+    tools.register(writeFileTool);
+    const sessions = new SessionManager(tempDir);
+    const pathSecurity = new PathSecurity(tempDir, config.paths);
+    const agent = new Agent(
+      providers,
+      tools,
+      sessions,
+      config,
+      new ToolCache(tempDir, config),
+      new PermissionGateway(config, pathSecurity, new AuditLogger(tempDir), events, true),
+      pathSecurity,
+      events,
+    );
+    const session = sessions.create({ provider: "openrouter", model: "test-model" });
+    const targetPath = path.join(tempDir, "undo-target.txt");
+
+    // Run agent — provider emits write_file("undo-target.txt", "new content")
+    await agent.run({ session, input: "write the file" });
+    const { readFile } = await import("node:fs/promises");
+    expect(await readFile(targetPath, "utf8")).toBe("new content");
+
+    // Undo: file should be deleted (it didn't exist before)
+    const result = await agent.undo(session.id);
+    expect(result).not.toBeNull();
+    expect(result?.path).toBe(targetPath);
+    await expect(readFile(targetPath, "utf8")).rejects.toThrow();
+
+    // Second undo: nothing left on the stack
+    expect(await agent.undo(session.id)).toBeNull();
+  });
+
+  it("undo restores the previous content of an edited file", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agent-"));
+    const config = createConfig();
+    const events = new EventBus();
+    const providers = new ProviderManager(config);
+    providers.register(new EditFileThenDoneProvider());
+    const tools = new ToolRegistry();
+    tools.register(editFileTool);
+    const sessions = new SessionManager(tempDir);
+    const pathSecurity = new PathSecurity(tempDir, config.paths);
+    const agent = new Agent(
+      providers,
+      tools,
+      sessions,
+      config,
+      new ToolCache(tempDir, config),
+      new PermissionGateway(config, pathSecurity, new AuditLogger(tempDir), events, true),
+      pathSecurity,
+      events,
+    );
+    const session = sessions.create({ provider: "openrouter", model: "test-model" });
+    const targetPath = path.join(tempDir, "editable.txt");
+    await writeFile(targetPath, "hello world", "utf8");
+
+    await agent.run({ session, input: "edit the file" });
+    const { readFile } = await import("node:fs/promises");
+    expect(await readFile(targetPath, "utf8")).toBe("hello planet");
+
+    const result = await agent.undo(session.id);
+    expect(result?.path).toBe(targetPath);
+    expect(await readFile(targetPath, "utf8")).toBe("hello world");
+  });
 });
 
 describe("provider message conversion", () => {
@@ -1032,4 +1105,36 @@ function createLegacyTaskPrompt(): string {
     "",
     "Execute this task using the available tools. Return a summary of what was done.",
   ].join("\n");
+}
+
+class WriteFileThenDoneProvider extends ToolAwareProvider {
+  override async *chat(messages: Message[], options: ProviderChatOptions = {}): AsyncIterable<Chunk> {
+    this.calls.push(messages.map((m) => ({ ...m })));
+    this.optionCalls.push({ toolChoice: options.toolChoice, tools: options.tools });
+    const toolMsg = messages.find((m) => m.role === "tool");
+    if (!toolMsg) {
+      yield { type: "tool_call", call: { id: "call_write", name: "write_file", arguments: { path: "undo-target.txt", content: "new content" } } };
+      yield { type: "done" };
+      return;
+    }
+    yield { type: "delta", content: "file written" };
+    yield { type: "done" };
+  }
+  override async complete(): Promise<string> { throw new Error("skip planning for test"); }
+}
+
+class EditFileThenDoneProvider extends ToolAwareProvider {
+  override async *chat(messages: Message[], options: ProviderChatOptions = {}): AsyncIterable<Chunk> {
+    this.calls.push(messages.map((m) => ({ ...m })));
+    this.optionCalls.push({ toolChoice: options.toolChoice, tools: options.tools });
+    const toolMsg = messages.find((m) => m.role === "tool");
+    if (!toolMsg) {
+      yield { type: "tool_call", call: { id: "call_edit", name: "edit_file", arguments: { path: "editable.txt", oldString: "world", newString: "planet" } } };
+      yield { type: "done" };
+      return;
+    }
+    yield { type: "delta", content: "file edited" };
+    yield { type: "done" };
+  }
+  override async complete(): Promise<string> { throw new Error("skip planning for test"); }
 }

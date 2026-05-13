@@ -779,16 +779,18 @@ export function App(props: AppProps) {
       return;
     }
     if (name === "/undo") {
-      // Undo: show notice (actual undo would need integration with file tool history)
-      const lastWrite = activities.slice().reverse().find((a) => {
-        const tool = String(a.metadata?.tool ?? "");
-        return tool === "write_file" || tool === "edit_file";
+      if (!activeRuntime || !session) { setNotice(t("undoNotAvailable")); return; }
+      void activeRuntime.agent.undo(session.id).then((result) => {
+        if (!result) {
+          setNotice(t("undoNotAvailable"));
+        } else {
+          const worktree = session.worktree ?? "";
+          const rel = result.path.startsWith(worktree)
+            ? result.path.slice(worktree.length + 1)
+            : result.path;
+          setNotice(t("undoSuccess", { path: rel }));
+        }
       });
-      if (!lastWrite) {
-        setNotice(t("undoNotAvailable"));
-      } else {
-        setNotice(`Undo: last change was to ${String(lastWrite.metadata?.path ?? "unknown")}`);
-      }
       return;
     }
     if (name === "/diff") {

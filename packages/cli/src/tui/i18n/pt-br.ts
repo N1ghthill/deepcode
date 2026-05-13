@@ -430,6 +430,7 @@ export const ptBR: I18nDict = {
   contextPanelTitle: "Contexto",
   executionPanelTitle: "Execução",
   undoNotAvailable: "Nenhuma alteração de arquivo para desfazer nesta sessão.",
+  undoSuccess: "Revertido: {path}",
   diffNoPendingChanges: "Sem alterações pendentes para mostrar.",
   ctrlPanelShortcuts: "Ctrl+1/2/3 alterna painéis · Ctrl+←/→ redimensiona",
 };

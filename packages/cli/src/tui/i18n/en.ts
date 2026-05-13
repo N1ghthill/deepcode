@@ -419,6 +419,7 @@ export const en = {
   contextPanelTitle: "Context",
   executionPanelTitle: "Execution",
   undoNotAvailable: "No file changes to undo in this session.",
+  undoSuccess: "Reverted: {path}",
   diffNoPendingChanges: "No pending changes to show.",
   ctrlPanelShortcuts: "Ctrl+1/2/3 toggle panels · Ctrl+←/→ resize",
 } as const;
