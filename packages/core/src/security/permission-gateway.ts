@@ -178,11 +178,12 @@ export class PermissionGateway {
       createdAt: nowIso(),
     };
 
-    this.eventBus.emit("approval:request", request);
-
     // Timeout for approval requests (5 minutes)
     const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000;
 
+    // Register the decision listener BEFORE emitting the request so that
+    // synchronous handlers (e.g. the --yes auto-approver in run.ts) that
+    // immediately re-emit "approval:decision" are guaranteed to be heard.
     const decision = await new Promise<ApprovalDecision>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         cleanup();
@@ -215,6 +216,8 @@ export class PermissionGateway {
         deferred: { reject } as any,
         timeoutId,
       });
+
+      this.eventBus.emit("approval:request", request);
     });
 
     // If session-scoped approval, remember for subsequent checks
