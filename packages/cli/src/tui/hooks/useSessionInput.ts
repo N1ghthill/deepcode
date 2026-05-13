@@ -1,6 +1,5 @@
 import { useInput } from "ink";
 import type { DeepCodeRuntime } from "../../runtime.js";
-import type { ApprovalRequest } from "@deepcode/core";
 import { useAgentStore } from "../store/agent-store.js";
 import { t } from "../i18n/index.js";
 

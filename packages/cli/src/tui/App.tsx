@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import {
   resolveConfiguredModelForProvider,
-  resolveUsableProviderTarget,
   type AgentMode,
   type Session,
   type ProviderId,
@@ -20,7 +19,6 @@ import {
   Header,
   Sidebar,
   StatusBar,
-  type SidebarTab,
 } from "./components/layout/index.js";
 import {
   ProviderModal,
@@ -40,36 +38,30 @@ import {
   useSessionManager,
   useLiveMetrics,
 } from "./hooks/index.js";
-import { UIStateManager, type RecentModelSelection, type UIState } from "./persistence/ui-state.js";
+import { UIStateManager, type UIState } from "./persistence/ui-state.js";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary.js";
 import { useTokenEstimate } from "./hooks/useTokenEstimate.js";
-import type { AppProps, ViewMode, VimMode, ModalType } from "./types.js";
+import type { AppProps, ViewMode, VimMode } from "./types.js";
 import { formatModelSelection } from "./model-selection.js";
 import {
   resolveEffectiveModeProvider,
   resolveEffectiveModeSelection,
 } from "./mode-routing.js";
 import {
-  CONFIG_FIELDS,
   PROVIDER_IDS,
   PROVIDER_LABELS,
 } from "./app-config.js";
 import {
   buildProviderHealthCheck,
-  cloneTaskPlan,
   dedupeRecentModels,
   extractTaskPlanFromSession,
   formatExpectedProviderTarget,
   getChatPreflightIssue,
-  getConfigValue,
-  getModelPricing,
   getRenderableChatMessages,
   getSlashCommandSuggestions,
   isSidebarHotkeysEnabled,
   isSlashCommandInput,
-  recordAgentRunError,
   selectInitialSessionForLaunch,
-  serializeConfigEditValue,
 } from "./app-utils.js";
 import {
   ApprovalPanel,
