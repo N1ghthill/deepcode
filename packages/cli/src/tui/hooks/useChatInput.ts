@@ -37,8 +37,7 @@ export function useChatInput({
   const setNotice = useAgentStore((s) => s.setNotice);
   const setHistoryIndex = useAgentStore((s) => s.setHistoryIndex);
   const setSelectedSlashCommandIndex = useAgentStore((s) => s.setSelectedSlashCommandIndex);
-  const setShowInputPreview = useAgentStore((s) => s.setShowInputPreview);
-  const setPendingInput = useAgentStore((s) => s.setPendingInput);
+  const setSlashMenuDismissed = useAgentStore((s) => s.setSlashMenuDismissed);
 
   useInput(
     (inputChar, key) => {
@@ -82,8 +81,10 @@ export function useChatInput({
         if (slashMenuAction.type === "move") {
           setSelectedSlashCommandIndex(slashMenuAction.selectedIndex);
         } else if (slashMenuAction.type === "close") {
-          setInput("");
-          setNotice(t("commandCancelled"));
+          setSlashMenuDismissed(true);
+        } else if (slashMenuAction.type === "complete") {
+          setInput(slashMenuAction.command);
+          setSlashMenuDismissed(true);
         } else {
           setInput("");
           onCommand(slashMenuAction.command);

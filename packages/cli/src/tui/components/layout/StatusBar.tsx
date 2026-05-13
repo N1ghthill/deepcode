@@ -8,10 +8,10 @@ import {
 } from "../../model-selection.js";
 import { t } from "../../i18n/index.js";
 import { formatAgentStatus } from "../../utils/status-format.js";
+import { InlineSpinner } from "../shared/InlineSpinner.js";
 
 export interface StatusBarProps {
   theme: ThemeColors;
-  input: string;
   streaming: boolean;
   status: string;
   vimMode?: "insert" | "normal";
@@ -32,7 +32,6 @@ export interface StatusBarProps {
 
 export function StatusBar({
   theme,
-  input,
   streaming,
   status,
   vimMode = "insert",
@@ -50,27 +49,6 @@ export function StatusBar({
   planSelection,
   buildSelection,
 }: StatusBarProps) {
-  const formatTokens = (tokens: number): string => {
-    if (tokens >= 1000) {
-      return `${(tokens / 1000).toFixed(1)}k`;
-    }
-    return String(tokens);
-  };
-
-  const formatCost = (cost: number): string => {
-    return `$${cost.toFixed(4)}`;
-  };
-
-  const formatElapsed = (ms: number): string => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-    return `${seconds}s`;
-  };
-
-  const visibleInput = truncateMiddle(input.replace(/\s+/g, " "), 72);
   const visibleNotice = notice ? truncateMiddle(notice.replace(/\s+/g, " "), 110) : undefined;
   const planTarget = formatRouteTarget(planSelection);
   const buildTarget = formatRouteTarget(buildSelection);
@@ -80,35 +58,31 @@ export function StatusBar({
       <Box
         flexDirection="column"
         paddingX={1}
-        borderStyle="single"
-        borderColor={theme.border}
+        borderStyle="round"
+        borderColor={streaming ? theme.borderActive : theme.border}
       >
         {streaming ? (
-          <Text color={theme.warning}>
-            {phase === "planning" ? t("statusBarPlanning") :
-             phase.startsWith("task") ? `\u26A1 ${phase}` :
-             toolExecuting ? t("statusBarExecutingTools") : t("statusBarGenerating")}
-            {iteration.max > 0 && (
-              <Text color={theme.fgMuted}> [{iteration.current}/{iteration.max}]</Text>
-            )}
-            {elapsed > 0 && (
-              <Text color={theme.fgMuted}> [{formatElapsed(elapsed)}]</Text>
-            )}
-            {' '}<Text color={theme.fgMuted}>{t("statusBarCtrlCCancel")}</Text>
-          </Text>
+          <StreamingLine
+            theme={theme}
+            phase={phase}
+            toolExecuting={toolExecuting}
+            iteration={iteration}
+            elapsed={elapsed}
+          />
         ) : vimMode === "normal" ? (
-          <Text color={theme.fgMuted}>
-            {t("statusBarNormalMode")}
-          </Text>
-        ) : (
-          <Text>
-            {" > "}{visibleInput}_
-          </Text>
-        )}
+          <Box flexDirection="row" gap={1}>
+            <Text backgroundColor={theme.warning} color="black" bold>
+              {" NORMAL "}
+            </Text>
+            <Text color={theme.fgMuted}>{t("statusBarNormalMode")}</Text>
+          </Box>
+        ) : null}
 
-        <Box gap={2}>
-          <Text color={theme.fgMuted}>
-            {t("statusBarStatusLabel")}
+        <Box gap={2} flexWrap="wrap">
+          <Box flexDirection="row" gap={1}>
+            <Text color={theme.fgMuted} dimColor>
+              ●
+            </Text>
             <Text
               bold
               color={
@@ -121,24 +95,39 @@ export function StatusBar({
             >
               {streaming ? t("statusBarExecuting") : formatAgentStatus(status)}
             </Text>
-          </Text>
+          </Box>
 
-          <Text color={theme.accent}>
-            ↑ {formatTokens(inputTokens)} | ↓ {formatTokens(outputTokens)}
-          </Text>
+          <Box flexDirection="row" gap={1}>
+            <Text color={theme.fgMuted} dimColor>
+              ↑
+            </Text>
+            <Text color={theme.accent}>{formatTokens(inputTokens)}</Text>
+            <Text color={theme.fgMuted} dimColor>
+              ↓
+            </Text>
+            <Text color={theme.accent}>{formatTokens(outputTokens)}</Text>
+          </Box>
 
-          <Text color={theme.success}>
-            {formatCost(estimatedCost)}
-          </Text>
+          <Box flexDirection="row" gap={1}>
+            <Text color={theme.fgMuted} dimColor>
+              $
+            </Text>
+            <Text color={theme.success}>{formatCost(estimatedCost)}</Text>
+          </Box>
 
-          <Text color={theme.fgMuted}>
-            ⚡ {toolCalls}
-          </Text>
+          <Box flexDirection="row" gap={1}>
+            <Text color={theme.fgMuted} dimColor>
+              ⚡
+            </Text>
+            <Text color={theme.fg}>{toolCalls}</Text>
+          </Box>
 
           {errorCount > 0 && (
-            <Text color={theme.error}>
-              ✗ {errorCount}
-            </Text>
+            <Box flexDirection="row" gap={1}>
+              <Text color={theme.error} bold>
+                ✗ {errorCount}
+              </Text>
+            </Box>
           )}
         </Box>
 
@@ -149,7 +138,9 @@ export function StatusBar({
             target={planTarget}
             theme={theme}
           />
-          <Text color={theme.fgMuted}>|</Text>
+          <Text color={theme.fgMuted} dimColor>
+            │
+          </Text>
           <ModeRoute
             active={agentMode === "build"}
             label={t("statusBarBuildLabel")}
@@ -160,12 +151,80 @@ export function StatusBar({
       </Box>
 
       {visibleNotice && (
-        <Text color={theme.fgMuted} dimColor>
-          {visibleNotice}
-        </Text>
+        <Box paddingX={1}>
+          <Text color={theme.accent} dimColor>
+            ›
+          </Text>
+          <Text color={theme.fgMuted}> {visibleNotice}</Text>
+        </Box>
       )}
     </Box>
   );
+}
+
+function StreamingLine({
+  theme,
+  phase,
+  toolExecuting,
+  iteration,
+  elapsed,
+}: {
+  theme: ThemeColors;
+  phase: string;
+  toolExecuting: boolean;
+  iteration: { current: number; max: number };
+  elapsed: number;
+}) {
+  const label =
+    phase === "planning"
+      ? t("statusBarPlanning")
+      : phase.startsWith("task")
+      ? `⚡ ${phase}`
+      : toolExecuting
+      ? t("statusBarExecutingTools")
+      : t("statusBarGenerating");
+
+  return (
+    <Box flexDirection="row" gap={1}>
+      <InlineSpinner theme={theme} />
+      <Text color={theme.warning} bold>
+        {label}
+      </Text>
+      {iteration.max > 0 && (
+        <Text color={theme.fgMuted}>
+          [{iteration.current}/{iteration.max}]
+        </Text>
+      )}
+      {elapsed > 0 && (
+        <Text color={theme.fgMuted}>
+          · {formatElapsed(elapsed)}
+        </Text>
+      )}
+      <Text color={theme.fgMuted} dimColor>
+        · {t("statusBarCtrlCCancel")}
+      </Text>
+    </Box>
+  );
+}
+
+function formatTokens(tokens: number): string {
+  if (tokens >= 1000) {
+    return `${(tokens / 1000).toFixed(1)}k`;
+  }
+  return String(tokens);
+}
+
+function formatCost(cost: number): string {
+  return `$${cost.toFixed(4)}`;
+}
+
+function formatElapsed(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+  return `${seconds}s`;
 }
 
 function truncateMiddle(input: string, maxLength: number): string {
@@ -198,18 +257,15 @@ function ModeRoute({
   const badgeColor = label === "BUILD" ? theme.success : theme.primary;
 
   return (
-    <Box>
-      <Text color={active ? badgeColor : theme.fgMuted}>
-        {active ? "●" : "○"}
-      </Text>
+    <Box flexDirection="row">
       <Text
         bold
         backgroundColor={active ? badgeColor : undefined}
         color={active ? "black" : theme.fgMuted}
       >
-        {` ${label} `}
+        {active ? ` ● ${label} ` : `   ${label}  `}
       </Text>
-      <Text color={active ? theme.fg : theme.fgMuted}>
+      <Text color={active ? theme.fg : theme.fgMuted} dimColor={!active}>
         {" "}{target}
       </Text>
     </Box>

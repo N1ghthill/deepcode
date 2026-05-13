@@ -1,3 +1,4 @@
+import type React from "react";
 import { useRef, useCallback } from "react";
 import {
   collectSecretValues,
@@ -27,7 +28,6 @@ export interface AgentBridgeOptions {
 export function useAgentBridge(options: AgentBridgeOptions) {
   const {
     telemetryRef,
-    activeSessionIdRef,
     abortRef,
     recordTokenUsage,
     resetMetrics,

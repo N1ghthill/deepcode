@@ -1,4 +1,5 @@
-import React from "react";
+/* eslint-disable no-undef */
+import React, { useEffect, useState } from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
 import type { ThemeColors } from "../../themes.js";
@@ -27,23 +28,33 @@ export function InputField({
   placeholder,
 }: InputFieldProps) {
   const isInputActive = focused && vimMode === "insert" && !streaming;
+  const promptColor = isInputActive ? theme.primary : theme.fgMuted;
 
   return (
-    <Box borderStyle="single" borderColor={isInputActive ? theme.borderActive : theme.border} paddingX={1}>
+    <Box
+      borderStyle="round"
+      borderColor={isInputActive ? theme.borderActive : theme.border}
+      paddingX={1}
+    >
       {vimMode === "normal" ? (
         <Box flexDirection="row" gap={1}>
-          <Text color={theme.warning} bold>
-            {t("normalModeIndicator")}
+          <Text backgroundColor={theme.warning} color="black" bold>
+            {" "}NORMAL{" "}
           </Text>
           <Text color={theme.fgMuted}>{value || t("normalModeHint")}</Text>
         </Box>
       ) : streaming ? (
         <Box flexDirection="row" gap={1}>
-          <Text color={theme.fgMuted}>{t("streamingIndicator")}</Text>
+          <AnimatedDots theme={theme} />
+          <Text color={theme.fgMuted} dimColor>
+            {t("streamingIndicator")}
+          </Text>
         </Box>
       ) : (
         <Box flexDirection="row" gap={1}>
-          <Text color={theme.primary} bold>›</Text>
+          <Text color={promptColor} bold>
+            ▶
+          </Text>
           <TextInput
             value={value}
             onChange={onChange}
@@ -55,5 +66,19 @@ export function InputField({
         </Box>
       )}
     </Box>
+  );
+}
+
+function AnimatedDots({ theme }: { theme: ThemeColors }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setStep((prev) => (prev + 1) % 3), 350);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <Text color={theme.primary}>
+      {step === 0 ? "●  ·" : step === 1 ? "·●  " : " ·● "}
+    </Text>
   );
 }

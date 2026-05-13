@@ -31,6 +31,19 @@ The repository README is the public entrypoint. This directory is the detailed r
 - [14 - Decisions Log](./14-decisions-log.md)
 - [15 - Handoff and Next Steps](./15-handoff-next-steps.md)
 
+## Reference (live)
+
+Auto-generated or living references about the running agent:
+
+- [Agent Context](./reference/AGENT_CONTEXT.md) — runtime, providers, tools, prompts, TUI
+- [Approval System](./reference/APPROVAL_SYSTEM.md) — permission gateway and approval flow
+
+## Archive
+
+Historical plans and refactor notes (kept for context):
+
+- [TUI Refactor Plan](./archive/TUI_REFACTOR_PLAN.md)
+
 ## Repository Policies
 
 - [../CONTRIBUTING.md](../CONTRIBUTING.md)

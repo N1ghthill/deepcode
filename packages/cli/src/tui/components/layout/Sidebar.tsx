@@ -60,24 +60,32 @@ export function Sidebar({
   return (
     <Box
       flexDirection="column"
-      borderStyle="single"
+      borderStyle="round"
       borderColor={theme.border}
       paddingX={1}
     >
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={theme.fgMuted}>
-          {t("sidebarSession")}{truncate(activeSessionId, 14)}
-        </Text>
-        <Text color={theme.fgMuted}>
-          {t("statusLabel")}<Text color={status === "error" ? theme.error : theme.success}>{formatAgentStatus(status ?? "idle")}</Text>
-        </Text>
-        <Text color={theme.fgMuted}>
-          {t("sidebarTarget")}{truncate(activeTarget ?? t("notConfigured"), 22)}
-        </Text>
-        <Text color={theme.fgMuted}>
-          {t("sidebarMsgs")}{messageCount} \u2022 {t("sidebarTools")}{toolCalls.length}
-          {approvalCount > 0 ? ` \u2022 ${t("sidebarApprovals")}${approvalCount}` : ""}
-        </Text>
+        <Box flexDirection="row" gap={1}>
+          <Text color={theme.fgMuted} dimColor>session</Text>
+          <Text color={theme.fg}>{truncate(activeSessionId, 14)}</Text>
+        </Box>
+        <Box flexDirection="row" gap={1}>
+          <Text color={status === "error" ? theme.error : theme.success}>\u25cf</Text>
+          <Text color={status === "error" ? theme.error : theme.success} bold>
+            {formatAgentStatus(status ?? "idle")}
+          </Text>
+        </Box>
+        <Box flexDirection="row" gap={1}>
+          <Text color={theme.fgMuted} dimColor>target</Text>
+          <Text color={theme.fg}>{truncate(activeTarget ?? t("notConfigured"), 22)}</Text>
+        </Box>
+        <Box flexDirection="row" gap={1}>
+          <Text color={theme.accent}>\u25c6</Text>
+          <Text color={theme.fgMuted}>{messageCount} msgs \u00b7 {toolCalls.length} tools</Text>
+          {approvalCount > 0 && (
+            <Text color={theme.warning} bold>\u00b7 \u26a0 {approvalCount}</Text>
+          )}
+        </Box>
       </Box>
 
       <Box>
@@ -162,9 +170,16 @@ function TabButton({
   active: boolean;
   theme: ThemeColors;
 }) {
+  if (active) {
+    return (
+      <Text backgroundColor={theme.primary} color="black" bold>
+        {" "}{label}{" "}
+      </Text>
+    );
+  }
   return (
-    <Text bold={active} color={active ? theme.primary : theme.fgMuted}>
-      [{label}]
+    <Text color={theme.fgMuted}>
+      {" "}{label}{" "}
     </Text>
   );
 }

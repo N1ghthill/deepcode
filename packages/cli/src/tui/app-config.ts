@@ -73,7 +73,8 @@ export interface SlashMenuKeyState {
 export type SlashMenuAction =
   | { type: "move"; selectedIndex: number }
   | { type: "close" }
-  | { type: "execute"; command: string };
+  | { type: "execute"; command: string }
+  | { type: "complete"; command: string };
 
 export interface ChatPreflightIssue {
   message: string;

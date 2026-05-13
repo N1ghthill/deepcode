@@ -62,11 +62,17 @@ export function getSlashMenuAction({
       selectedIndex: Math.max(0, selectedSlashCommandIndex - 1),
     };
   }
-  if (key.downArrow || key.tab) {
+  if (key.downArrow) {
     return {
       type: "move",
       selectedIndex: Math.min(slashCommandSuggestions.length - 1, selectedSlashCommandIndex + 1),
     };
+  }
+  if (key.tab) {
+    const selected = slashCommandSuggestions[selectedSlashCommandIndex] ?? slashCommandSuggestions[0];
+    if (selected) {
+      return { type: "complete", command: selected.command };
+    }
   }
   if (key.escape) {
     return { type: "close" };

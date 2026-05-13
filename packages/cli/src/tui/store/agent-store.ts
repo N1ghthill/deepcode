@@ -56,6 +56,7 @@ export interface AgentStoreState {
   showInputPreview: boolean;
   pendingInput: string;
   selectedSlashCommandIndex: number;
+  slashMenuDismissed: boolean;
 
   // Task execution
   currentPlan: TaskPlan | undefined;
@@ -93,6 +94,7 @@ export interface AgentStoreState {
   setShowInputPreview: (s: boolean) => void;
   setPendingInput: (p: string) => void;
   setSelectedSlashCommandIndex: (i: number) => void;
+  setSlashMenuDismissed: (v: boolean) => void;
   setCurrentPlan: (p: TaskPlan | undefined) => void;
   setToolCalls: (t: Array<{ id: string; name: string; args: string; result?: string }> | ((prev: Array<{ id: string; name: string; args: string; result?: string }>) => Array<{ id: string; name: string; args: string; result?: string }>)) => void;
   setToolExecuting: (e: boolean) => void;
@@ -135,6 +137,7 @@ export const useAgentStore = create<AgentStoreState>()((set) => ({
   showInputPreview: false,
   pendingInput: "",
   selectedSlashCommandIndex: 0,
+  slashMenuDismissed: false,
   currentPlan: undefined,
   taskBuffers: {},
   toolCalls: [],
@@ -167,6 +170,7 @@ export const useAgentStore = create<AgentStoreState>()((set) => ({
   setShowInputPreview: (s) => set({ showInputPreview: s }),
   setPendingInput: (p) => set({ pendingInput: p }),
   setSelectedSlashCommandIndex: (i) => set({ selectedSlashCommandIndex: i }),
+  setSlashMenuDismissed: (v) => set({ slashMenuDismissed: v }),
   setCurrentPlan: (p) => set({ currentPlan: p }),
   setToolCalls: (t) => set((state) => ({ toolCalls: resolveUpdater(t, state.toolCalls) })),
   setToolExecuting: (e) => set({ toolExecuting: e }),

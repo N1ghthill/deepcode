@@ -31,31 +31,61 @@ import { CommandPreview } from "../shared/CommandPreview.js";
 import { t } from "../../i18n/index.js";
 import { formatAgentStatus } from "../../utils/status-format.js";
 
-export function
-
- ChatApprovalIndicator({
+export function ChatApprovalIndicator({
   request,
   theme,
 }: {
   request: ApprovalRequest;
   theme: ThemeColors;
 }) {
-  const riskColor = request.level === "dangerous" ? theme.error : request.level === "shell" ? theme.warning : theme.accent;
-  const operation = request.preview?.type === "shell_command" ? request.preview.command : request.operation;
+  const riskColor =
+    request.level === "dangerous"
+      ? theme.error
+      : request.level === "shell"
+        ? theme.warning
+        : theme.accent;
+  const operation =
+    request.preview?.type === "shell_command" ? request.preview.command : request.operation;
+  const opText = (operation ?? "").length > 60 ? (operation ?? "").slice(0, 60) + "..." : operation ?? "";
 
   return (
-    <Box flexDirection="column" paddingX={1} marginTop={1} gap={1}>
-      <Box flexDirection="row" alignItems="center">
-        <Text color={riskColor} bold>⚠ </Text>
-        <Text color={riskColor} bold>[{request.level.toUpperCase()}] </Text>
-        <Text>{t("approvalRequired")}</Text>
-        <Text color={theme.fgMuted}>{(operation ?? "").length > 50 ? (operation ?? "").slice(0, 50) + "..." : (operation ?? "")}</Text>
+    <Box
+      flexDirection="column"
+      paddingX={1}
+      marginTop={1}
+      gap={1}
+      borderStyle="round"
+      borderColor={riskColor}
+    >
+      <Box flexDirection="row" gap={1}>
+        <Text color={riskColor} bold>
+          ⚠
+        </Text>
+        <Text backgroundColor={riskColor} color="black" bold>
+          {" "}{request.level.toUpperCase()}{" "}
+        </Text>
+        <Text color={theme.fg} bold>
+          {t("approvalRequired")}
+        </Text>
       </Box>
-      <Box flexDirection="row" gap={2}>
-        <Text backgroundColor={theme.success} bold> {t("approveOnce")} </Text>
-        <Text backgroundColor={theme.primary} bold> {t("approveAlways")} </Text>
-        <Text backgroundColor={theme.accent} bold> {t("approveSessionKey")} </Text>
-        <Text backgroundColor={theme.error} bold> {t("denyKey")} </Text>
+      {opText && (
+        <Box paddingLeft={2}>
+          <Text color={theme.fgMuted}>{opText}</Text>
+        </Box>
+      )}
+      <Box flexDirection="row" gap={1}>
+        <Text backgroundColor={theme.success} color="black" bold>
+          {" "}{t("approveOnce")}{" "}
+        </Text>
+        <Text backgroundColor={theme.primary} color="black" bold>
+          {" "}{t("approveAlways")}{" "}
+        </Text>
+        <Text backgroundColor={theme.accent} color="black" bold>
+          {" "}{t("approveSessionKey")}{" "}
+        </Text>
+        <Text backgroundColor={theme.error} color="black" bold>
+          {" "}{t("denyKey")}{" "}
+        </Text>
       </Box>
     </Box>
   );
@@ -78,26 +108,55 @@ export function SlashCommandMenu({
       borderColor={theme.borderActive}
       paddingX={1}
     >
+      <Box flexDirection="row" gap={1}>
+        <Text color={theme.accent} bold>
+          ◆
+        </Text>
+        <Text color={theme.fgMuted} dimColor>
+          {commands.length > 6
+            ? `comandos · ${visible.length}/${commands.length}`
+            : `comandos · ${visible.length}`}
+        </Text>
+      </Box>
       {visible.map((item, index) => {
         const selected = index === selectedIndex;
         return (
           <Box key={item.command} flexDirection="row" gap={1}>
+            <Text color={selected ? theme.primary : theme.fgMuted}>
+              {selected ? "▸" : " "}
+            </Text>
             <Text
               bold={selected}
-              color={selected ? "black" : theme.fgMuted}
-              backgroundColor={selected ? theme.primary : undefined}
+              color={selected ? theme.primary : theme.fg}
             >
-              {selected ? `  ${item.command}  ` : ` ${item.command} `}
+              {item.command.padEnd(16)}
             </Text>
             <Text color={selected ? theme.fg : theme.fgMuted} dimColor={!selected}>
-              {truncate(item.description, 60)}
+              {truncate(item.description, 55)}
             </Text>
           </Box>
         );
       })}
-      <Text color={theme.fgMuted} dimColor>
-        ↑↓ navigate · Tab/Enter select · Esc close
-      </Text>
+      <Box flexDirection="row" gap={1} marginTop={0}>
+        <Text color={theme.fgMuted} dimColor>
+          ↑↓
+        </Text>
+        <Text color={theme.fgMuted} dimColor>
+          navegar ·
+        </Text>
+        <Text color={theme.accent}>Tab</Text>
+        <Text color={theme.fgMuted} dimColor>
+          completar ·
+        </Text>
+        <Text color={theme.success}>Enter</Text>
+        <Text color={theme.fgMuted} dimColor>
+          executar ·
+        </Text>
+        <Text color={theme.error}>Esc</Text>
+        <Text color={theme.fgMuted} dimColor>
+          fechar
+        </Text>
+      </Box>
     </Box>
   );
 }
@@ -422,35 +481,90 @@ export function EmptyChatState({
   buildSelection: ReturnType<typeof resolveEffectiveModeSelection>;
   approvalCount: number;
 }) {
+  const planLabel = planSelection ? formatModelSelection(planSelection) : t("notConfigured");
+  const buildLabel = buildSelection ? formatModelSelection(buildSelection) : t("notConfigured");
+
   return (
-    <Box flexDirection="column">
-      <Text color={theme.fgMuted}>
-        {t("noMessagesYet")}
+    <Box flexDirection="column" paddingY={1} paddingX={2} flexGrow={1}>
+      <Box flexDirection="column" marginBottom={1}>
+        <Text color={theme.primary} bold>
+          ◆ DeepCode
+        </Text>
+        <Text color={theme.fgMuted} dimColor>
+          Agente de código local · pronto pra trabalhar
+        </Text>
+      </Box>
+
+      <Box flexDirection="column" marginBottom={1}>
+        <InfoRow theme={theme} icon="◉" label={t("activeTarget")} value={activeTarget ?? t("notConfigured")} />
+        <InfoRow theme={theme} icon="●" label={t("statusLabel")} value={formatAgentStatus(status)} valueColor={status === "error" ? theme.error : theme.success} />
+        <InfoRow theme={theme} icon="◆" label="PLAN " value={planLabel} valueColor={theme.primary} />
+        <InfoRow theme={theme} icon="◆" label="BUILD" value={buildLabel} valueColor={theme.success} />
+        {approvalCount > 0 && (
+          <InfoRow theme={theme} icon="⚠" label="Aprovações" value={String(approvalCount)} valueColor={theme.warning} />
+        )}
+      </Box>
+
+      <Box flexDirection="column" marginBottom={1}>
+        <Text color={theme.accent} bold>
+          ▌ {t("usefulShortcuts")}
+        </Text>
+        <Box paddingLeft={2} flexDirection="column">
+          <ShortcutHint theme={theme} keys="/" desc="comandos rápidos" />
+          <ShortcutHint theme={theme} keys="Tab" desc="alternar Plan/Build" />
+          <ShortcutHint theme={theme} keys="Ctrl+O" desc="trocar de sessão" />
+          <ShortcutHint theme={theme} keys="Ctrl+H" desc="ajuda completa" />
+        </Box>
+      </Box>
+
+      <Box flexDirection="column">
+        <Text color={theme.fgMuted} dimColor>
+          {t("sessionLabel")} {session.id.slice(0, 8)} · {formatSessionTime(session.updatedAt)}
+        </Text>
+      </Box>
+    </Box>
+  );
+}
+
+function InfoRow({
+  theme,
+  icon,
+  label,
+  value,
+  valueColor,
+}: {
+  theme: ThemeColors;
+  icon: string;
+  label: string;
+  value: string;
+  valueColor?: string;
+}) {
+  return (
+    <Box flexDirection="row" gap={1}>
+      <Text color={theme.fgMuted}>{icon}</Text>
+      <Text color={theme.fgMuted}>{label}</Text>
+      <Text color={valueColor ?? theme.fg} bold>
+        {value}
       </Text>
-      <Text color={theme.fgMuted}>
-        {t("activeTarget")} {activeTarget ?? t("notConfigured")}
+    </Box>
+  );
+}
+
+function ShortcutHint({
+  theme,
+  keys,
+  desc,
+}: {
+  theme: ThemeColors;
+  keys: string;
+  desc: string;
+}) {
+  return (
+    <Box flexDirection="row" gap={1}>
+      <Text backgroundColor={theme.bgTertiary} color={theme.accent} bold>
+        {" "}{keys}{" "}
       </Text>
-      <Text color={theme.fgMuted}>
-        {t("statusLabel")} {formatAgentStatus(status)}
-      </Text>
-      <Text color={theme.fgMuted}>
-        {t("appPanelsPlanMode")}{planSelection ? formatModelSelection(planSelection) : t("notConfigured")}
-      </Text>
-      <Text color={theme.fgMuted}>
-        {t("appPanelsBuildMode")}{buildSelection ? formatModelSelection(buildSelection) : t("notConfigured")}
-      </Text>
-      <Text color={theme.fgMuted}>
-        {t("pendingApprovals", { count: approvalCount })}
-      </Text>
-      <Text> </Text>
-      <Text color={theme.primary}>{t("usefulShortcuts")}</Text>
-      <Text color={theme.fgMuted}>{t("appPanelsShortcutsHint")}</Text>
-      <Text color={theme.fgMuted}>{t("emptyChatSlashHint")}</Text>
-      <Text> </Text>
-      <Text color={theme.primary}>{t("sessionLabel")}</Text>
-      <Text color={theme.fgMuted}>{t("appPanelsIdLabel")}{session.id}</Text>
-      <Text color={theme.fgMuted}>{t("appPanelsCreatedLabel")}{formatSessionTime(session.createdAt)}</Text>
-      <Text color={theme.fgMuted}>{t("appPanelsUpdatedLabel")}{formatSessionTime(session.updatedAt)}</Text>
+      <Text color={theme.fgMuted}>{desc}</Text>
     </Box>
   );
 }

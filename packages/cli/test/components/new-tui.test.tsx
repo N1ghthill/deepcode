@@ -48,7 +48,7 @@ describe("TaskLane", () => {
       <TaskLane buffer={makeBuffer()} width={40} theme={theme} />,
     );
     const frame = lastFrame();
-    expect(frame).toContain("code");
+    expect(frame).toContain("CODE");
     expect(frame).toContain("Implement feature X");
     expect(frame).toContain("▶");
   });
@@ -104,7 +104,9 @@ describe("ProgressMatrix", () => {
       { id: "t2", status: "completed", description: "OK task" },
     ]);
     const { lastFrame } = render(<ProgressMatrix plan={plan} theme={theme} />);
-    expect(lastFrame()).toContain("1 failed");
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("✗");
+    expect(frame).toMatch(/✗\s*1/);
   });
 });
 
