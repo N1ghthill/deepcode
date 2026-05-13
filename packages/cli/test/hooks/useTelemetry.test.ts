@@ -42,9 +42,7 @@ function TestComponent({
   );
 }
 
-async function settleInk() {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
+import { settleInk } from "../settle-ink.js";
 
 describe("useTelemetry", () => {
   it("returns zeros when collector is null", async () => {

@@ -7,9 +7,7 @@ import { getTheme } from "../../src/tui/themes.js";
 
 const theme = getTheme("dark");
 
-async function settleInk(ms = 20) {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { settleInk } from "../settle-ink.js";
 
 function createModels(count: number, provider: ModelInfo["provider"] = "deepseek"): ModelInfo[] {
   return Array.from({ length: count }, (_, index) => ({

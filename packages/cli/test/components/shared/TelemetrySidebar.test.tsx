@@ -21,9 +21,7 @@ function createStats(overrides?: Record<string, unknown>) {
   };
 }
 
-async function settleInk() {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
+import { settleInk } from "../../settle-ink.js";
 
 describe("TelemetrySidebar", () => {
   it("shows placeholder when stats is null", async () => {

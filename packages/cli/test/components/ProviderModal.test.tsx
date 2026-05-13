@@ -7,10 +7,7 @@ import { getTheme } from "../../src/tui/themes.js";
 
 const theme = getTheme("dark");
 
-async function settleInk() {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
+import { settleInk } from "../settle-ink.js";
 
 function createProviders() {
   return [
