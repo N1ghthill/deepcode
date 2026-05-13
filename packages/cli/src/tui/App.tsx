@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
+import type { DetailContent } from "./types.js";
 import {
   resolveConfiguredModelForProvider,
   type AgentMode,
@@ -15,11 +16,12 @@ import {
 import { createRuntime, type DeepCodeRuntime } from "../runtime.js";
 import { getTheme } from "./themes.js";
 import {
-  Layout,
   Header,
   Sidebar,
   StatusBar,
 } from "./components/layout/index.js";
+import { AppLayout } from "./components/AppLayout.js";
+import { useUIStore } from "./store/ui-store.js";
 import {
   ProviderModal,
   ModelSelector,
@@ -37,6 +39,9 @@ import {
   useConfigEditor,
   useSessionManager,
   useLiveMetrics,
+  useGitStatus,
+  useFileTree,
+  useAutocomplete,
 } from "./hooks/index.js";
 import { UIStateManager, type UIState } from "./persistence/ui-state.js";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary.js";
@@ -77,7 +82,19 @@ import { MessageList } from "./components/chat/MessageList.js";
 import { InputField } from "./components/chat/InputField.js";
 import { ParallelTasksPanel } from "./components/tasks/ParallelTasksPanel.js";
 import { ProgressMatrix } from "./components/tasks/ProgressMatrix.js";
+import { TaskProgress } from "./components/TaskProgress.js";
+import { HistorySearch } from "./components/HistorySearch.js";
+import { SessionTimeline } from "./components/SessionTimeline.js";
+import { OAuthWizard } from "./components/OAuthWizard.js";
+import { CommandSuggestions } from "./components/CommandSuggestions.js";
+import { PreviewOverlay } from "./components/PreviewOverlay.js";
+import { usePreview } from "./hooks/usePreview.js";
+import { ConfigPanel } from "./components/ConfigPanel.js";
+import { FileTreePanel } from "./components/FileTreePanel.js";
+import { CONFIG_FIELDS } from "./app-config.js";
+import { useExecutionStore } from "./store/execution-store.js";
 import { useAgentStore } from "./store/agent-store.js";
+import { useConfigStore } from "./store/config-store.js";
 import { useAgentBridge } from "./hooks/useAgentBridge.js";
 import { useChatInput } from "./hooks/useChatInput.js";
 import { useSessionInput } from "./hooks/useSessionInput.js";
@@ -87,6 +104,7 @@ import { t, setLanguage } from "./i18n/index.js";
 export function App(props: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
+  const [contextView, setContextView] = React.useState<"sidebar" | "files">("sidebar");
 
   // ── Store slices ──────────────────────────────────────────────────────────
   const runtime = useAgentStore((s) => s.runtime);
@@ -103,7 +121,7 @@ export function App(props: AppProps) {
   const selectedSessionIndex = useAgentStore((s) => s.selectedSessionIndex);
   const vimMode = useAgentStore((s) => s.vimMode);
   const sidebarTab = useAgentStore((s) => s.sidebarTab);
-  const sidebarVisible = useAgentStore((s) => s.sidebarVisible);
+  // sidebarVisible is kept in store for potential consumers but layout is now UIStore-driven
   const activeModal = useAgentStore((s) => s.activeModal);
   const agentMode = useAgentStore((s) => s.agentMode);
   const showInputPreview = useAgentStore((s) => s.showInputPreview);
@@ -119,6 +137,8 @@ export function App(props: AppProps) {
   const lastExportPath = useAgentStore((s) => s.lastExportPath);
   const slashMenuDismissed = useAgentStore((s) => s.slashMenuDismissed);
   const selectedSlashCommandIndex = useAgentStore((s) => s.selectedSlashCommandIndex);
+  const showHistorySearch = useAgentStore((s) => s.showHistorySearch);
+  const detailContent = useAgentStore((s) => s.detailContent);
 
   const setRuntime = useAgentStore((s) => s.setRuntime);
   const setSession = useAgentStore((s) => s.setSession);
@@ -131,7 +151,6 @@ export function App(props: AppProps) {
   const setViewMode = useAgentStore((s) => s.setViewMode);
   const setVimMode = useAgentStore((s) => s.setVimMode);
   const setSidebarTab = useAgentStore((s) => s.setSidebarTab);
-  const setSidebarVisible = useAgentStore((s) => s.setSidebarVisible);
   const setActiveModal = useAgentStore((s) => s.setActiveModal);
   const setAgentMode = useAgentStore((s) => s.setAgentMode);
   const setShowInputPreview = useAgentStore((s) => s.setShowInputPreview);
@@ -141,7 +160,12 @@ export function App(props: AppProps) {
   const setRecentModels = useAgentStore((s) => s.setRecentModels);
   const setTelemetryExportStatus = useAgentStore((s) => s.setTelemetryExportStatus);
   const setLastExportPath = useAgentStore((s) => s.setLastExportPath);
+  const setShowHistorySearch = useAgentStore((s) => s.setShowHistorySearch);
+  const setDetailContent = useAgentStore((s) => s.setDetailContent);
   const dispatch = useAgentStore((s) => s.dispatch);
+
+  // Execution store (for TaskProgress)
+  const executionTasks = useExecutionStore((s) => s.tasks);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const abortRef = useRef<AbortController | null>(null);
@@ -186,6 +210,7 @@ export function App(props: AppProps) {
   const { githubOAuth, abortRef: githubOAuthAbortRef, startGithubLogin, cancelOAuth } =
     useGithubOAuth({ cwd: props.cwd, configPath: props.config, setNotice, applyUpdatedConfig });
   const { approvals, setApprovals, resolveApproval } = useApprovalFlow();
+  const { previewState, openPreview, closePreview, nextFile, prevFile } = usePreview();
   const {
     configEditIndex,
     setConfigEditIndex,
@@ -204,6 +229,9 @@ export function App(props: AppProps) {
     onUpdateSession: handleSessionUpdate,
   });
   const { liveTokens, elapsed, resetMetrics, recordTokenUsage } = useLiveMetrics(streaming);
+  const gitStatus = useGitStatus(props.cwd);
+  const fileTree = useFileTree(props.cwd);
+  const autocompleteSuggestions = useAutocomplete(input, fileTree);
 
   // ── Agent bridge (replaces inline agent.run + all state mutations) ────────
   const providerEntries = useMemo(() => {
@@ -358,10 +386,42 @@ export function App(props: AppProps) {
     }
   }, [currentPlan, sidebarTab, setSidebarTab]);
 
+  // ── Open PreviewOverlay when an approval carries a diff ───────────────────
+  const firstApproval = approvals[0];
+  useEffect(() => {
+    if (firstApproval?.diff) {
+      openPreview(firstApproval.operation, [
+        {
+          path: firstApproval.diff.filePath,
+          action: "modify",
+          before: firstApproval.diff.before,
+          after: firstApproval.diff.after,
+        },
+      ]);
+    } else {
+      closePreview();
+    }
+  }, [firstApproval?.id, firstApproval?.diff]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     useAgentStore.getState().setSelectedSlashCommandIndex(0);
     useAgentStore.getState().setSlashMenuDismissed(false);
   }, [input]);
+
+  // ── Sync runtime/session/git state into ConfigStore ──────────────────────
+  useEffect(() => {
+    if (!session) return;
+    const cs = useConfigStore.getState();
+    cs.setActiveProvider(session.provider as Parameters<typeof cs.setActiveProvider>[0]);
+    cs.setActiveModel(session.model ?? "");
+    cs.setAgentMode(agentMode);
+  }, [session?.provider, session?.model, agentMode]);
+
+  useEffect(() => {
+    const cs = useConfigStore.getState();
+    cs.setGitBranch(gitStatus.branch);
+    cs.setGitStatus(gitStatus.status);
+  }, [gitStatus.branch, gitStatus.status]);
 
   // ── Theme / derived values ─────────────────────────────────────────────────
   const theme = useMemo(
@@ -543,7 +603,43 @@ export function App(props: AppProps) {
       setActiveModal("telemetry"); setNotice(t("appTelemetryPanelOpened")); return;
     }
     if (key.ctrl && inputChar === "b") {
-      setSidebarVisible((v) => !v);
+      useUIStore.getState().togglePanel("context");
+      return;
+    }
+    if (key.ctrl && inputChar === "f") {
+      setContextView((v) => (v === "sidebar" ? "files" : "sidebar"));
+      useUIStore.getState().openPanel("context");
+      return;
+    }
+    if (key.ctrl && inputChar === ",") {
+      const nextDetail: DetailContent = detailContent === "config" ? "none" : "config";
+      setDetailContent(nextDetail);
+      if (nextDetail !== "none") {
+        useUIStore.getState().openPanel("detail");
+      } else {
+        useUIStore.getState().closePanel("detail");
+      }
+      return;
+    }
+    // History search (Ctrl+R)
+    if (key.ctrl && inputChar === "r" && !streaming && vimMode === "insert") {
+      setShowHistorySearch(true);
+      return;
+    }
+    // Timeline (Ctrl+L)
+    if (key.ctrl && inputChar === "l") {
+      const nextDetail: DetailContent = detailContent === "timeline" ? "none" : "timeline";
+      setDetailContent(nextDetail);
+      if (nextDetail !== "none") {
+        useUIStore.getState().openPanel("detail");
+      } else {
+        useUIStore.getState().closePanel("detail");
+      }
+      return;
+    }
+    // Close history search or detail panel
+    if (showHistorySearch && key.escape) {
+      setShowHistorySearch(false);
       return;
     }
 
@@ -682,6 +778,31 @@ export function App(props: AppProps) {
       void startGithubLogin(command, activeRuntime, session);
       return;
     }
+    if (name === "/undo") {
+      // Undo: show notice (actual undo would need integration with file tool history)
+      const lastWrite = activities.slice().reverse().find((a) => {
+        const tool = String(a.metadata?.tool ?? "");
+        return tool === "write_file" || tool === "edit_file";
+      });
+      if (!lastWrite) {
+        setNotice(t("undoNotAvailable"));
+      } else {
+        setNotice(`Undo: last change was to ${String(lastWrite.metadata?.path ?? "unknown")}`);
+      }
+      return;
+    }
+    if (name === "/diff") {
+      setDetailContent("diff");
+      useUIStore.getState().openPanel("detail");
+      setNotice(t("slashDiffDesc"));
+      return;
+    }
+    if (name === "/timeline") {
+      setDetailContent("timeline");
+      useUIStore.getState().openPanel("detail");
+      setNotice(t("slashTimelineDesc"));
+      return;
+    }
     setNotice(t("unknownCommand", { command }));
   }
 
@@ -738,10 +859,43 @@ export function App(props: AppProps) {
   const activeApproval = approvals[0];
   const hasParallelTasks = Object.keys(taskBuffers).length > 1;
 
+  const approvalHasDiff = Boolean(activeApproval?.diff);
+
+  // Build the detail panel content based on detailContent state
+  const detailPanelContent = detailContent === "timeline" ? (
+    <SessionTimeline
+      activities={activities}
+      theme={theme}
+      isActive={detailContent === "timeline" && !activeModal}
+      onClose={() => {
+        setDetailContent("none");
+        useUIStore.getState().closePanel("detail");
+      }}
+    />
+  ) : detailContent === "config" && runtime ? (
+    <ConfigPanel
+      runtime={runtime}
+      theme={theme}
+      isActive={detailContent === "config" && !activeModal}
+      onClose={() => {
+        setDetailContent("none");
+        useUIStore.getState().closePanel("detail");
+      }}
+      onSave={async (fieldKey, value) => {
+        const field = CONFIG_FIELDS.find((f) => f.key === fieldKey);
+        if (field) await saveConfigEdit(runtime, field, value);
+      }}
+    />
+  ) : (
+    <Box paddingX={1} paddingY={1}>
+      <Text color={theme.fgMuted} dimColor>{t("detailPanelPlaceholder")}</Text>
+    </Box>
+  );
+
   return (
-    <Layout
+    <AppLayout
       height={stdout.rows}
-      sidebarVisible={sidebarVisible}
+      theme={theme}
       header={
         <Header
           provider={activeModeSelection?.provider ?? activeProviderId}
@@ -751,34 +905,351 @@ export function App(props: AppProps) {
           providerStatus={activeProviderStatus}
         />
       }
-      sidebar={
-        <Sidebar
-          theme={theme}
-          activeTab={sidebarTab}
-          sessions={sessionList}
-          activities={activities}
-          toolCalls={toolCalls}
-          activeSessionId={session.id}
-          status={status}
-          activeTarget={activeTarget}
-          messageCount={visibleMessages.length}
-          approvalCount={approvals.length}
-          currentApprovals={approvals}
-          onTabChange={setSidebarTab}
-          onApprovalAction={(requestId, allowed, scope) => {
-            resolveApproval(
-              runtime,
-              approvals.find((a) => a.id === requestId),
-              allowed,
-              scope,
-              { setNotice, setStatus },
-            );
-          }}
-          telemetryStats={telemetry.stats}
-          telemetryBreakdown={telemetry.toolBreakdown}
-          currentPlan={currentPlan}
-          hotkeysEnabled={sidebarHotkeysEnabled}
-        />
+      contextPanel={
+        contextView === "files" ? (
+          <FileTreePanel files={fileTree} theme={theme} cwd={props.cwd} />
+        ) : (
+          <Sidebar
+            theme={theme}
+            activeTab={sidebarTab}
+            sessions={sessionList}
+            activities={activities}
+            toolCalls={toolCalls}
+            activeSessionId={session.id}
+            status={status}
+            activeTarget={activeTarget}
+            messageCount={visibleMessages.length}
+            approvalCount={approvals.length}
+            currentApprovals={approvals}
+            onTabChange={setSidebarTab}
+            onApprovalAction={(requestId, allowed, scope) => {
+              resolveApproval(
+                runtime,
+                approvals.find((a) => a.id === requestId),
+                allowed,
+                scope,
+                { setNotice, setStatus },
+              );
+            }}
+            telemetryStats={telemetry.stats}
+            telemetryBreakdown={telemetry.toolBreakdown}
+            currentPlan={currentPlan}
+            hotkeysEnabled={sidebarHotkeysEnabled}
+          />
+        )
+      }
+      detailPanel={detailPanelContent}
+      executionPanel={
+        <Box flexDirection="column" flexGrow={1}>
+          {activeModal === "provider" && (
+            <ErrorBoundary theme={theme} onReset={() => setActiveModal(null)}>
+              <ProviderModal
+                theme={theme}
+                currentProvider={activeProviderId}
+                providers={Object.entries(runtime.config.providers).map(([id, provider]) => ({
+                  id: id as ProviderId,
+                  name: PROVIDER_LABELS[id as ProviderId] ?? id,
+                  status: statuses[id as ProviderId] ?? EMPTY_PROVIDER_STATUS,
+                  hasApiKey: Boolean(provider.apiKey),
+                  hasApiKeyFile: Boolean(provider.apiKeyFile),
+                  expectedTarget: session
+                    ? formatExpectedProviderTarget(runtime.config, session, id as ProviderId, agentMode)
+                    : undefined,
+                }))}
+                onClose={() => setActiveModal(null)}
+                onSelectProvider={async (providerId) => {
+                  try {
+                    const updatedConfig = await saveConfigPatch(runtime, (mutable) => {
+                      const modeDefaults = ((mutable.modeDefaults ?? {}) as Record<string, unknown>);
+                      const modeOverride = ((modeDefaults[agentMode] ?? {}) as Record<string, unknown>);
+                      const defaults = ((mutable.defaultModels ?? {}) as Record<string, unknown>);
+                      const providerDefault = typeof defaults[providerId] === "string" ? defaults[providerId] : undefined;
+                      modeOverride.provider = providerId;
+                      if (providerDefault) modeOverride.model = providerDefault;
+                      else delete modeOverride.model;
+                      modeDefaults[agentMode] = modeOverride;
+                      mutable.modeDefaults = modeDefaults;
+                    });
+                    const next = {
+                      ...session,
+                      provider: providerId,
+                      model: updatedConfig.modeDefaults?.[agentMode]?.model
+                        ?? resolveConfiguredModelForProvider(updatedConfig, providerId),
+                      updatedAt: new Date().toISOString(),
+                    };
+                    runtime.sessions.save(next);
+                    void runtime.sessions.persist(next.id);
+                    void telemetryRef.current?.createSession(next.id, next.provider, next.model || "unknown");
+                    setSession(runtime.sessions.get(session.id));
+                    if (!next.model) {
+                      setActiveModal("model");
+                      setNotice(t("providerForModeActiveChooseModel", { mode: agentMode.toUpperCase(), provider: providerId }));
+                    } else {
+                      setNotice(t("providerForModeActive", { mode: agentMode.toUpperCase(), provider: providerId }));
+                    }
+                  } catch (err) {
+                    setNotice(t("errorSelectingProvider", { error: err instanceof Error ? err.message : String(err) }));
+                  }
+                }}
+                onTestConnection={async (providerId) => {
+                  const healthCheck = buildProviderHealthCheck(runtime, session, providerId, agentMode);
+                  const result = await checkStatus(providerId, healthCheck);
+                  const label = PROVIDER_LABELS[providerId] ?? providerId;
+                  setNotice(
+                    result.online
+                      ? healthCheck.modelUnderTest
+                        ? t("testOkWithModel", { label, model: healthCheck.modelUnderTest })
+                        : t("testOkChooseModel", { label })
+                      : t("testFailedLabel", { label, error: result.error ?? "unknown error" }),
+                  );
+                }}
+                onUpdateApiKey={async (providerId, apiKey) => {
+                  try {
+                    await saveConfigPatch(runtime, (mutable) => {
+                      const providers = (mutable.providers ?? {}) as Record<string, unknown>;
+                      const prov = (providers[providerId] ?? {}) as Record<string, unknown>;
+                      prov.apiKey = apiKey;
+                      providers[providerId] = prov;
+                      mutable.providers = providers;
+                    });
+                    setNotice(t("apiKeyUpdated", { provider: providerId }));
+                  } catch (err) {
+                    setNotice(t("errorUpdatingApiKey", { error: err instanceof Error ? err.message : String(err) }));
+                  }
+                }}
+                onUpdateApiKeyFile={async (providerId, apiKeyFile) => {
+                  try {
+                    await saveConfigPatch(runtime, (mutable) => {
+                      const providers = (mutable.providers ?? {}) as Record<string, unknown>;
+                      const prov = (providers[providerId] ?? {}) as Record<string, unknown>;
+                      prov.apiKeyFile = apiKeyFile;
+                      delete prov.apiKey;
+                      providers[providerId] = prov;
+                      mutable.providers = providers;
+                    });
+                    setNotice(t("apiKeyFileConfigured", { provider: providerId }));
+                  } catch (err) {
+                    setNotice(t("errorSavingApiKeyFile", { error: err instanceof Error ? err.message : String(err) }));
+                  }
+                }}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeModal === "model" && (
+            <ErrorBoundary theme={theme} onReset={() => setActiveModal(null)}>
+              <ModelSelector
+                theme={theme}
+                models={models}
+                loading={modelsLoading}
+                error={modelsError}
+                currentSelection={activeModeSelection}
+                currentProvider={activeProviderId}
+                recentSelections={recentModels}
+                onSelect={(selection) => {
+                  void (async () => {
+                    try {
+                      await saveConfigPatch(runtime, (mutable) => {
+                        const defaults = ((mutable.defaultModels ?? {}) as Record<string, unknown>);
+                        defaults[selection.provider] = selection.model;
+                        mutable.defaultModels = defaults;
+                        const modeDefaults = ((mutable.modeDefaults ?? {}) as Record<string, unknown>);
+                        modeDefaults[agentMode] = { provider: selection.provider, model: selection.model };
+                        mutable.modeDefaults = modeDefaults;
+                        if (selection.provider === runtime.config.defaultProvider) {
+                          mutable.defaultModel = selection.model;
+                        }
+                      });
+                      setRecentModels((current) => dedupeRecentModels([selection, ...current]));
+                      const next = {
+                        ...session,
+                        provider: selection.provider,
+                        model: selection.model,
+                        updatedAt: new Date().toISOString(),
+                      };
+                      runtime.sessions.save(next);
+                      void runtime.sessions.persist(next.id);
+                      void telemetryRef.current?.createSession(next.id, next.provider, next.model || "unknown");
+                      setSession(runtime.sessions.get(session.id));
+                      setActiveModal(null);
+                      setNotice(t("modelForMode", { mode: agentMode.toUpperCase(), model: formatModelSelection(selection) }));
+                    } catch (err) {
+                      setNotice(t("errorSelectingModel", { error: err instanceof Error ? err.message : String(err) }));
+                    }
+                  })();
+                }}
+                onRefresh={refreshModels}
+                onClose={() => setActiveModal(null)}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeModal === "telemetry" && (
+            <ErrorBoundary theme={theme} onReset={() => setActiveModal(null)}>
+              <TelemetryPanel
+                theme={theme}
+                stats={telemetry.stats}
+                allSessions={telemetry.allStats}
+                toolBreakdown={telemetry.toolBreakdown}
+                onExport={handleExportTelemetry}
+                exportStatus={telemetryExportStatus}
+                lastExportPath={lastExportPath}
+                onClose={() => setActiveModal(null)}
+              />
+            </ErrorBoundary>
+          )}
+
+          {showInputPreview && (
+            <InputPreview
+              theme={theme}
+              input={pendingInput}
+              onConfirm={handleConfirmInput}
+              onCancel={handleCancelInput}
+              onEdit={handleEditInput}
+              estimatedTokens={estimatedTokens}
+            />
+          )}
+
+          {githubOAuth.status !== "idle" && (
+            <OAuthWizard state={githubOAuth} theme={theme} />
+          )}
+
+          {!activeModal && activeApproval && approvalHasDiff && previewState.open && (
+            <PreviewOverlay
+              summary={previewState.summary}
+              files={previewState.files}
+              selectedIndex={previewState.selectedIndex}
+              theme={theme}
+              isActive={!activeModal}
+              onConfirm={() => {
+                closePreview();
+                resolveApproval(runtime, activeApproval, true, "once", { setNotice, setStatus });
+              }}
+              onCancel={() => {
+                closePreview();
+                resolveApproval(runtime, activeApproval, false, "once", { setNotice, setStatus });
+              }}
+              onNext={nextFile}
+              onPrev={prevFile}
+            />
+          )}
+
+          {!activeModal && activeApproval && !approvalHasDiff && (
+            <ApprovalPanel
+              request={activeApproval}
+              runtime={runtime}
+              queueLength={approvals.length}
+              theme={theme}
+            />
+          )}
+
+          {!activeModal && viewMode === "sessions" && (
+            <SessionSwitcher
+              sessions={sessionList}
+              selectedIndex={selectedSessionIndex}
+              activeId={session.id}
+              theme={theme}
+            />
+          )}
+
+          {!activeModal && viewMode === "config" && (
+            <ConfigEditor
+              runtime={runtime}
+              selectedIndex={configEditIndex}
+              editing={editingConfig}
+              editValue={configEditValue}
+              saveStatus={configSaveStatus}
+              theme={theme}
+            />
+          )}
+
+          {!activeModal && viewMode === "help" && <HelpView theme={theme} />}
+
+          {!activeModal && viewMode === "chat" && (
+            <Box flexDirection="column" flexGrow={1} paddingX={1}>
+              {showHistorySearch && (
+                <HistorySearch
+                  history={useAgentStore.getState().history}
+                  theme={theme}
+                  isActive={showHistorySearch}
+                  onSelect={(entry) => setInput(entry)}
+                  onClose={() => setShowHistorySearch(false)}
+                />
+              )}
+
+              {hasParallelTasks && (
+                <ParallelTasksPanel
+                  taskBuffers={taskBuffers}
+                  streaming={streaming}
+                  theme={theme}
+                />
+              )}
+
+              {executionTasks.length > 0 && (
+                <TaskProgress tasks={executionTasks} theme={theme} />
+              )}
+
+              {currentPlan && streaming && (
+                <ProgressMatrix plan={currentPlan} theme={theme} />
+              )}
+
+              <Box flexDirection="column" flexGrow={1}>
+                {visibleMessages.length === 0 && !streaming ? (
+                  <EmptyChatState
+                    theme={theme}
+                    session={session}
+                    status={status}
+                    activeTarget={activeTarget}
+                    planSelection={planModeSelection}
+                    buildSelection={buildModeSelection}
+                    approvalCount={approvals.length}
+                  />
+                ) : (
+                  <>
+                    <MessageList
+                      messages={visibleMessages}
+                      assistantDraft={assistantDraft}
+                      streaming={streaming}
+                      runtime={runtime}
+                      theme={theme}
+                      vimMode={vimMode}
+                    />
+                    {approvals.length > 0 && activeApproval && (
+                      <ChatApprovalIndicator request={activeApproval} theme={theme} />
+                    )}
+                  </>
+                )}
+              </Box>
+
+              {showSlashMenu && (
+                <SlashCommandMenu
+                  commands={slashCommandSuggestions}
+                  selectedIndex={selectedSlashCommandIndex}
+                  theme={theme}
+                />
+              )}
+
+              {!showSlashMenu && !showHistorySearch && autocompleteSuggestions.length > 0 && (
+                <CommandSuggestions
+                  commands={[]}
+                  fileSuggestions={autocompleteSuggestions}
+                  selectedIndex={0}
+                  theme={theme}
+                />
+              )}
+
+              <InputField
+                value={input}
+                onChange={setInput}
+                onSubmit={(v) => void handleSubmit(v)}
+                vimMode={vimMode}
+                streaming={streaming}
+                focused={viewMode === "chat" && !activeModal && !showInputPreview}
+                theme={theme}
+              />
+            </Box>
+          )}
+        </Box>
       }
       statusBar={
         <StatusBar
@@ -799,283 +1270,11 @@ export function App(props: AppProps) {
           agentMode={agentMode}
           planSelection={planModeSelection}
           buildSelection={buildModeSelection}
+          gitBranch={gitStatus.branch}
+          gitDirty={gitStatus.isDirty}
         />
       }
-    >
-      <Box flexDirection="column" flexGrow={1}>
-        {activeModal === "provider" && (
-          <ErrorBoundary theme={theme} onReset={() => setActiveModal(null)}>
-            <ProviderModal
-              theme={theme}
-              currentProvider={activeProviderId}
-              providers={Object.entries(runtime.config.providers).map(([id, provider]) => ({
-                id: id as ProviderId,
-                name: PROVIDER_LABELS[id as ProviderId] ?? id,
-                status: statuses[id as ProviderId] ?? EMPTY_PROVIDER_STATUS,
-                hasApiKey: Boolean(provider.apiKey),
-                hasApiKeyFile: Boolean(provider.apiKeyFile),
-                expectedTarget: session
-                  ? formatExpectedProviderTarget(runtime.config, session, id as ProviderId, agentMode)
-                  : undefined,
-              }))}
-              onClose={() => setActiveModal(null)}
-              onSelectProvider={async (providerId) => {
-                try {
-                  const updatedConfig = await saveConfigPatch(runtime, (mutable) => {
-                    const modeDefaults = ((mutable.modeDefaults ?? {}) as Record<string, unknown>);
-                    const modeOverride = ((modeDefaults[agentMode] ?? {}) as Record<string, unknown>);
-                    const defaults = ((mutable.defaultModels ?? {}) as Record<string, unknown>);
-                    const providerDefault = typeof defaults[providerId] === "string" ? defaults[providerId] : undefined;
-                    modeOverride.provider = providerId;
-                    if (providerDefault) modeOverride.model = providerDefault;
-                    else delete modeOverride.model;
-                    modeDefaults[agentMode] = modeOverride;
-                    mutable.modeDefaults = modeDefaults;
-                  });
-                  const next = {
-                    ...session,
-                    provider: providerId,
-                    model: updatedConfig.modeDefaults?.[agentMode]?.model
-                      ?? resolveConfiguredModelForProvider(updatedConfig, providerId),
-                    updatedAt: new Date().toISOString(),
-                  };
-                  runtime.sessions.save(next);
-                  void runtime.sessions.persist(next.id);
-                  void telemetryRef.current?.createSession(next.id, next.provider, next.model || "unknown");
-                  setSession(runtime.sessions.get(session.id));
-                  if (!next.model) {
-                    setActiveModal("model");
-                    setNotice(t("providerForModeActiveChooseModel", { mode: agentMode.toUpperCase(), provider: providerId }));
-                  } else {
-                    setNotice(t("providerForModeActive", { mode: agentMode.toUpperCase(), provider: providerId }));
-                  }
-                } catch (err) {
-                  setNotice(t("errorSelectingProvider", { error: err instanceof Error ? err.message : String(err) }));
-                }
-              }}
-              onTestConnection={async (providerId) => {
-                const healthCheck = buildProviderHealthCheck(runtime, session, providerId, agentMode);
-                const result = await checkStatus(providerId, healthCheck);
-                const label = PROVIDER_LABELS[providerId] ?? providerId;
-                setNotice(
-                  result.online
-                    ? healthCheck.modelUnderTest
-                      ? t("testOkWithModel", { label, model: healthCheck.modelUnderTest })
-                      : t("testOkChooseModel", { label })
-                    : t("testFailedLabel", { label, error: result.error ?? "unknown error" }),
-                );
-              }}
-              onUpdateApiKey={async (providerId, apiKey) => {
-                try {
-                  await saveConfigPatch(runtime, (mutable) => {
-                    const providers = (mutable.providers ?? {}) as Record<string, unknown>;
-                    const prov = (providers[providerId] ?? {}) as Record<string, unknown>;
-                    prov.apiKey = apiKey;
-                    providers[providerId] = prov;
-                    mutable.providers = providers;
-                  });
-                  setNotice(t("apiKeyUpdated", { provider: providerId }));
-                } catch (err) {
-                  setNotice(t("errorUpdatingApiKey", { error: err instanceof Error ? err.message : String(err) }));
-                }
-              }}
-              onUpdateApiKeyFile={async (providerId, apiKeyFile) => {
-                try {
-                  await saveConfigPatch(runtime, (mutable) => {
-                    const providers = (mutable.providers ?? {}) as Record<string, unknown>;
-                    const prov = (providers[providerId] ?? {}) as Record<string, unknown>;
-                    prov.apiKeyFile = apiKeyFile;
-                    delete prov.apiKey;
-                    providers[providerId] = prov;
-                    mutable.providers = providers;
-                  });
-                  setNotice(t("apiKeyFileConfigured", { provider: providerId }));
-                } catch (err) {
-                  setNotice(t("errorSavingApiKeyFile", { error: err instanceof Error ? err.message : String(err) }));
-                }
-              }}
-            />
-          </ErrorBoundary>
-        )}
-
-        {activeModal === "model" && (
-          <ErrorBoundary theme={theme} onReset={() => setActiveModal(null)}>
-            <ModelSelector
-              theme={theme}
-              models={models}
-              loading={modelsLoading}
-              error={modelsError}
-              currentSelection={activeModeSelection}
-              currentProvider={activeProviderId}
-              recentSelections={recentModels}
-              onSelect={(selection) => {
-                void (async () => {
-                  try {
-                    await saveConfigPatch(runtime, (mutable) => {
-                      const defaults = ((mutable.defaultModels ?? {}) as Record<string, unknown>);
-                      defaults[selection.provider] = selection.model;
-                      mutable.defaultModels = defaults;
-                      const modeDefaults = ((mutable.modeDefaults ?? {}) as Record<string, unknown>);
-                      modeDefaults[agentMode] = { provider: selection.provider, model: selection.model };
-                      mutable.modeDefaults = modeDefaults;
-                      if (selection.provider === runtime.config.defaultProvider) {
-                        mutable.defaultModel = selection.model;
-                      }
-                    });
-                    setRecentModels((current) => dedupeRecentModels([selection, ...current]));
-                    const next = {
-                      ...session,
-                      provider: selection.provider,
-                      model: selection.model,
-                      updatedAt: new Date().toISOString(),
-                    };
-                    runtime.sessions.save(next);
-                    void runtime.sessions.persist(next.id);
-                    void telemetryRef.current?.createSession(next.id, next.provider, next.model || "unknown");
-                    setSession(runtime.sessions.get(session.id));
-                    setActiveModal(null);
-                    setNotice(t("modelForMode", { mode: agentMode.toUpperCase(), model: formatModelSelection(selection) }));
-                  } catch (err) {
-                    setNotice(t("errorSelectingModel", { error: err instanceof Error ? err.message : String(err) }));
-                  }
-                })();
-              }}
-              onRefresh={refreshModels}
-              onClose={() => setActiveModal(null)}
-            />
-          </ErrorBoundary>
-        )}
-
-        {activeModal === "telemetry" && (
-          <ErrorBoundary theme={theme} onReset={() => setActiveModal(null)}>
-            <TelemetryPanel
-              theme={theme}
-              stats={telemetry.stats}
-              allSessions={telemetry.allStats}
-              toolBreakdown={telemetry.toolBreakdown}
-              onExport={handleExportTelemetry}
-              exportStatus={telemetryExportStatus}
-              lastExportPath={lastExportPath}
-              onClose={() => setActiveModal(null)}
-            />
-          </ErrorBoundary>
-        )}
-
-        {showInputPreview && (
-          <InputPreview
-            theme={theme}
-            input={pendingInput}
-            onConfirm={handleConfirmInput}
-            onCancel={handleCancelInput}
-            onEdit={handleEditInput}
-            estimatedTokens={estimatedTokens}
-          />
-        )}
-
-        {githubOAuth.status !== "idle" && (
-          <GithubOAuthPanel state={githubOAuth} theme={theme} />
-        )}
-
-        {!activeModal && activeApproval && (
-          <ApprovalPanel
-            request={activeApproval}
-            runtime={runtime}
-            queueLength={approvals.length}
-            theme={theme}
-          />
-        )}
-
-        {!activeModal && viewMode === "sessions" && (
-          <SessionSwitcher
-            sessions={sessionList}
-            selectedIndex={selectedSessionIndex}
-            activeId={session.id}
-            theme={theme}
-          />
-        )}
-
-        {!activeModal && viewMode === "config" && (
-          <ConfigEditor
-            runtime={runtime}
-            selectedIndex={configEditIndex}
-            editing={editingConfig}
-            editValue={configEditValue}
-            saveStatus={configSaveStatus}
-            theme={theme}
-          />
-        )}
-
-        {!activeModal && viewMode === "help" && <HelpView theme={theme} />}
-
-        {!activeModal && viewMode === "chat" && (
-          <Box
-            flexDirection="column"
-            flexGrow={1}
-            paddingX={1}
-          >
-            {/* Parallel tasks panel — visible when 2+ tasks running */}
-            {hasParallelTasks && (
-              <ParallelTasksPanel
-                taskBuffers={taskBuffers}
-                streaming={streaming}
-                theme={theme}
-              />
-            )}
-
-            {/* Progress matrix replaces the old single-task bar */}
-            {currentPlan && streaming && (
-              <ProgressMatrix plan={currentPlan} theme={theme} />
-            )}
-
-            <Box flexDirection="column" flexGrow={1}>
-              {visibleMessages.length === 0 && !streaming ? (
-                <EmptyChatState
-                  theme={theme}
-                  session={session}
-                  status={status}
-                  activeTarget={activeTarget}
-                  planSelection={planModeSelection}
-                  buildSelection={buildModeSelection}
-                  approvalCount={approvals.length}
-                />
-              ) : (
-                <>
-                  <MessageList
-                    messages={visibleMessages}
-                    assistantDraft={assistantDraft}
-                    streaming={streaming}
-                    runtime={runtime}
-                    theme={theme}
-                  />
-                  {approvals.length > 0 && activeApproval && (
-                    <ChatApprovalIndicator request={activeApproval} theme={theme} />
-                  )}
-                </>
-              )}
-            </Box>
-
-            {showSlashMenu && (
-              <SlashCommandMenu
-                commands={slashCommandSuggestions}
-                selectedIndex={selectedSlashCommandIndex}
-                theme={theme}
-              />
-            )}
-
-            {/* Input field with real cursor */}
-            <InputField
-              value={input}
-              onChange={setInput}
-              onSubmit={(v) => void handleSubmit(v)}
-              vimMode={vimMode}
-              streaming={streaming}
-              focused={viewMode === "chat" && !activeModal && !showInputPreview}
-              theme={theme}
-            />
-          </Box>
-        )}
-      </Box>
-    </Layout>
+    />
   );
 }
 

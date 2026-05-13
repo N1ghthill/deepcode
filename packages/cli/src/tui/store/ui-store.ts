@@ -1,0 +1,84 @@
+import { create } from "zustand";
+
+export type PanelId = "context" | "execution" | "detail";
+
+export interface UIPanelState {
+  widthPercent: number;
+  collapsed: boolean;
+}
+
+export interface UIStoreState {
+  panels: Record<PanelId, UIPanelState>;
+  activePanel: PanelId;
+
+  setActivePanel: (p: PanelId) => void;
+  setPanelWidth: (id: PanelId, pct: number) => void;
+  togglePanel: (id: PanelId) => void;
+  openPanel: (id: PanelId) => void;
+  closePanel: (id: PanelId) => void;
+  resizePanel: (direction: "left" | "right") => void;
+}
+
+// Detail panel is hidden by default — revealed by /timeline, /diff, Ctrl+L
+const DEFAULT_PANELS: Record<PanelId, UIPanelState> = {
+  context: { widthPercent: 28, collapsed: false },
+  execution: { widthPercent: 44, collapsed: false },
+  detail: { widthPercent: 28, collapsed: true },
+};
+
+const MIN_WIDTH = 15;
+const RESIZE_STEP = 5;
+
+export const useUIStore = create<UIStoreState>()((set) => ({
+  panels: DEFAULT_PANELS,
+  activePanel: "execution",
+
+  setActivePanel: (p) => set({ activePanel: p }),
+
+  setPanelWidth: (id, pct) =>
+    set((state) => ({
+      panels: {
+        ...state.panels,
+        [id]: { ...state.panels[id], widthPercent: Math.max(MIN_WIDTH, Math.min(70, pct)) },
+      },
+    })),
+
+  togglePanel: (id) =>
+    set((state) => ({
+      panels: {
+        ...state.panels,
+        [id]: { ...state.panels[id], collapsed: !state.panels[id].collapsed },
+      },
+    })),
+
+  openPanel: (id) =>
+    set((state) => ({
+      panels: { ...state.panels, [id]: { ...state.panels[id], collapsed: false } },
+    })),
+
+  closePanel: (id) =>
+    set((state) => ({
+      panels: { ...state.panels, [id]: { ...state.panels[id], collapsed: true } },
+    })),
+
+  resizePanel: (direction) =>
+    set((state) => {
+      const active = state.activePanel;
+      const current = state.panels[active].widthPercent;
+      const delta = direction === "right" ? RESIZE_STEP : -RESIZE_STEP;
+      const next = Math.max(MIN_WIDTH, Math.min(70, current + delta));
+      // Adjust the other non-active panels proportionally
+      const others = (["context", "execution", "detail"] as PanelId[]).filter((p) => p !== active && !state.panels[p].collapsed);
+      const diff = next - current;
+      const perOther = others.length > 0 ? -diff / others.length : 0;
+      const updated = { ...state.panels };
+      updated[active] = { ...updated[active], widthPercent: next };
+      for (const o of others) {
+        updated[o] = {
+          ...updated[o],
+          widthPercent: Math.max(MIN_WIDTH, updated[o].widthPercent + perOther),
+        };
+      }
+      return { panels: updated };
+    }),
+}));

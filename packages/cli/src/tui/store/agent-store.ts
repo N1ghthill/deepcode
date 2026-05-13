@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { Activity, AgentMode, Message, Session } from "@deepcode/shared";
 import type { TaskPlan } from "@deepcode/core";
 import type { DeepCodeRuntime } from "../../runtime.js";
-import type { ViewMode, VimMode, ModalType } from "../types.js";
+import type { ViewMode, VimMode, ModalType, DetailContent } from "../types.js";
 import type { SidebarTab } from "../components/layout/index.js";
 import type { RecentModelSelection } from "../persistence/ui-state.js";
 
@@ -71,6 +71,10 @@ export interface AgentStoreState {
   telemetryExportStatus: "idle" | "exporting" | "success" | "error";
   lastExportPath: string | null;
 
+  // New panel state
+  showHistorySearch: boolean;
+  detailContent: DetailContent;
+
   // Setters for UI state
   setRuntime: (r: DeepCodeRuntime | null) => void;
   setSession: (s: Session | null) => void;
@@ -103,6 +107,8 @@ export interface AgentStoreState {
   setRecentModels: (m: RecentModelSelection[] | ((prev: RecentModelSelection[]) => RecentModelSelection[])) => void;
   setTelemetryExportStatus: (s: "idle" | "exporting" | "success" | "error") => void;
   setLastExportPath: (p: string | null) => void;
+  setShowHistorySearch: (v: boolean) => void;
+  setDetailContent: (v: DetailContent) => void;
 
   // Compound action dispatcher for agent callbacks
   dispatch: (action: AgentAction) => void;
@@ -147,6 +153,8 @@ export const useAgentStore = create<AgentStoreState>()((set) => ({
   recentModels: [],
   telemetryExportStatus: "idle",
   lastExportPath: null,
+  showHistorySearch: false,
+  detailContent: "none",
 
   setRuntime: (r) => set({ runtime: r }),
   setSession: (s) => set({ session: s }),
@@ -179,6 +187,8 @@ export const useAgentStore = create<AgentStoreState>()((set) => ({
   setRecentModels: (m) => set((state) => ({ recentModels: resolveUpdater(m, state.recentModels) })),
   setTelemetryExportStatus: (s) => set({ telemetryExportStatus: s }),
   setLastExportPath: (p) => set({ lastExportPath: p }),
+  setShowHistorySearch: (v) => set({ showHistorySearch: v }),
+  setDetailContent: (v) => set({ detailContent: v }),
 
   dispatch: (action) =>
     set((state) => {

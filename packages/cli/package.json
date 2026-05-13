@@ -34,8 +34,10 @@
   "dependencies": {
     "@deepcode/core": "workspace:*",
     "@deepcode/shared": "workspace:*",
+    "@types/diff": "^8.0.0",
     "chalk": "^5.4.1",
     "commander": "^12.1.0",
+    "diff": "^9.0.0",
     "ink": "^4.4.1",
     "ink-text-input": "^5.0.1",
     "react": "^18.3.1",

@@ -28,6 +28,8 @@ export interface StatusBarProps {
   agentMode?: AgentMode;
   planSelection?: ModelSelection | null;
   buildSelection?: ModelSelection | null;
+  gitBranch?: string;
+  gitDirty?: boolean;
 }
 
 export function StatusBar({
@@ -48,6 +50,8 @@ export function StatusBar({
   agentMode = "build",
   planSelection,
   buildSelection,
+  gitBranch,
+  gitDirty = false,
 }: StatusBarProps) {
   const visibleNotice = notice ? truncateMiddle(notice.replace(/\s+/g, " "), 110) : undefined;
   const planTarget = formatRouteTarget(planSelection);
@@ -126,6 +130,15 @@ export function StatusBar({
             <Box flexDirection="row" gap={1}>
               <Text color={theme.error} bold>
                 ✗ {errorCount}
+              </Text>
+            </Box>
+          )}
+
+          {gitBranch && (
+            <Box flexDirection="row" gap={1}>
+              <Text color={theme.fgMuted} dimColor>⎇</Text>
+              <Text color={gitDirty ? theme.warning : theme.fgMuted}>
+                {gitBranch}{gitDirty ? " *" : ""}
               </Text>
             </Box>
           )}

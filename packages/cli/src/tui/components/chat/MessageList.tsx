@@ -7,6 +7,7 @@ import {
 } from "@deepcode/core";
 import type { Message } from "@deepcode/shared";
 import type { ThemeColors } from "../../themes.js";
+import type { VimMode } from "../../types.js";
 import type { DeepCodeRuntime } from "../../../runtime.js";
 import { useVirtualScroll } from "../../hooks/useVirtualScroll.js";
 import { MarkdownText } from "./MarkdownText.js";
@@ -18,6 +19,7 @@ interface MessageListProps {
   streaming: boolean;
   runtime: DeepCodeRuntime;
   theme: ThemeColors;
+  vimMode?: VimMode;
   viewportReserved?: number;
 }
 
@@ -34,6 +36,7 @@ export function MessageList({
   streaming,
   runtime,
   theme,
+  vimMode,
   viewportReserved = 12,
 }: MessageListProps) {
   const { stdout } = useStdout();
@@ -45,10 +48,17 @@ export function MessageList({
     messages,
     viewportHeight,
     (msg) => estimateMessageHeight(msg, terminalWidth),
+    true,
+    vimMode,
   );
 
   return (
     <Box flexDirection="column" flexGrow={1}>
+      {vimMode === "normal" && (
+        <Box paddingX={1}>
+          <Text color={theme.fgMuted} dimColor>j/k scroll · gg top · G bottom · Ctrl+d/u half-page · i insert</Text>
+        </Box>
+      )}
       {canScrollUp && (
         <Box flexDirection="row" gap={1} paddingX={1}>
           <Text color={theme.fgMuted} dimColor>

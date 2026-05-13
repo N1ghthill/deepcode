@@ -7,24 +7,23 @@ export interface VirtualScrollResult<T> {
   canScrollDown: boolean;
   scrollUp: () => void;
   scrollDown: () => void;
+  scrollToTop: () => void;
   scrollToBottom: () => void;
 }
 
-/**
- * Computes a visible window over a list of items for terminal virtual scrolling.
- * Scroll managed via Page Up / Page Down key bindings.
- */
 export function useVirtualScroll<T>(
   items: T[],
   viewportHeight: number,
   estimateHeight: (item: T) => number,
   isActive = true,
+  vimMode?: "insert" | "normal",
 ): VirtualScrollResult<T> {
   const [scrollTop, setScrollTop] = useState(0);
   const autoScrollRef = useRef(true);
   const prevLengthRef = useRef(items.length);
+  const ggPendingRef = useRef(false);
+  const ggTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-scroll to bottom when new items arrive, unless user scrolled up
   useEffect(() => {
     if (items.length > prevLengthRef.current && autoScrollRef.current) {
       setScrollTop(items.length);
@@ -40,22 +39,52 @@ export function useVirtualScroll<T>(
   const scrollDown = useCallback(() => {
     setScrollTop((prev) => {
       const next = prev + 1;
-      if (next >= items.length) {
-        autoScrollRef.current = true;
-      }
+      if (next >= items.length) autoScrollRef.current = true;
       return next;
     });
   }, [items.length]);
+
+  const scrollToTop = useCallback(() => {
+    autoScrollRef.current = false;
+    setScrollTop(0);
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     autoScrollRef.current = true;
     setScrollTop(items.length);
   }, [items.length]);
 
+  const halfPage = Math.max(1, Math.floor(viewportHeight / 4));
+
   useInput(
-    (_input, key) => {
-      if (key.pageUp) scrollUp();
-      if (key.pageDown) scrollDown();
+    (inputChar, key) => {
+      if (key.pageUp) { scrollUp(); return; }
+      if (key.pageDown) { scrollDown(); return; }
+
+      if (vimMode !== "normal") return;
+
+      if (inputChar === "j") { scrollDown(); return; }
+      if (inputChar === "k") { scrollUp(); return; }
+      if (inputChar === "G") { scrollToBottom(); return; }
+      if (key.ctrl && inputChar === "d") {
+        setScrollTop((prev) => Math.min(items.length, prev + halfPage));
+        return;
+      }
+      if (key.ctrl && inputChar === "u") {
+        autoScrollRef.current = false;
+        setScrollTop((prev) => Math.max(0, prev - halfPage));
+        return;
+      }
+      if (inputChar === "g") {
+        if (ggPendingRef.current) {
+          if (ggTimerRef.current) clearTimeout(ggTimerRef.current);
+          ggPendingRef.current = false;
+          scrollToTop();
+        } else {
+          ggPendingRef.current = true;
+          ggTimerRef.current = setTimeout(() => { ggPendingRef.current = false; }, 400);
+        }
+      }
     },
     { isActive },
   );
@@ -76,5 +105,5 @@ export function useVirtualScroll<T>(
   const canScrollUp = startIndex > 0;
   const canScrollDown = safeScrollTop < items.length;
 
-  return { visibleItems, canScrollUp, canScrollDown, scrollUp, scrollDown, scrollToBottom };
+  return { visibleItems, canScrollUp, canScrollDown, scrollUp, scrollDown, scrollToTop, scrollToBottom };
 }

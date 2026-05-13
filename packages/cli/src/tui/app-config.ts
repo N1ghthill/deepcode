@@ -97,6 +97,9 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { command: "/new", get label() { return t("slashNewLabel"); }, get description() { return t("slashNewDesc"); } },
   { command: "/clear", get label() { return t("slashClearLabel"); }, get description() { return t("slashClearDesc"); } },
   { command: "/help", get label() { return t("slashHelpLabel"); }, get description() { return t("slashHelpDesc"); } },
+  { command: "/undo", get label() { return t("slashUndoLabel"); }, get description() { return t("slashUndoDesc"); } },
+  { command: "/diff", get label() { return t("slashDiffLabel"); }, get description() { return t("slashDiffDesc"); } },
+  { command: "/timeline", get label() { return t("slashTimelineLabel"); }, get description() { return t("slashTimelineDesc"); } },
 ];
 
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
