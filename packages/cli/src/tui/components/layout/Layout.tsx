@@ -6,6 +6,7 @@ export interface LayoutProps {
   header: React.ReactNode;
   sidebar: React.ReactNode;
   statusBar: React.ReactNode;
+  sidebarVisible?: boolean;
   children: React.ReactNode;
 }
 
@@ -14,6 +15,7 @@ export function Layout({
   header,
   sidebar,
   statusBar,
+  sidebarVisible = false,
   children,
 }: LayoutProps) {
   return (
@@ -21,13 +23,15 @@ export function Layout({
       {header}
 
       <Box flexDirection="row" flexGrow={1}>
-        <Box width="65%" flexDirection="column">
+        <Box flexGrow={1} flexDirection="column">
           {children}
         </Box>
 
-        <Box width="35%">
-          {sidebar}
-        </Box>
+        {sidebarVisible && (
+          <Box width={36} flexShrink={0}>
+            {sidebar}
+          </Box>
+        )}
       </Box>
 
       {statusBar}

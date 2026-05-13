@@ -2,7 +2,7 @@ import type { I18nDict } from "./index";
 
 export const ptBR: I18nDict = {
   initialNotice:
-    "Ctrl+Q sai. Ctrl+H ajuda. Ctrl+O sessões. Ctrl+P providers. Ctrl+M modelos. Ctrl+T telemetria. Esc modo normal. Tab alterna modo. Ctrl+C cancela execução.",
+    "Ctrl+Q sair · Ctrl+H ajuda · Ctrl+O sessões · Ctrl+P providers · Ctrl+M modelos · Ctrl+B sidebar · Tab alterna modo · Ctrl+C cancelar",
   approvalPending: "Aprovação pendente: {operation}",
   githubOAuthCancelled: "GitHub OAuth cancelado.",
   executionCancelled: "Execução cancelada.",

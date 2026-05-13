@@ -50,6 +50,7 @@ export interface AgentStoreState {
   historyIndex: number | null;
   vimMode: VimMode;
   sidebarTab: SidebarTab;
+  sidebarVisible: boolean;
   activeModal: ModalType;
   agentMode: AgentMode;
   showInputPreview: boolean;
@@ -86,6 +87,7 @@ export interface AgentStoreState {
   setHistoryIndex: (i: number | null) => void;
   setVimMode: (v: VimMode) => void;
   setSidebarTab: (t: SidebarTab) => void;
+  setSidebarVisible: (v: boolean | ((prev: boolean) => boolean)) => void;
   setActiveModal: (m: ModalType) => void;
   setAgentMode: (m: AgentMode | ((prev: AgentMode) => AgentMode)) => void;
   setShowInputPreview: (s: boolean) => void;
@@ -127,6 +129,7 @@ export const useAgentStore = create<AgentStoreState>()((set) => ({
   historyIndex: null,
   vimMode: "insert",
   sidebarTab: "sessions",
+  sidebarVisible: false,
   activeModal: null,
   agentMode: "build",
   showInputPreview: false,
@@ -158,6 +161,7 @@ export const useAgentStore = create<AgentStoreState>()((set) => ({
   setHistoryIndex: (i) => set({ historyIndex: i }),
   setVimMode: (v) => set({ vimMode: v }),
   setSidebarTab: (t) => set({ sidebarTab: t }),
+  setSidebarVisible: (v) => set((state) => ({ sidebarVisible: resolveUpdater(v, state.sidebarVisible) })),
   setActiveModal: (m) => set({ activeModal: m }),
   setAgentMode: (m) => set((state) => ({ agentMode: resolveUpdater(m, state.agentMode) })),
   setShowInputPreview: (s) => set({ showInputPreview: s }),

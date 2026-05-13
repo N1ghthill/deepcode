@@ -8,6 +8,7 @@ import type { Message } from "@deepcode/shared";
 import type { ThemeColors } from "../../themes.js";
 import type { DeepCodeRuntime } from "../../../runtime.js";
 import { useVirtualScroll } from "../../hooks/useVirtualScroll.js";
+import { MarkdownText } from "./MarkdownText.js";
 import { t } from "../../i18n/index.js";
 
 interface MessageListProps {
@@ -48,34 +49,44 @@ export function MessageList({
   return (
     <Box flexDirection="column" flexGrow={1}>
       {canScrollUp && (
-        <Text color={theme.fgMuted}>↑ {t("scrollHint")}</Text>
+        <Text color={theme.fgMuted} dimColor>
+          ↑ {t("scrollHint")}
+        </Text>
       )}
 
       {visibleItems.map((msg) => (
-        <Box key={msg.id} flexDirection="column">
+        <Box key={msg.id} flexDirection="column" marginBottom={1}>
           <Text
             color={msg.role === "user" ? theme.userMsg : theme.assistantMsg}
             bold
           >
             {msg.role === "user" ? t("you") : t("deepCodeLabel")}
           </Text>
-          <Text>{redactText(msg.content, secretValues)}</Text>
-          <Text> </Text>
+          <MarkdownText
+            text={redactText(msg.content, secretValues)}
+            theme={theme}
+          />
         </Box>
       ))}
 
       {streaming && assistantDraft && (
-        <Box flexDirection="column">
-          <Text color={theme.assistantMsg} bold>
-            {t("deepCodeDraft")}
-          </Text>
-          <Text dimColor>{assistantDraft}</Text>
-          <Text> </Text>
+        <Box flexDirection="column" marginBottom={1}>
+          <Box flexDirection="row" gap={1}>
+            <Text color={theme.assistantMsg} bold>
+              {t("deepCodeLabel")}
+            </Text>
+            <Text color={theme.fgMuted} dimColor>
+              ▍
+            </Text>
+          </Box>
+          <MarkdownText text={assistantDraft} theme={theme} dimColor />
         </Box>
       )}
 
       {canScrollDown && (
-        <Text color={theme.fgMuted}>↓ {t("scrollHint")}</Text>
+        <Text color={theme.fgMuted} dimColor>
+          ↓ {t("scrollHint")}
+        </Text>
       )}
     </Box>
   );

@@ -42,7 +42,6 @@ import {
 } from "./hooks/index.js";
 import { UIStateManager, type RecentModelSelection, type UIState } from "./persistence/ui-state.js";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary.js";
-import { TypingIndicator } from "./components/shared/TypingIndicator.js";
 import { useTokenEstimate } from "./hooks/useTokenEstimate.js";
 import type { AppProps, ViewMode, VimMode, ModalType } from "./types.js";
 import { formatModelSelection } from "./model-selection.js";
@@ -112,6 +111,7 @@ export function App(props: AppProps) {
   const selectedSessionIndex = useAgentStore((s) => s.selectedSessionIndex);
   const vimMode = useAgentStore((s) => s.vimMode);
   const sidebarTab = useAgentStore((s) => s.sidebarTab);
+  const sidebarVisible = useAgentStore((s) => s.sidebarVisible);
   const activeModal = useAgentStore((s) => s.activeModal);
   const agentMode = useAgentStore((s) => s.agentMode);
   const showInputPreview = useAgentStore((s) => s.showInputPreview);
@@ -137,6 +137,7 @@ export function App(props: AppProps) {
   const setViewMode = useAgentStore((s) => s.setViewMode);
   const setVimMode = useAgentStore((s) => s.setVimMode);
   const setSidebarTab = useAgentStore((s) => s.setSidebarTab);
+  const setSidebarVisible = useAgentStore((s) => s.setSidebarVisible);
   const setActiveModal = useAgentStore((s) => s.setActiveModal);
   const setAgentMode = useAgentStore((s) => s.setAgentMode);
   const setShowInputPreview = useAgentStore((s) => s.setShowInputPreview);
@@ -175,7 +176,6 @@ export function App(props: AppProps) {
       currentPlan?: TaskPlan | undefined;
       viewMode?: ViewMode;
       vimMode?: VimMode;
-      assistantDraft?: string;
     }) => {
       setSession(next);
       if (extras?.messages !== undefined) setMessages(extras.messages);
@@ -546,6 +546,10 @@ export function App(props: AppProps) {
     if (key.ctrl && inputChar === "t") {
       setActiveModal("telemetry"); setNotice(t("appTelemetryPanelOpened")); return;
     }
+    if (key.ctrl && inputChar === "b") {
+      setSidebarVisible((v) => !v);
+      return;
+    }
 
     // Tab toggle mode
     if (key.tab && !key.ctrl && !showSlashMenu) {
@@ -741,6 +745,7 @@ export function App(props: AppProps) {
   return (
     <Layout
       height={stdout.rows}
+      sidebarVisible={sidebarVisible}
       header={
         <Header
           provider={activeModeSelection?.provider ?? activeProviderId}
@@ -1064,14 +1069,6 @@ export function App(props: AppProps) {
                   />
                   {approvals.length > 0 && activeApproval && (
                     <ChatApprovalIndicator request={activeApproval} theme={theme} />
-                  )}
-                  {streaming && assistantDraft && !hasParallelTasks && (
-                    <Box flexDirection="column">
-                      <Box gap={1}>
-                        <Text color={theme.assistantMsg} bold>{t("deepCodeDraft")}</Text>
-                        <TypingIndicator theme={theme} />
-                      </Box>
-                    </Box>
                   )}
                 </>
               )}

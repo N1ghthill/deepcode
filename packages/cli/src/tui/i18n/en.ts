@@ -1,6 +1,6 @@
 export const en = {
   initialNotice:
-    "Ctrl+Q quit. Ctrl+H help. Ctrl+O sessions. Ctrl+P providers. Ctrl+M models. Ctrl+T telemetry. Esc normal mode. Tab toggle mode. Ctrl+C cancel execution.",
+    "Ctrl+Q quit · Ctrl+H help · Ctrl+O sessions · Ctrl+P providers · Ctrl+M models · Ctrl+B sidebar · Tab toggle mode · Ctrl+C cancel",
   approvalPending: "Approval pending: {operation}",
   githubOAuthCancelled: "GitHub OAuth cancelled.",
   executionCancelled: "Execution cancelled.",

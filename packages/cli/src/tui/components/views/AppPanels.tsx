@@ -70,27 +70,34 @@ export function SlashCommandMenu({
   selectedIndex: number;
   theme: ThemeColors;
 }) {
+  const visible = commands.slice(0, 6);
   return (
-    <Box width="100%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.borderActive}>
-        <Text color={theme.primary} bold>
-          {t("commands")}
-        </Text>
-      {commands.slice(0, 8).map((item, index) => {
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.borderActive}
+      paddingX={1}
+    >
+      {visible.map((item, index) => {
         const selected = index === selectedIndex;
         return (
-          <Box key={item.command} flexDirection="column">
-            <Text color={selected ? theme.primary : undefined} bold={selected}>
-              {selected ? "> " : "  "}
-              {truncate(item.label, 22)} <Text color={theme.fgMuted}>{item.command}</Text>
+          <Box key={item.command} flexDirection="row" gap={1}>
+            <Text
+              bold={selected}
+              color={selected ? "black" : theme.fgMuted}
+              backgroundColor={selected ? theme.primary : undefined}
+            >
+              {selected ? `  ${item.command}  ` : ` ${item.command} `}
             </Text>
-            <Text color={selected ? theme.warning : theme.fgMuted}>
-              {"  "}
-              {truncate(item.description, 78)}
+            <Text color={selected ? theme.fg : theme.fgMuted} dimColor={!selected}>
+              {truncate(item.description, 60)}
             </Text>
           </Box>
         );
       })}
-      <Text color={theme.fgMuted}>{t("commandBarHint")}</Text>
+      <Text color={theme.fgMuted} dimColor>
+        ↑↓ navigate · Tab/Enter select · Esc close
+      </Text>
     </Box>
   );
 }
