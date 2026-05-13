@@ -133,16 +133,8 @@ export function useChatInput({
         return;
       }
 
-      // Backspace (handled by ink-text-input when focused, but fallback here)
-      if (key.backspace || key.delete) {
-        setInput((current) => current.slice(0, -1));
-        return;
-      }
-
-      // Regular characters
-      if (inputChar && !key.ctrl && !key.meta) {
-        setInput((current) => current + inputChar);
-      }
+      // Backspace and regular characters are handled by ink-text-input via onChange.
+      // Adding fallbacks here would double-apply the input.
     },
     { isActive },
   );
