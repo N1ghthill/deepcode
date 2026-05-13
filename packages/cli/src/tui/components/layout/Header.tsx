@@ -20,47 +20,52 @@ export function Header({
   theme,
   providerStatus,
 }: HeaderProps) {
-  const statusIndicator = providerStatus
-    ? providerStatus.online
-      ? { symbol: "●", color: theme.success }
-      : { symbol: "○", color: theme.error }
-    : { symbol: "○", color: theme.fgMuted };
-  const activeTarget = model ? `${provider}/${model}` : `${provider}/${t("notConfigured")}`;
+  const online = providerStatus?.online ?? false;
+  const statusColor = providerStatus
+    ? online
+      ? theme.success
+      : theme.error
+    : theme.fgMuted;
+  const statusSymbol = providerStatus ? (online ? "●" : "○") : "◌";
+  const modeColor = agentMode === "build" ? theme.success : theme.primary;
+
+  const modelLabel = model || t("notConfigured");
 
   return (
     <Box
       flexDirection="row"
       justifyContent="space-between"
       paddingX={1}
-      borderStyle="single"
+      borderStyle="round"
       borderColor={theme.border}
     >
-      <Box>
-        <Text bold color={theme.primary}>
+      <Box flexDirection="row" gap={1}>
+        <Text color={theme.primary} bold>
+          ◆
+        </Text>
+        <Text color={theme.primary} bold>
           DeepCode
         </Text>
-        <Text color={theme.fgMuted}> v2.0</Text>
+        <Text color={theme.fgMuted} dimColor>
+          v2.0
+        </Text>
       </Box>
 
-      <Box gap={2}>
-        <Box>
-          <Text color={theme.fgMuted}>{t("sidebarTarget")}</Text>
-          <Text color={statusIndicator.color}>
-            {statusIndicator.symbol}{" "}
+      <Box flexDirection="row" gap={2}>
+        <Box flexDirection="row" gap={1}>
+          <Text color={statusColor}>{statusSymbol}</Text>
+          <Text color={theme.fgMuted}>{provider}</Text>
+          <Text color={theme.fgMuted} dimColor>
+            ·
           </Text>
-          <Text bold color={theme.primary}>
-            {activeTarget}
-          </Text>
+          <Text color={theme.fg}>{modelLabel}</Text>
         </Box>
 
-        <Box>
-          <Text color={theme.fgMuted}>{t("headerMode")}</Text>
-          <Text
-            bold
-            backgroundColor={agentMode === "build" ? theme.success : theme.primary}
-            color={agentMode === "build" ? "black" : "black"}
-          >
-            {agentMode === "build" ? t("headerBuild") : t("headerPlan")}
+        <Text color={theme.fgMuted}>│</Text>
+
+        <Box flexDirection="row">
+          <Text backgroundColor={modeColor} color="black" bold>
+            {" "}{agentMode === "build" ? t("headerBuild") : t("headerPlan")}{" "}
           </Text>
         </Box>
       </Box>

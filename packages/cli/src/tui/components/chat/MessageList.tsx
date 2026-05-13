@@ -1,4 +1,5 @@
-import React from "react";
+/* eslint-disable no-undef */
+import React, { useEffect, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import {
   collectSecretValues,
@@ -49,45 +50,94 @@ export function MessageList({
   return (
     <Box flexDirection="column" flexGrow={1}>
       {canScrollUp && (
-        <Text color={theme.fgMuted} dimColor>
-          ↑ {t("scrollHint")}
-        </Text>
+        <Box flexDirection="row" gap={1} paddingX={1}>
+          <Text color={theme.fgMuted} dimColor>
+            ╴╴╴
+          </Text>
+          <Text color={theme.fgMuted} dimColor>
+            ↑ {t("scrollHint")}
+          </Text>
+        </Box>
       )}
 
       {visibleItems.map((msg) => (
-        <Box key={msg.id} flexDirection="column" marginBottom={1}>
-          <Text
-            color={msg.role === "user" ? theme.userMsg : theme.assistantMsg}
-            bold
-          >
-            {msg.role === "user" ? t("you") : t("deepCodeLabel")}
-          </Text>
-          <MarkdownText
-            text={redactText(msg.content, secretValues)}
-            theme={theme}
-          />
-        </Box>
+        <MessageRow
+          key={msg.id}
+          role={msg.role}
+          content={redactText(msg.content, secretValues)}
+          theme={theme}
+        />
       ))}
 
       {streaming && assistantDraft && (
         <Box flexDirection="column" marginBottom={1}>
           <Box flexDirection="row" gap={1}>
             <Text color={theme.assistantMsg} bold>
+              ◆
+            </Text>
+            <Text color={theme.assistantMsg} bold>
               {t("deepCodeLabel")}
             </Text>
-            <Text color={theme.fgMuted} dimColor>
-              ▍
-            </Text>
+            <BlinkingCursor theme={theme} />
           </Box>
-          <MarkdownText text={assistantDraft} theme={theme} dimColor />
+          <Box paddingLeft={2}>
+            <MarkdownText text={assistantDraft} theme={theme} />
+          </Box>
         </Box>
       )}
 
       {canScrollDown && (
-        <Text color={theme.fgMuted} dimColor>
-          ↓ {t("scrollHint")}
-        </Text>
+        <Box flexDirection="row" gap={1} paddingX={1}>
+          <Text color={theme.fgMuted} dimColor>
+            ╴╴╴
+          </Text>
+          <Text color={theme.fgMuted} dimColor>
+            ↓ {t("scrollHint")}
+          </Text>
+        </Box>
       )}
     </Box>
+  );
+}
+
+function MessageRow({
+  role,
+  content,
+  theme,
+}: {
+  role: "user" | "assistant" | "system" | "tool";
+  content: string;
+  theme: ThemeColors;
+}) {
+  const isUser = role === "user";
+  const avatar = isUser ? "▸" : "◆";
+  const color = isUser ? theme.userMsg : theme.assistantMsg;
+  const label = isUser ? t("you") : t("deepCodeLabel");
+
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Box flexDirection="row" gap={1}>
+        <Text color={color} bold>
+          {avatar}
+        </Text>
+        <Text color={color} bold>
+          {label}
+        </Text>
+      </Box>
+      <Box paddingLeft={2}>
+        <MarkdownText text={content} theme={theme} />
+      </Box>
+    </Box>
+  );
+}
+
+function BlinkingCursor({ theme }: { theme: ThemeColors }) {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const timer = setInterval(() => setVisible((v) => !v), 500);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <Text color={theme.accent}>{visible ? "▍" : " "}</Text>
   );
 }

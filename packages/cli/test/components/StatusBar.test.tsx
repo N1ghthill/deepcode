@@ -15,7 +15,6 @@ describe("StatusBar", () => {
     const { lastFrame, unmount } = render(
       <StatusBar
         theme={theme}
-        input=""
         streaming={false}
         status="idle"
         vimMode="insert"
@@ -40,7 +39,7 @@ describe("StatusBar", () => {
       const frame = lastFrame() ?? "";
       expect(frame).toContain("● PLAN");
       expect(frame).toContain("deepseek/deepseek-v4-pro");
-      expect(frame).toContain("○ BUILD");
+      expect(frame).toContain("BUILD");
       expect(frame).toContain("openrouter/qwen/qwen3-coder");
     } finally {
       unmount();

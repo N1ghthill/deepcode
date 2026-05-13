@@ -125,6 +125,8 @@ export function App(props: AppProps) {
   const recentModels = useAgentStore((s) => s.recentModels);
   const telemetryExportStatus = useAgentStore((s) => s.telemetryExportStatus);
   const lastExportPath = useAgentStore((s) => s.lastExportPath);
+  const slashMenuDismissed = useAgentStore((s) => s.slashMenuDismissed);
+  const selectedSlashCommandIndex = useAgentStore((s) => s.selectedSlashCommandIndex);
 
   const setRuntime = useAgentStore((s) => s.setRuntime);
   const setSession = useAgentStore((s) => s.setSession);
@@ -366,6 +368,7 @@ export function App(props: AppProps) {
 
   useEffect(() => {
     useAgentStore.getState().setSelectedSlashCommandIndex(0);
+    useAgentStore.getState().setSlashMenuDismissed(false);
   }, [input]);
 
   // ── Theme / derived values ─────────────────────────────────────────────────
@@ -411,6 +414,7 @@ export function App(props: AppProps) {
     !activeModal &&
     !streaming &&
     !showInputPreview &&
+    !slashMenuDismissed &&
     slashCommandSuggestions.length > 0 &&
     isSlashCommandInput(input);
 
@@ -787,7 +791,6 @@ export function App(props: AppProps) {
       statusBar={
         <StatusBar
           theme={theme}
-          input={input}
           streaming={streaming}
           status={status}
           vimMode={vimMode}
@@ -977,14 +980,6 @@ export function App(props: AppProps) {
           />
         )}
 
-        {showSlashMenu && slashCommandSuggestions.length > 0 && (
-          <SlashCommandMenu
-            commands={slashCommandSuggestions}
-            selectedIndex={useAgentStore.getState().selectedSlashCommandIndex}
-            theme={theme}
-          />
-        )}
-
         {githubOAuth.status !== "idle" && (
           <GithubOAuthPanel state={githubOAuth} theme={theme} />
         )}
@@ -1024,15 +1019,8 @@ export function App(props: AppProps) {
           <Box
             flexDirection="column"
             flexGrow={1}
-            borderStyle="single"
-            borderColor={theme.border}
             paddingX={1}
           >
-            <Box marginBottom={1}>
-              <Text bold color={theme.primary}>{t("appChatLabel")}</Text>
-              <Text color={theme.fgMuted}> {session.id}</Text>
-            </Box>
-
             {/* Parallel tasks panel — visible when 2+ tasks running */}
             {hasParallelTasks && (
               <ParallelTasksPanel
@@ -1073,6 +1061,14 @@ export function App(props: AppProps) {
                 </>
               )}
             </Box>
+
+            {showSlashMenu && (
+              <SlashCommandMenu
+                commands={slashCommandSuggestions}
+                selectedIndex={selectedSlashCommandIndex}
+                theme={theme}
+              />
+            )}
 
             {/* Input field with real cursor */}
             <InputField

@@ -359,13 +359,51 @@ Usado pela ferramenta `search_symbols`.
 
 ## 15. TUI (Terminal User Interface)
 
-Construída com Ink (React para terminal) em `packages/cli/src/tui/`:
+Construída com Ink (React para terminal) em `packages/cli/src/tui/`. Estado centralizado em **Zustand** (`store/agent-store.ts`).
 
-- **Temas disponíveis**: `dark`, `light`, `high-contrast`, `nord`, `dracula`
-- **Idiomas**: `en`, `pt-BR`
-- **Modo Vim**: normal/insert
-- **Sidebar tabs**: sessions, activities, plan, telemetry
-- **Atalho principal**: Tab para alternar entre BUILD e PLAN
+### Identidade visual
+- **Paleta moderna** (Tokyo Night-inspired) com hex codes em `themes.ts` — `dark`, `light`, `high-contrast`, `nord`, `dracula`
+- **Bordas arredondadas** (`borderStyle="round"`) em painéis principais
+- **Badges coloridos** com fundo sólido (Header, StatusBar, modos, aprovações)
+- **Avatares** `▸` (user) e `◆` (assistant) nas mensagens
+- **Animações sutis**: `InlineSpinner` durante streaming, cursor piscante no draft, dots animados no campo de input
+
+### Componentes-chave (todos sob `packages/cli/src/tui/components/`)
+| Caminho | Função |
+|---|---|
+| `layout/Header.tsx` | Marca + status do provider/modelo + badge de modo |
+| `layout/StatusBar.tsx` | Spinner ao vivo, tokens, custo, tools, mode routes |
+| `layout/Sidebar.tsx` | Tabs (sessions/activities/telemetry/approvals/plan), hotkeys `1-5` |
+| `chat/InputField.tsx` | Input com border ativa, cursor real, dots de streaming |
+| `chat/MessageList.tsx` | Lista virtual com avatares e cursor piscante durante streaming |
+| `chat/MarkdownText.tsx` | Renderer markdown (bold/italic/code/lists/blockquote/headings) |
+| `tasks/TaskLane.tsx` | Lane por task paralela (type badge, status, output streaming) |
+| `tasks/ProgressMatrix.tsx` | Barra de progresso visual + matriz de tasks + contadores |
+| `tasks/ParallelTasksPanel.tsx` | Multi-lanes lado a lado, paginação com `[` / `]` |
+| `views/AppPanels.tsx` | EmptyChatState, SlashCommandMenu, ApprovalPanel, SessionSwitcher, ConfigEditor, HelpView |
+| `modals/*` | Provider, Model, Telemetry, InputPreview |
+
+### UX de comandos rápidos
+- `/` abre menu de comandos contextual (acima do input)
+- **Esc fecha o menu sem apagar o texto** (`slashMenuDismissed` no store)
+- **Tab completa** o comando selecionado no input
+- **↑↓** navegam o menu; **Enter** executa
+- Sem menu: ↑↓ navegam histórico de mensagens
+
+### Idiomas
+- `en`, `pt-BR` (via `i18n/index.ts` + tabelas)
+
+### Atalhos globais
+- `Tab` — alterna PLAN ↔ BUILD
+- `Ctrl+O` — abre seletor de sessão
+- `Ctrl+H` — ajuda
+- `Ctrl+P` — modal de provider
+- `Ctrl+M` — modal de modelo
+- `Ctrl+T` — modal de telemetria
+- `Ctrl+C` — cancela operação em curso
+- `Ctrl+Q` — sai
+- `Esc` — alterna para modo NORMAL (vim)
+- `i`/`a` (em NORMAL) — volta para INSERT
 
 ---
 

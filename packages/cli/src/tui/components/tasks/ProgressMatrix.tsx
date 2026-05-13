@@ -26,9 +26,21 @@ export function ProgressMatrix({ plan, theme }: ProgressMatrixProps) {
   const failed = tasks.filter((t) => t.status === "failed").length;
   const running = tasks.filter((t) => t.status === "running").length;
   const pending = tasks.filter((t) => t.status === "pending").length;
-  const elapsed = "";
+  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-  // Columns per row: fit ~4 per line at standard widths
+  const barWidth = Math.min(Math.max(terminalWidth - 20, 16), 40);
+  const filled = Math.round((completed / Math.max(total, 1)) * barWidth);
+  const failedBars = Math.round((failed / Math.max(total, 1)) * barWidth);
+  const runningPos = running > 0 ? filled : -1;
+
+  let bar = "";
+  for (let i = 0; i < barWidth; i += 1) {
+    if (i < filled - failedBars) bar += "█";
+    else if (i < filled) bar += "▓";
+    else if (i === runningPos) bar += "▌";
+    else bar += "·";
+  }
+
   const colWidth = Math.floor((terminalWidth - 2) / 4);
   const itemsPerRow = Math.max(1, Math.floor((terminalWidth - 2) / colWidth));
   const rows: typeof tasks[] = [];
@@ -37,13 +49,41 @@ export function ProgressMatrix({ plan, theme }: ProgressMatrixProps) {
   }
 
   return (
-    <Box flexDirection="column" paddingX={1}>
-      <Text color={theme.accent} bold>
-        {plan.objective ? truncate(plan.objective, terminalWidth - 4) : "Plan"}
-      </Text>
-      <Text color={theme.fgMuted}>
-        {"═".repeat(Math.min(terminalWidth - 4, 60))}
-      </Text>
+    <Box
+      flexDirection="column"
+      paddingX={1}
+      borderStyle="round"
+      borderColor={theme.border}
+      marginBottom={1}
+    >
+      <Box flexDirection="row" justifyContent="space-between">
+        <Box flexDirection="row" gap={1}>
+          <Text color={theme.accent} bold>
+            ◆
+          </Text>
+          <Text color={theme.fg} bold>
+            {plan.objective ? truncate(plan.objective, terminalWidth - 24) : "Plan"}
+          </Text>
+        </Box>
+        <Text color={theme.fgMuted}>
+          {completed}/{total}
+        </Text>
+      </Box>
+
+      <Box flexDirection="row" gap={1}>
+        <Text color={theme.success}>{bar.slice(0, filled - failedBars)}</Text>
+        <Text color={theme.error}>{bar.slice(filled - failedBars, filled)}</Text>
+        <Text color={theme.primary}>
+          {runningPos >= 0 ? bar.slice(filled, filled + 1) : ""}
+        </Text>
+        <Text color={theme.fgMuted} dimColor>
+          {bar.slice(Math.max(filled, runningPos + 1))}
+        </Text>
+        <Text color={theme.accent} bold>
+          {percentage}%
+        </Text>
+      </Box>
+
       {rows.map((row, rowIndex) => (
         <Box key={rowIndex} flexDirection="row">
           {row.map((task) => {
@@ -56,27 +96,32 @@ export function ProgressMatrix({ plan, theme }: ProgressMatrixProps) {
                   : task.status === "running"
                     ? theme.primary
                     : theme.fgMuted;
-            const label = truncate(`[${task.type}] ${task.description}`, colWidth - 6);
+            const label = truncate(task.description, colWidth - 4);
             return (
               <Box key={task.id} width={colWidth}>
                 <Text color={color}>
-                  {icon} {label}{"  "}
+                  {icon} {label}
                 </Text>
               </Box>
             );
           })}
         </Box>
       ))}
-      <Text color={theme.fgMuted}>
-        {"═".repeat(Math.min(terminalWidth - 4, 60))}
-      </Text>
-      <Text color={theme.fgMuted}>
-        {completed}/{total} done
-        {running > 0 ? ` · ${running} running` : ""}
-        {failed > 0 ? ` · ${failed} failed` : ""}
-        {pending > 0 ? ` · ${pending} pending` : ""}
-        {elapsed ? ` · ${elapsed}` : ""}
-      </Text>
+
+      <Box flexDirection="row" gap={2}>
+        {completed > 0 && (
+          <Text color={theme.success}>✓ {completed}</Text>
+        )}
+        {running > 0 && (
+          <Text color={theme.primary}>▶ {running}</Text>
+        )}
+        {failed > 0 && (
+          <Text color={theme.error}>✗ {failed}</Text>
+        )}
+        {pending > 0 && (
+          <Text color={theme.fgMuted} dimColor>○ {pending}</Text>
+        )}
+      </Box>
     </Box>
   );
 }
