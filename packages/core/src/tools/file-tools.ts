@@ -61,6 +61,7 @@ export const writeFileTool = defineTool({
       try: async () => {
         const filePath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "write_file", kind: "write", path: filePath });
+        await context.snapshotForUndo?.(filePath);
         await mkdir(path.dirname(filePath), { recursive: true });
         await writeFile(filePath, args.content, "utf8");
         context.logActivity({
@@ -87,6 +88,7 @@ export const editFileTool = defineTool({
       try: async () => {
         const filePath = await context.pathSecurity.normalize(args.path, { enforceAccess: false });
         await context.permissions.ensure({ operation: "edit_file", kind: "write", path: filePath });
+        await context.snapshotForUndo?.(filePath);
         const content = await readFile(filePath, "utf8");
         const occurrences = content.split(args.oldString).length - 1;
         if (occurrences === 0) {

@@ -591,9 +591,6 @@ async function configureLLM(tempDir: string, serverUrl: string): Promise<void> {
   await runCli(["--cwd", tempDir, "config", "set", "defaultModel", "test-model"]);
   await runCli(["--cwd", tempDir, "config", "set", "providers.openrouter.apiKey", "fake-e2e-key"]);
   await runCli(["--cwd", tempDir, "config", "set", "providers.openrouter.baseUrl", serverUrl]);
-  // Allow reads and writes without interactive approval prompts
-  await runCli(["--cwd", tempDir, "config", "set", "permissions.read", "allow"]);
-  await runCli(["--cwd", tempDir, "config", "set", "permissions.write", "allow"]);
 }
 
 // ── deepcode run E2E tests ────────────────────────────────────────────────────

@@ -67,8 +67,17 @@ interface ToolExecutionOutcome {
   errorMessage?: string;
 }
 
+interface UndoEntry {
+  /** Absolute path of the file that was modified. */
+  path: string;
+  /** Content before the modification, or null if the file was newly created. */
+  previousContent: string | null;
+}
+
 export class Agent {
   private readonly planner = new TaskPlanner();
+  /** Per-session undo stacks. Each write_file / edit_file pushes one entry. */
+  private readonly undoStacks = new Map<string, UndoEntry[]>();
 
   constructor(
     private readonly providerManager: ProviderManager,
@@ -470,6 +479,28 @@ Execute this task using the available tools. Return a summary of what was done.`
     return finalText;
   }
 
+  /**
+   * Reverts the last file mutation recorded for the given session.
+   * Returns a description of what was restored, or null if nothing to undo.
+   */
+  async undo(sessionId: string): Promise<{ path: string; restored: boolean } | null> {
+    const stack = this.undoStacks.get(sessionId);
+    if (!stack || stack.length === 0) return null;
+    const entry = stack.pop()!;
+    const { writeFile, unlink } = await import("node:fs/promises");
+    if (entry.previousContent === null) {
+      // File was newly created — delete it
+      try {
+        await unlink(entry.path);
+      } catch {
+        // Already gone — still counts as restored
+      }
+    } else {
+      await writeFile(entry.path, entry.previousContent, "utf8");
+    }
+    return { path: entry.path, restored: true };
+  }
+
   private async executeTool(
     call: ToolCall,
     session: Session,
@@ -524,6 +555,17 @@ Execute this task using the available tools. Return a summary of what was done.`
         const full: Activity = { ...activity, id: createId("activity"), createdAt: nowIso() };
         session.activities.push(full);
         this.eventBus.emit("activity", full);
+      },
+      snapshotForUndo: async (filePath: string) => {
+        let previousContent: string | null = null;
+        try {
+          previousContent = await import("node:fs/promises").then((fs) => fs.readFile(filePath, "utf8"));
+        } catch {
+          // File doesn't exist yet — previousContent stays null (new file)
+        }
+        const stack = this.undoStacks.get(session.id) ?? [];
+        stack.push({ path: filePath, previousContent });
+        this.undoStacks.set(session.id, stack);
       },
     };
 
