@@ -17,6 +17,7 @@ import {
 } from "@deepcode/core";
 import { resolveUsableProviderTarget } from "@deepcode/shared";
 import { createRuntime, type DeepCodeRuntime } from "../runtime.js";
+import { writeStdoutLine } from "../stream-flush.js";
 
 interface DoctorCheck {
   name: string;
@@ -43,7 +44,7 @@ export async function doctorCommand(options: { cwd: string; config?: string }): 
   }
 
   for (const check of checks) {
-    console.log(`${check.ok ? "ok" : "fail"} ${check.name}: ${check.detail}`);
+    await writeStdoutLine(`${check.ok ? "ok" : "fail"} ${check.name}: ${check.detail}`);
   }
 
   const failed = checks.filter((check) => !check.ok);

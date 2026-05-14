@@ -47,8 +47,8 @@ deepcode/
 
 | Tecnologia | Propósito | Baseado no OpenCode |
 |------------|-----------|---------------------|
-| **Effect** | 4.0.0-beta.57 | Programação funcional, error handling, concorrência | ✅ Igual |
-| **Solid.js Signals** | 1.8+ | Reatividade granular | ✅ Padrão similar |
+| **Effect** | 3.12.x | Runtime do core, composição assíncrona e tratamento explícito de erro | ✅ Parcial |
+| **Zustand** | 5.x | Estado da TUI e coordenação de UI local | ❌ Divergiu |
 
 **Por que Effect?**
 - Functional programming (como Elm, Haskell)
@@ -77,7 +77,7 @@ const result = await Effect.runPromise(program);
 |------------|-----------|
 | **Ink** | 4.4+ | Framework React para terminal |
 | **React** | 18+ | Base do Ink |
-| **@inkjs/ui** | Componentes Ink |
+| **ink-text-input** | Input controlado para a experiência de chat |
 
 **Alternativa considerada:** OpenTUI (Solid.js) - usado pelo OpenCode, mas Ink tem:
 - Mais documentação
@@ -89,7 +89,7 @@ const result = await Effect.runPromise(program);
 
 | Tecnologia | Propósito | Baseado no OpenCode |
 |------------|-----------|---------------------|
-| **Zod** | 4.1.8 | Schema validation, type inference | ✅ Igual |
+| **Zod** | 3.24.x | Schema validation, type inference | ✅ Igual |
 
 **Exemplo:**
 ```typescript
@@ -109,8 +109,7 @@ type Tool = z.infer<typeof ToolSchema>;
 |------------|-----------|---------------------|
 | **ripgrep (rg)** | Busca texto rápida | ✅ Igual |
 | **LSP Client** | Busca simbólica | ✅ Igual |
-| **tree-sitter** | Parsing multi-linguagem | ✅ Similar |
-| **ts-morph** | Manipulação TypeScript | Adicional |
+| **Parsing orientado a heurísticas locais** | Ferramentas de análise de código do runtime | ✅ Similar |
 
 **Por que sem Vector DB?**
 Análise do OpenCode mostrou que:
@@ -124,23 +123,23 @@ Análise do OpenCode mostrou que:
 
 | Tecnologia | Propósito |
 |------------|-----------|
-| **simple-git** | Operações Git em Node.js |
-| **@octokit/rest** | API GitHub oficial |
+| **CLI `git` via `execFile`** | Operações Git locais |
+| **Cliente GitHub próprio sobre `fetch`** | GitHub.com e GitHub Enterprise |
 
 ### HTTP e APIs
 
 | Tecnologia | Propósito |
 |------------|-----------|
-| **axios** | HTTP client (intercepters, retry) |
-| **eventsource** | Server-Sent Events |
+| **`fetch` nativo do Node 20+** | Providers OpenAI-compatible, web fetch e GitHub |
+| **SSE parser próprio** | Streaming de respostas dos providers |
 
 ### Testes
 
 | Tecnologia | Propósito |
 |------------|-----------|
-| **Vitest** | 1.6+ | Test runner rápido |
-| **@effect/vitest** | Integração Effect |
-| **msw** | Mock de APIs |
+| **Vitest** | 2.1.x | Test runner principal |
+| **ink-testing-library** | Testes da TUI |
+| **Servidores HTTP locais e fixtures temporárias** | E2E e testes de integração |
 
 **Por que Vitest?**
 - Mais rápido que Jest
@@ -154,42 +153,38 @@ Análise do OpenCode mostrou que:
 |------------|-----------|
 | **commander** | Parsing de argumentos CLI |
 | **chalk** | Cores no terminal |
-| **ora** | Spinners de loading |
-| **inquirer** | Prompts interativos |
-| **conf** | Configuração persistida |
+| **atomic file helpers próprios** | Persistência segura de config/sessões/cache |
 
 ### Logging
 
 | Tecnologia | Propósito |
 |------------|-----------|
-| **pino** | Logging estruturado |
-| **pino-pretty** | Formatação para dev |
+| **Audit log JSONL próprio** | Rastreamento de permissões e ações locais |
+| **TelemetryCollector próprio** | Métricas de sessão e exportação |
 
 ## Resumo das Dependências
 
 ```json
 {
   "dependencies": {
-    "effect": "^4.0.0-beta.57",
-    "zod": "^4.1.8",
-    "ink": "^4.4.0",
-    "react": "^18.3.0",
-    "simple-git": "^3.25.0",
-    "@octokit/rest": "^20.1.0",
-    "axios": "^1.7.0",
+    "effect": "^3.12.7",
+    "zod": "^3.24.1",
+    "ink": "^4.4.1",
+    "react": "^18.3.1",
     "commander": "^12.1.0",
-    "pino": "^9.2.0",
-    "conf": "^13.0.0"
+    "zustand": "^5.0.3",
+    "ink-text-input": "^5.0.1",
+    "chalk": "^5.4.1"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
-    "@types/react": "^18.3.0",
-    "typescript": "^5.5.0",
-    "tsup": "^8.1.0",
-    "vitest": "^1.6.0",
-    "turbo": "^2.0.0",
-    "eslint": "^9.5.0",
-    "prettier": "^3.3.0"
+    "@types/node": "^20.17.10",
+    "@types/react": "^18.3.12",
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8",
+    "turbo": "^2.3.3",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2"
   }
 }
 ```
@@ -211,10 +206,9 @@ Análise do OpenCode mostrou que:
 - Sem necessidade de embeddings
 
 **Redux/Zustand?**
-- OpenCode usa Effect
-- Effect é mais moderno
-- Melhor para programação funcional
-- Error handling integrado
+- O runtime central continua baseado em Effect
+- A TUI atual usa Zustand porque simplifica coordenação de estado local em Ink/React
+- A divergência é intencional no código atual e deve ser considerada documentação do estado real, não do design aspiracional
 
 **Native binary (pkg/nexe)?**
 - NPM é mais simples

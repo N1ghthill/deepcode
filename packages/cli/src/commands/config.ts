@@ -1,4 +1,5 @@
 import { ConfigLoader, redactSecrets } from "@deepcode/core";
+import { writeStdoutLine } from "../stream-flush.js";
 
 export interface ConfigCommandOptions {
   cwd: string;
@@ -6,7 +7,7 @@ export interface ConfigCommandOptions {
 }
 
 export async function configPathCommand(options: ConfigCommandOptions): Promise<void> {
-  console.log(
+  await writeStdoutLine(
     new ConfigLoader().resolveConfigPath({ cwd: options.cwd, configPath: options.config }),
   );
 }
@@ -18,7 +19,7 @@ export async function configShowCommand(
   const config = options.effective
     ? await loader.load({ cwd: options.cwd, configPath: options.config })
     : await loader.loadFile({ cwd: options.cwd, configPath: options.config });
-  console.log(
+  await writeStdoutLine(
     JSON.stringify(
       redactSecrets(config, { secretPlaceholder: "[set]", emptySecretPlaceholder: "[empty]" }),
       null,
@@ -45,10 +46,10 @@ export async function configGetCommand(
     emptySecretPlaceholder: "[empty]",
   });
   if (typeof masked === "object" && masked !== null) {
-    console.log(JSON.stringify(masked, null, 2));
+    await writeStdoutLine(JSON.stringify(masked, null, 2));
     return;
   }
-  console.log(String(masked));
+  await writeStdoutLine(String(masked));
 }
 
 export async function configSetCommand(
@@ -72,7 +73,7 @@ export async function configSetCommand(
   ) {
     throw new Error(`Config key is not supported by the schema: ${key}`);
   }
-  console.log(`Set ${key} in ${savedPath}`);
+  await writeStdoutLine(`Set ${key} in ${savedPath}`);
 }
 
 export async function configUnsetCommand(
@@ -89,7 +90,7 @@ export async function configUnsetCommand(
   const nextConfig = cloneJson(config);
   deletePath(nextConfig, pathSegments);
   const savedPath = await loader.save(loadOptions, nextConfig);
-  console.log(`Unset ${key} in ${savedPath}`);
+  await writeStdoutLine(`Unset ${key} in ${savedPath}`);
 }
 
 function parsePath(key: string): string[] {

@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useMemo, useCallback } from "react";
-import { Box, Text, useApp, useInput, useStdout } from "ink";
-import type { DetailContent } from "./types.js";
+import { Box, Text, useApp, useStdout } from "ink";
 import {
   resolveConfiguredModelForProvider,
-  type AgentMode,
   type Session,
   type ProviderId,
 } from "@deepcode/shared";
@@ -42,6 +40,8 @@ import {
   useGitStatus,
   useFileTree,
   useAutocomplete,
+  useAppStoreBindings,
+  useGlobalAppInput,
 } from "./hooks/index.js";
 import { UIStateManager, type UIState } from "./persistence/ui-state.js";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary.js";
@@ -93,7 +93,6 @@ import { FileTreePanel } from "./components/FileTreePanel.js";
 import { DiffDetailPanel } from "./components/DiffDetailPanel.js";
 import { ToolInspector } from "./components/ToolInspector.js";
 import { CONFIG_FIELDS } from "./app-config.js";
-import { useExecutionStore } from "./store/execution-store.js";
 import { useAgentStore } from "./store/agent-store.js";
 import { useConfigStore } from "./store/config-store.js";
 import { useAgentBridge } from "./hooks/useAgentBridge.js";
@@ -106,68 +105,64 @@ export function App(props: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [contextView, setContextView] = React.useState<"sidebar" | "files">("sidebar");
-
-  // ── Store slices ──────────────────────────────────────────────────────────
-  const runtime = useAgentStore((s) => s.runtime);
-  const session = useAgentStore((s) => s.session);
-  const input = useAgentStore((s) => s.input);
-  const messages = useAgentStore((s) => s.messages);
-  const activities = useAgentStore((s) => s.activities);
-  const streaming = useAgentStore((s) => s.streaming);
-  const assistantDraft = useAgentStore((s) => s.assistantDraft);
-  const status = useAgentStore((s) => s.status);
-  const notice = useAgentStore((s) => s.notice);
-  const error = useAgentStore((s) => s.error);
-  const viewMode = useAgentStore((s) => s.viewMode);
-  const selectedSessionIndex = useAgentStore((s) => s.selectedSessionIndex);
-  const vimMode = useAgentStore((s) => s.vimMode);
-  const cursorOffset = useAgentStore((s) => s.cursorOffset);
-  const sidebarTab = useAgentStore((s) => s.sidebarTab);
-  // sidebarVisible is kept in store for potential consumers but layout is now UIStore-driven
-  const activeModal = useAgentStore((s) => s.activeModal);
-  const agentMode = useAgentStore((s) => s.agentMode);
-  const showInputPreview = useAgentStore((s) => s.showInputPreview);
-  const pendingInput = useAgentStore((s) => s.pendingInput);
-  const currentPlan = useAgentStore((s) => s.currentPlan);
-  const taskBuffers = useAgentStore((s) => s.taskBuffers);
-  const toolCalls = useAgentStore((s) => s.toolCalls);
-  const toolExecuting = useAgentStore((s) => s.toolExecuting);
-  const phase = useAgentStore((s) => s.phase);
-  const iteration = useAgentStore((s) => s.iteration);
-  const recentModels = useAgentStore((s) => s.recentModels);
-  const telemetryExportStatus = useAgentStore((s) => s.telemetryExportStatus);
-  const lastExportPath = useAgentStore((s) => s.lastExportPath);
-  const slashMenuDismissed = useAgentStore((s) => s.slashMenuDismissed);
-  const selectedSlashCommandIndex = useAgentStore((s) => s.selectedSlashCommandIndex);
-  const showHistorySearch = useAgentStore((s) => s.showHistorySearch);
-  const detailContent = useAgentStore((s) => s.detailContent);
-
-  const setRuntime = useAgentStore((s) => s.setRuntime);
-  const setSession = useAgentStore((s) => s.setSession);
-  const setInput = useAgentStore((s) => s.setInput);
-  const setMessages = useAgentStore((s) => s.setMessages);
-  const setActivities = useAgentStore((s) => s.setActivities);
-  const setStatus = useAgentStore((s) => s.setStatus);
-  const setNotice = useAgentStore((s) => s.setNotice);
-  const setError = useAgentStore((s) => s.setError);
-  const setViewMode = useAgentStore((s) => s.setViewMode);
-  const setVimMode = useAgentStore((s) => s.setVimMode);
-  const setSidebarTab = useAgentStore((s) => s.setSidebarTab);
-  const setActiveModal = useAgentStore((s) => s.setActiveModal);
-  const setAgentMode = useAgentStore((s) => s.setAgentMode);
-  const setShowInputPreview = useAgentStore((s) => s.setShowInputPreview);
-  const setPendingInput = useAgentStore((s) => s.setPendingInput);
-  const setCurrentPlan = useAgentStore((s) => s.setCurrentPlan);
-  const setToolCalls = useAgentStore((s) => s.setToolCalls);
-  const setRecentModels = useAgentStore((s) => s.setRecentModels);
-  const setTelemetryExportStatus = useAgentStore((s) => s.setTelemetryExportStatus);
-  const setLastExportPath = useAgentStore((s) => s.setLastExportPath);
-  const setShowHistorySearch = useAgentStore((s) => s.setShowHistorySearch);
-  const setDetailContent = useAgentStore((s) => s.setDetailContent);
-  const dispatch = useAgentStore((s) => s.dispatch);
-
-  // Execution store (for TaskProgress)
-  const executionTasks = useExecutionStore((s) => s.tasks);
+  const {
+    runtime,
+    session,
+    input,
+    messages,
+    activities,
+    streaming,
+    assistantDraft,
+    status,
+    notice,
+    error,
+    viewMode,
+    selectedSessionIndex,
+    vimMode,
+    cursorOffset,
+    sidebarTab,
+    activeModal,
+    agentMode,
+    showInputPreview,
+    pendingInput,
+    currentPlan,
+    taskBuffers,
+    toolCalls,
+    toolExecuting,
+    phase,
+    iteration,
+    recentModels,
+    telemetryExportStatus,
+    lastExportPath,
+    slashMenuDismissed,
+    selectedSlashCommandIndex,
+    showHistorySearch,
+    detailContent,
+    setRuntime,
+    setSession,
+    setInput,
+    setMessages,
+    setActivities,
+    setStatus,
+    setNotice,
+    setError,
+    setViewMode,
+    setVimMode,
+    setSidebarTab,
+    setActiveModal,
+    setAgentMode,
+    setShowInputPreview,
+    setPendingInput,
+    setCurrentPlan,
+    setToolCalls,
+    setRecentModels,
+    setTelemetryExportStatus,
+    setLastExportPath,
+    setShowHistorySearch,
+    setDetailContent,
+    dispatch,
+    executionTasks,
+  } = useAppStoreBindings();
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const abortRef = useRef<AbortController | null>(null);
@@ -503,164 +498,40 @@ export function App(props: AppProps) {
     void uiStateRef.current.save(stateToSave);
   }, [session]);
 
-  // ── Global input handler (Ctrl shortcuts, OAuth, modal dismiss, approvals) ─
-  useInput((inputChar, key) => {
-    if (key.ctrl && inputChar === "q") {
-      saveUIState();
-      abortRef.current?.abort();
-      githubOAuthAbortRef.current?.abort();
-      exit();
-      return;
-    }
-    if (key.ctrl && inputChar === "c") {
-      if (githubOAuth.status !== "idle") {
-        cancelOAuth();
-      } else if (streaming) {
-        abortRef.current?.abort();
-        setStatus("cancelled");
-        setNotice(t("executionCancelled"));
-      } else {
-        exit();
-      }
-      return;
-    }
-
-    if (!runtime || !session) return;
-
-    // OAuth mode
-    if (githubOAuthAbortRef.current || githubOAuth.status === "waiting") {
-      if (key.escape) { cancelOAuth(); return; }
-      if (inputChar?.toLowerCase() === "r") {
-        void startGithubLogin("/github-login", runtime, session);
-        return;
-      }
-      return;
-    }
-
-    // Modal dismiss
-    if (activeModal) {
-      if (key.escape) { setActiveModal(null); setNotice(t("modalClosed")); }
-      return;
-    }
-
-    // Approval keys
-    if (approvals.length > 0) {
-      if (inputChar?.toLowerCase() === "a") {
-        resolveApproval(runtime, approvals[0], true, "once", { setNotice, setStatus });
-        return;
-      }
-      if (inputChar?.toLowerCase() === "l") {
-        resolveApproval(runtime, approvals[0], true, "always", { setNotice, setStatus });
-        return;
-      }
-      if (inputChar?.toLowerCase() === "s") {
-        resolveApproval(runtime, approvals[0], true, "session", { setNotice, setStatus });
-        return;
-      }
-      if (inputChar?.toLowerCase() === "d" || inputChar?.toLowerCase() === "n" || key.escape) {
-        resolveApproval(runtime, approvals[0], false, "once", { setNotice, setStatus });
-        return;
-      }
-      return;
-    }
-
-    // Input preview
-    if (showInputPreview) {
-      if (key.escape || key.return) { setShowInputPreview(false); }
-      return;
-    }
-
-    // Help view
-    if (viewMode === "help") {
-      if (key.escape || key.return || inputChar?.toLowerCase() === "q") {
-        setViewMode("chat");
-        setVimMode("insert");
-        setNotice(t("chatActive"));
-      }
-      return;
-    }
-
-    // Global navigation shortcuts
-    if (key.ctrl && inputChar === "h") {
-      setViewMode("help"); setVimMode("normal");
-      setNotice(t("helpOpenedEscapeToReturn")); return;
-    }
-    if (key.ctrl && inputChar === "o") {
-      useAgentStore.getState().setSelectedSessionIndex(0);
-      setViewMode("sessions"); setVimMode("normal");
-      setNotice(t("selectSessionEscapeToReturn")); return;
-    }
-    if (key.ctrl && inputChar === "n") {
-      const newSession = createNewSession(runtime, agentMode);
-      setApprovals([]); setNotice(t("newSession", { id: newSession.id })); return;
-    }
-    if (key.ctrl && inputChar === "p") {
-      setActiveModal("provider"); setNotice(t("providerModalOpenedEscapeToClose")); return;
-    }
-    if (key.ctrl && inputChar === "m") {
-      setActiveModal("model");
-      setNotice(t("modelSelectorOpenedEscapeToClose", { mode: agentMode.toUpperCase() })); return;
-    }
-    if (key.ctrl && inputChar === "t") {
-      setActiveModal("telemetry"); setNotice(t("appTelemetryPanelOpened")); return;
-    }
-    if (key.ctrl && inputChar === "b") {
-      useUIStore.getState().togglePanel("context");
-      return;
-    }
-    if (key.ctrl && inputChar === "f") {
-      setContextView((v) => (v === "sidebar" ? "files" : "sidebar"));
-      useUIStore.getState().openPanel("context");
-      return;
-    }
-    if (key.ctrl && inputChar === ",") {
-      const nextDetail: DetailContent = detailContent === "config" ? "none" : "config";
-      setDetailContent(nextDetail);
-      if (nextDetail !== "none") {
-        useUIStore.getState().openPanel("detail");
-      } else {
-        useUIStore.getState().closePanel("detail");
-      }
-      return;
-    }
-    // History search (Ctrl+R)
-    if (key.ctrl && inputChar === "r" && !streaming && vimMode === "insert") {
-      setShowHistorySearch(true);
-      return;
-    }
-    // Timeline (Ctrl+L)
-    if (key.ctrl && inputChar === "l") {
-      const nextDetail: DetailContent = detailContent === "timeline" ? "none" : "timeline";
-      setDetailContent(nextDetail);
-      if (nextDetail !== "none") {
-        useUIStore.getState().openPanel("detail");
-      } else {
-        useUIStore.getState().closePanel("detail");
-      }
-      return;
-    }
-    // Close history search or detail panel
-    if (showHistorySearch && key.escape) {
-      setShowHistorySearch(false);
-      return;
-    }
-
-    // Tab toggle mode
-    if (key.tab && !key.ctrl && !showSlashMenu) {
-      setAgentMode((current) => {
-        const next: AgentMode = current === "build" ? "plan" : "build";
-        const nextSelection = runtime && session
-          ? resolveEffectiveModeSelection(runtime.config, session, next)
-          : null;
-        setNotice(
-          nextSelection
-            ? t("modeChangedWithModel", { mode: next.toUpperCase(), model: formatModelSelection(nextSelection) })
-            : t("modeChanged", { mode: next.toUpperCase() }),
-        );
-        return next;
-      });
-      return;
-    }
+  useGlobalAppInput({
+    saveUIState,
+    abortRef,
+    githubOAuthAbortRef,
+    exit,
+    githubOAuthStatus: githubOAuth.status,
+    cancelOAuth,
+    startGithubLogin,
+    streaming,
+    setStatus,
+    setNotice,
+    runtime,
+    session,
+    activeModal,
+    setActiveModal,
+    approvals,
+    resolveApproval,
+    showInputPreview,
+    setShowInputPreview,
+    viewMode,
+    setViewMode,
+    setVimMode,
+    input,
+    vimMode,
+    showSlashMenu,
+    agentMode,
+    setAgentMode,
+    detailContent,
+    setDetailContent,
+    setContextView,
+    createNewSession,
+    setApprovals,
+    showHistorySearch,
+    setShowHistorySearch,
   });
 
   // ── Per-mode input handlers ────────────────────────────────────────────────

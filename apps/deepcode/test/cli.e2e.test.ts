@@ -9,6 +9,9 @@ import { afterEach, describe, expect, it } from "vitest";
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const bin = path.join(appRoot, "dist", "index.js");
 let tempDir: string | undefined;
+const localBindingSupported = await canBindLocalBinding();
+const describeWithLocalBinding = localBindingSupported ? describe : describe.skip;
+const itWithLocalBinding = localBindingSupported ? it : it.skip;
 
 afterEach(async () => {
   if (tempDir) {
@@ -172,7 +175,7 @@ describe("deepcode CLI e2e", () => {
     expect(doctor.stderr).toBe("");
   }, 10_000);
 
-  it("runs GitHub CLI commands against a configured local enterprise API", async () => {
+  itWithLocalBinding("runs GitHub CLI commands against a configured local enterprise API", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-cli-"));
     await createTypeScriptFixture(tempDir);
     const server = await startGitHubTestServer();
@@ -607,7 +610,7 @@ async function configureLLM(tempDir: string, serverUrl: string): Promise<void> {
 
 // ── deepcode run E2E tests ────────────────────────────────────────────────────
 
-describe("deepcode run with mock LLM", () => {
+describeWithLocalBinding("deepcode run with mock LLM", () => {
   it("streams a direct text response and exits 0", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
     await createTypeScriptFixture(tempDir);
@@ -702,7 +705,7 @@ describe("deepcode run with mock LLM", () => {
 
 // ── github solve E2E ─────────────────────────────────────────────────────────
 
-describe("deepcode github solve", () => {
+describeWithLocalBinding("deepcode github solve", () => {
   it("creates branch, runs agent, commits, pushes, and creates PR for an issue", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-solve-"));
 
@@ -862,4 +865,28 @@ async function startGitHttpServer(projectRoot: string): Promise<GitHttpServer> {
     url: `http://127.0.0.1:${address.port}`,
     close: () => new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
   };
+}
+
+async function canBindLocalBinding(): Promise<boolean> {
+  const server = createServer((_request, response) => response.end("ok"));
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    return true;
+  } catch {
+    try {
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+    } catch {
+      // Ignore close errors during capability probe.
+    }
+    return false;
+  }
 }
