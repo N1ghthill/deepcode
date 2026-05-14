@@ -37,7 +37,6 @@ import { TaskPlanner, type TaskPlan, type Task } from "./task-planner.js";
 import {
   buildSummaryMessage,
   buildSummaryPrompt,
-  estimateTokens,
   shouldCompressContext,
   splitForCompression,
 } from "./context-manager.js";
