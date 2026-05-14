@@ -90,6 +90,8 @@ import { PreviewOverlay } from "./components/PreviewOverlay.js";
 import { usePreview } from "./hooks/usePreview.js";
 import { ConfigPanel } from "./components/ConfigPanel.js";
 import { FileTreePanel } from "./components/FileTreePanel.js";
+import { DiffDetailPanel } from "./components/DiffDetailPanel.js";
+import { ToolInspector } from "./components/ToolInspector.js";
 import { CONFIG_FIELDS } from "./app-config.js";
 import { useExecutionStore } from "./store/execution-store.js";
 import { useAgentStore } from "./store/agent-store.js";
@@ -887,10 +889,24 @@ export function App(props: AppProps) {
         if (field) await saveConfigEdit(runtime, field, value);
       }}
     />
+  ) : detailContent === "diff" ? (
+    <DiffDetailPanel
+      diff={activeApproval?.diff ?? null}
+      theme={theme}
+      isActive={!activeModal}
+      onClose={() => {
+        setDetailContent("none");
+        useUIStore.getState().closePanel("detail");
+      }}
+    />
   ) : (
-    <Box paddingX={1} paddingY={1}>
-      <Text color={theme.fgMuted} dimColor>{t("detailPanelPlaceholder")}</Text>
-    </Box>
+    <ToolInspector
+      toolCalls={toolCalls}
+      toolExecuting={toolExecuting}
+      theme={theme}
+      isActive={detailContent === "none" && !activeModal}
+      onClose={() => useUIStore.getState().closePanel("detail")}
+    />
   );
 
   return (
