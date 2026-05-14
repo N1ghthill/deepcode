@@ -4,7 +4,7 @@ import { z } from "zod";
 export const RoleSchema = z.enum(["system", "user", "assistant", "tool"]);
 export type Role = z.infer<typeof RoleSchema>;
 
-export const MessageSourceSchema = z.enum(["user", "assistant", "tool", "ui", "agent_internal"]);
+export const MessageSourceSchema = z.enum(["user", "assistant", "tool", "ui", "agent_internal", "context_summary"]);
 export type MessageSource = z.infer<typeof MessageSourceSchema>;
 
 export const ProviderIdSchema = z.enum([
@@ -84,7 +84,7 @@ export const MessageSchema = z.object({
 });
 export type Message = z.infer<typeof MessageSchema>;
 
-const MODEL_CONTEXT_SOURCES = new Set<MessageSource>(["user", "assistant", "tool"]);
+const MODEL_CONTEXT_SOURCES = new Set<MessageSource>(["user", "assistant", "tool", "context_summary"]);
 
 export function isModelContextMessage(message: Message): boolean {
   return message.source === undefined || MODEL_CONTEXT_SOURCES.has(message.source);
@@ -427,6 +427,7 @@ export const DeepCodeConfigSchema = z
     strictMode: z.boolean().default(false).describe("When true, stop execution on first task failure"),
     taskRetries: z.number().int().min(0).max(3).default(1).describe("Number of retry attempts per task on failure"),
     subagentConcurrency: z.number().int().positive().max(16).default(4).describe("Maximum parallel sub-agents when running tasks"),
+    contextWindowThreshold: z.number().min(0.5).max(0.95).default(0.8).describe("Fraction of estimated context window at which to auto-summarize history"),
     mcpServers: z.array(McpServerConfigSchema).default([]),
     telemetry: z
       .object({

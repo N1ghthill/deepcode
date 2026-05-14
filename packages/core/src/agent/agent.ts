@@ -35,6 +35,13 @@ import {
 } from "./agent-prompts.js";
 import { TaskPlanner, type TaskPlan, type Task } from "./task-planner.js";
 import {
+  buildSummaryMessage,
+  buildSummaryPrompt,
+  estimateTokens,
+  shouldCompressContext,
+  splitForCompression,
+} from "./context-manager.js";
+import {
   applyFallbackToolCallParsing,
   buildFallbackToolCallPrompt,
   compactToolDescription,
@@ -401,6 +408,7 @@ Execute this task using the available tools. Return a summary of what was done.`
     while (iterations < maxIterations) {
       iterations += 1;
       options.onIteration?.(iterations, maxIterations);
+      await this.compressContextIfNeeded(session, turnStrategy.systemPrompt, options);
       const chunks = this.providerManager.chat(
         this.messagesForSystemPrompt(
           session,
@@ -766,6 +774,51 @@ Execute this task using the available tools. Return a summary of what was done.`
     }
 
     return true;
+  }
+
+  private async compressContextIfNeeded(
+    session: Session,
+    systemPrompt: string,
+    options: AgentRunOptions,
+  ): Promise<void> {
+    const KEEP_RECENT = 8;
+    const DEFAULT_MAX_CONTEXT = 128_000;
+    const allMessages = this.messagesForSystemPrompt(session, systemPrompt, true);
+    if (!shouldCompressContext(allMessages, DEFAULT_MAX_CONTEXT, this.config.contextWindowThreshold)) {
+      return;
+    }
+    const split = splitForCompression(session.messages, KEEP_RECENT);
+    if (!split) return;
+
+    const { toSummarize, toKeep, rest } = split;
+    const summaryPrompt = buildSummaryPrompt(toSummarize);
+    const resolvedModel =
+      session.model ?? resolveConfiguredModelForProvider(this.config, session.provider);
+
+    let summary = "";
+    const summaryChunks = this.providerManager.chat(
+      [
+        { id: "sys", role: "system" as const, content: UTILITY_SYSTEM_PROMPT, createdAt: session.createdAt },
+        { id: "req", role: "user" as const, content: summaryPrompt, createdAt: session.createdAt },
+      ],
+      {
+        preferredProvider: options.provider ?? session.provider,
+        failover: this.failoverOrder(options.provider ?? session.provider),
+        model: resolvedModel,
+        maxTokens: Math.min(this.config.maxTokens, 1024),
+        temperature: 0,
+        signal: options.signal,
+      },
+    );
+    for await (const chunk of summaryChunks) {
+      if (chunk.type === "delta") summary += chunk.content;
+    }
+
+    const summaryMessage = buildSummaryMessage(summary);
+    this.sessions.replaceMessages(session.id, [summaryMessage, ...toKeep, ...rest]);
+    this.eventBus.emit("app:warn", {
+      message: `Context window compressed: summarized ${toSummarize.length} messages into 1.`,
+    });
   }
 
   private failoverOrder(primary: ProviderId): ProviderId[] {
