@@ -19,7 +19,7 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "pnpm --filter deepcode dev",
+    "dev": "pnpm --filter deepcode-ai dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",

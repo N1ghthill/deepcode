@@ -38,7 +38,7 @@ jobs:
         run: pnpm build
 
       - name: Publish to NPM
-        run: pnpm --filter deepcode publish --no-git-checks --access public
+        run: pnpm --filter deepcode-ai publish --no-git-checks --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
