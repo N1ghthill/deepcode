@@ -35,6 +35,7 @@ export interface AppEvents {
   "approval:request": ApprovalRequest;
   "approval:decision": { requestId: string; decision: ApprovalDecision };
   "app:error": { error: Error; context?: Record<string, unknown> };
+  "app:warn": { message: string; context?: Record<string, unknown> };
 }
 
 export class EventBus {
@@ -46,6 +47,7 @@ export class EventBus {
     // through this channel frequently, so keep a default no-op subscriber.
     // We use "app:error" to avoid colliding with Node's built-in "error" semantics.
     this.emitter.on("app:error", () => {});
+    this.emitter.on("app:warn", () => {});
   }
 
   emit<K extends keyof AppEvents>(event: K, payload: AppEvents[K]): void {

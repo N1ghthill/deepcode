@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { EventBus } from "../src/events/event-bus.js";
 import { TelemetryCollector } from "../src/telemetry/telemetry-collector.js";
 
 let tempDir: string;
@@ -252,11 +253,13 @@ describe("TelemetryCollector", () => {
       await mkdir(telemetryDir, { recursive: true });
       await writeFile(path.join(telemetryDir, "broken.json"), "{", "utf8");
 
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const collector2 = new TelemetryCollector({ worktree: tempDir });
+      const events = new EventBus();
+      const warnings: string[] = [];
+      events.on("app:warn", ({ message }) => { warnings.push(message); });
+      const collector2 = new TelemetryCollector({ worktree: tempDir, events });
       await collector2.init();
 
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("broken.json"));
+      expect(warnings.some((m) => m.includes("broken.json"))).toBe(true);
       const quarantinedFiles = await readdir(path.join(telemetryDir, "corrupt"));
       expect(quarantinedFiles).toHaveLength(1);
       expect(quarantinedFiles[0]).toContain("broken.json");

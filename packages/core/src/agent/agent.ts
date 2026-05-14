@@ -140,7 +140,7 @@ export class Agent {
       } catch (error) {
         session.metadata.planError = error instanceof Error ? error.message : String(error);
         // Continue without plan if planning fails
-        console.warn(`Task planning failed: ${session.metadata.planError}. Continuing without structured plan.`);
+        this.eventBus.emit("app:warn", { message: `Task planning failed: ${session.metadata.planError}. Continuing without structured plan.` });
       }
     }
 

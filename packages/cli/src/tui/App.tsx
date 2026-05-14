@@ -291,7 +291,7 @@ export function App(props: AppProps) {
           setRecentModels(savedState.modals.recentModels ?? []);
         }
 
-        const collector = new TelemetryCollector({ worktree: props.cwd });
+        const collector = new TelemetryCollector({ worktree: props.cwd, events: created.events });
         await collector.init();
         setTelemetryCollector(collector);
         telemetryRef.current = collector;

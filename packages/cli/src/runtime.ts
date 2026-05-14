@@ -45,7 +45,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
     options.interactive,
   );
   const cache = new ToolCache(worktree, config);
-  const sessions = new SessionManager(worktree);
+  const sessions = new SessionManager(worktree, events);
   await sessions.loadAll();
   const providers = new ProviderManager(config);
   const tools = createDefaultToolRegistry();

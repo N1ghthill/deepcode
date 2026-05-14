@@ -7,9 +7,11 @@ import {
   SessionTelemetrySchema,
   writeFileAtomic,
 } from "@deepcode/shared";
+import type { EventBus } from "../events/event-bus.js";
 
 export interface TelemetryCollectorOptions {
   worktree: string;
+  events?: EventBus;
 }
 
 export interface ProviderStats {
@@ -41,10 +43,12 @@ export class TelemetryCollector {
   private readonly worktree: string;
   private readonly telemetryDir: string;
   private readonly sessions = new Map<string, SessionTelemetry>();
+  private readonly events?: EventBus;
 
   constructor(options: TelemetryCollectorOptions) {
     this.worktree = options.worktree;
     this.telemetryDir = path.join(this.worktree, ".deepcode", "telemetry");
+    this.events = options.events;
   }
 
   async init(): Promise<void> {
@@ -328,7 +332,9 @@ export class TelemetryCollector {
       await writeFileAtomic(filePath, `${JSON.stringify(session, null, 2)}\n`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to persist telemetry for session ${sessionId}: ${message}`);
+      this.events?.emit("app:error", {
+        error: new Error(`Failed to persist telemetry for session ${sessionId}: ${message}`),
+      });
     }
   }
 
@@ -347,16 +353,16 @@ export class TelemetryCollector {
             this.sessions.set(result.data.sessionId, result.data);
           } else {
             const quarantined = await quarantineFileIfPossible(filePath);
-            console.warn(
-              `Skipping corrupted telemetry file ${file}: ${result.error.message}${quarantined ? ` (moved to ${quarantined})` : ""}`,
-            );
+            this.events?.emit("app:warn", {
+              message: `Skipping corrupted telemetry file ${file}: ${result.error.message}${quarantined ? ` (moved to ${quarantined})` : ""}`,
+            });
           }
         } catch (parseError) {
           const filePath = path.join(this.telemetryDir, file);
           const quarantined = await quarantineFileIfPossible(filePath);
-          console.warn(
-            `Skipping unreadable telemetry file ${file}: ${parseError instanceof Error ? parseError.message : String(parseError)}${quarantined ? ` (moved to ${quarantined})` : ""}`,
-          );
+          this.events?.emit("app:warn", {
+            message: `Skipping unreadable telemetry file ${file}: ${parseError instanceof Error ? parseError.message : String(parseError)}${quarantined ? ` (moved to ${quarantined})` : ""}`,
+          });
         }
       }
     } catch (error) {
@@ -364,7 +370,7 @@ export class TelemetryCollector {
         return;
       }
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to load telemetry: ${message}`);
+      this.events?.emit("app:error", { error: new Error(`Failed to load telemetry: ${message}`) });
     }
   }
 }

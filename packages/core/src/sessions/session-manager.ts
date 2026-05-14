@@ -10,11 +10,15 @@ import {
   type Session,
   writeFileAtomic,
 } from "@deepcode/shared";
+import type { EventBus } from "../events/event-bus.js";
 
 export class SessionManager {
   private readonly sessions = new Map<string, Session>();
 
-  constructor(private readonly worktree: string) {}
+  constructor(
+    private readonly worktree: string,
+    private readonly events?: EventBus,
+  ) {}
 
   create(input: { provider: ProviderId; model?: string }): Session {
     const now = nowIso();
@@ -84,14 +88,14 @@ export class SessionManager {
             continue;
           }
           const quarantined = await quarantineFileIfPossible(filePath);
-          console.warn(
-            `Skipping corrupted session file ${entry}: ${result.error.message}${quarantined ? ` (moved to ${quarantined})` : ""}`,
-          );
+          this.events?.emit("app:warn", {
+            message: `Skipping corrupted session file ${entry}: ${result.error.message}${quarantined ? ` (moved to ${quarantined})` : ""}`,
+          });
         } catch (error) {
           const quarantined = await quarantineFileIfPossible(filePath);
-          console.warn(
-            `Skipping unreadable session file ${entry}: ${error instanceof Error ? error.message : String(error)}${quarantined ? ` (moved to ${quarantined})` : ""}`,
-          );
+          this.events?.emit("app:warn", {
+            message: `Skipping unreadable session file ${entry}: ${error instanceof Error ? error.message : String(error)}${quarantined ? ` (moved to ${quarantined})` : ""}`,
+          });
         }
       }
       for (const session of loaded) this.sessions.set(session.id, session);
