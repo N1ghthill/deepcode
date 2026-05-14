@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,8 +10,10 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const bin = path.join(appRoot, "dist", "index.js");
 let tempDir: string | undefined;
 const localBindingSupported = await canBindLocalBinding();
+const gitHttpBackendSupported = localBindingSupported && await canUseGitHttpBackend();
 const describeWithLocalBinding = localBindingSupported ? describe : describe.skip;
 const itWithLocalBinding = localBindingSupported ? it : it.skip;
+const describeWithGitHttpBackend = gitHttpBackendSupported ? describe : describe.skip;
 
 afterEach(async () => {
   if (tempDir) {
@@ -705,7 +707,7 @@ describeWithLocalBinding("deepcode run with mock LLM", () => {
 
 // ── github solve E2E ─────────────────────────────────────────────────────────
 
-describeWithLocalBinding("deepcode github solve", () => {
+describeWithGitHttpBackend("deepcode github solve", () => {
   it("creates branch, runs agent, commits, pushes, and creates PR for an issue", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-solve-"));
 
@@ -865,6 +867,15 @@ async function startGitHttpServer(projectRoot: string): Promise<GitHttpServer> {
     url: `http://127.0.0.1:${address.port}`,
     close: () => new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
   };
+}
+
+async function canUseGitHttpBackend(): Promise<boolean> {
+  try {
+    await access(GIT_HTTP_BACKEND);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function canBindLocalBinding(): Promise<boolean> {
