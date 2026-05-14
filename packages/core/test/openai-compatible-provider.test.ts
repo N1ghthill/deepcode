@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ProviderError } from "../src/errors.js";
 import { OpenAICompatibleProvider } from "../src/providers/openai-compatible-provider.js";
 
 afterEach(() => {
@@ -173,6 +174,61 @@ describe("OpenAICompatibleProvider", () => {
     const callArgs = fetchSpy.mock.calls[0] as [string, RequestInit] | undefined;
     const body = JSON.parse(String(callArgs?.[1]?.body ?? "{}"));
     expect(body.thinking).toEqual({ type: "disabled" });
+  });
+
+  it("sets statusCode and retryAfterMs on ProviderError for 429 responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ error: { message: "rate limit" } }), {
+          status: 429,
+          headers: { "retry-after": "30" },
+        }),
+      ),
+    );
+
+    const provider = new OpenAICompatibleProvider({
+      id: "openrouter",
+      name: "OpenRouter",
+      defaultBaseUrl: "https://openrouter.ai/api/v1",
+      defaultModel: "test-model",
+      config: { apiKey: "test-key" },
+    });
+
+    let caught: unknown;
+    try {
+      for await (const _ of provider.chat([], {})) { void _; }
+    } catch (e) { caught = e; }
+
+    expect(caught).toBeInstanceOf(ProviderError);
+    expect((caught as ProviderError).statusCode).toBe(429);
+    expect((caught as ProviderError).retryAfterMs).toBe(30_000);
+  });
+
+  it("sets statusCode on ProviderError for 401 responses without retryAfterMs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ error: { message: "unauthorized" } }), { status: 401 }),
+      ),
+    );
+
+    const provider = new OpenAICompatibleProvider({
+      id: "openai",
+      name: "OpenAI",
+      defaultBaseUrl: "https://api.openai.com/v1",
+      defaultModel: "gpt-4.1",
+      config: { apiKey: "bad-key" },
+    });
+
+    let caught: unknown;
+    try {
+      for await (const _ of provider.chat([], {})) { void _; }
+    } catch (e) { caught = e; }
+
+    expect(caught).toBeInstanceOf(ProviderError);
+    expect((caught as ProviderError).statusCode).toBe(401);
+    expect((caught as ProviderError).retryAfterMs).toBeUndefined();
   });
 
   it("normalizes provider-specific model identifiers before sending the request", async () => {

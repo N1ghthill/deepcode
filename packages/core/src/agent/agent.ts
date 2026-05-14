@@ -1440,7 +1440,12 @@ function resolveExecutionTarget(
     ?? (provider === session.provider ? session.model : undefined)
     ?? resolveConfiguredModelForProvider(config, provider);
 
-  if (hasProviderCredentials(config.providers[provider]) && model) {
+  // Explicit provider/model from modeDefaults or caller — honour without credential check
+  if ((explicitProvider || modeOverride?.provider) && model) {
+    return { provider, model };
+  }
+
+  if (hasProviderCredentials(config.providers[provider], provider) && model) {
     return { provider, model };
   }
 

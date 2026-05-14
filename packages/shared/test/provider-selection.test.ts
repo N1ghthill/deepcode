@@ -67,6 +67,8 @@ function createConfig(overrides: Partial<DeepCodeConfig> = {}): DeepCodeConfig {
       openai: {},
       deepseek: {},
       opencode: {},
+      groq: {},
+      ollama: {},
       ...providers,
     },
     permissions: {

@@ -586,6 +586,8 @@ function createProvidersConfig(
     openai: {},
     deepseek: {},
     opencode: {},
+    groq: {},
+    ollama: {},
     ...overrides,
   };
 }
