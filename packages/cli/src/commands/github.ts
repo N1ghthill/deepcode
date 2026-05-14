@@ -303,6 +303,63 @@ export async function solveIssueCommand(
   await writeStdoutLine(`PR created: ${pr.url}`);
 }
 
+export async function reviewPrCommand(
+  prNumber: number,
+  options: { cwd: string; config?: string; focus?: string[] },
+): Promise<void> {
+  const runtime = await createRuntime({
+    cwd: options.cwd,
+    configPath: options.config,
+    interactive: false,
+  });
+
+  const client = new GitHubClient({
+    token: runtime.config.github.token,
+    enterpriseUrl: runtime.config.github.enterpriseUrl,
+    worktree: options.cwd,
+  });
+  const repo = await client.detectRepo();
+  const [pr, diff] = await Promise.all([
+    client.getPullRequest({ ...repo, number: prNumber }),
+    client.getPullRequestDiff({ ...repo, number: prNumber }),
+  ]);
+
+  const focusLine =
+    options.focus && options.focus.length > 0
+      ? `\nFocus areas: ${options.focus.join(", ")}.`
+      : "";
+
+  const prompt = [
+    `Review PR #${pr.number}: ${pr.title}`,
+    `Branch: ${pr.head ?? "?"} → ${pr.base ?? "?"}`,
+    "",
+    pr.body ? `Description:\n${pr.body}` : "No description provided.",
+    "",
+    `Diff:\n\`\`\`diff\n${diff}\n\`\`\``,
+    "",
+    `Produce a structured code review with:${focusLine}`,
+    "1. **Summary** — what the PR does",
+    "2. **Issues** — bugs, security concerns, performance problems",
+    "3. **Suggestions** — improvements and nitpicks",
+    "4. **Verdict** — Approve / Request Changes / Neutral with a one-line rationale",
+  ].join("\n");
+
+  const target = resolveUsableProviderTarget(runtime.config, [runtime.config.defaultProvider]);
+  const session = runtime.sessions.create({
+    provider: target.provider,
+    model: target.model,
+  });
+  const secretValues = collectSecretValues(runtime.config);
+
+  await writeStdoutLine(`Reviewing PR #${pr.number}: ${pr.title}`);
+  await runtime.agent.run({
+    session,
+    input: prompt,
+    onChunk: (text) => void writeStdout(redactText(text, secretValues)),
+  });
+  await writeStdout("\n");
+}
+
 async function runGit(cwd: string, args: string[]) {
   const result = await execFileAsync("git", args, { cwd, timeoutMs: 180_000 });
   if (result.exitCode !== 0) {

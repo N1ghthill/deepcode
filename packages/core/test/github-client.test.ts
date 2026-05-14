@@ -206,6 +206,36 @@ describeWithLocalBinding("GitHubClient", () => {
     expect(requests[2]?.body).toEqual({ merge_method: "squash" });
   });
 
+  it("fetches a pull request diff", async () => {
+    const requests: Array<{ method: string; url: string; accept: string }> = [];
+    const server = createServer((request, response) => {
+      requests.push({
+        method: request.method ?? "GET",
+        url: request.url ?? "",
+        accept: request.headers.accept ?? "",
+      });
+      handleGitHubApi(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Unable to bind local GitHub test server");
+    const enterpriseUrl = `http://127.0.0.1:${address.port}`;
+    const client = new GitHubClient({ token: "test-token", enterpriseUrl, worktree: process.cwd() });
+
+    try {
+      const diff = await client.getPullRequestDiff({ owner: "acme", repo: "project", number: 2 });
+      expect(diff).toContain("diff --git");
+      expect(diff).toContain("+added line");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.method).toBe("GET");
+    expect(requests[0]?.url).toBe("/api/v3/repos/acme/project/pulls/2");
+    expect(requests[0]?.accept).toBe("application/vnd.github.diff");
+  });
+
   it("detects repository coordinates from a temporary git repository", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-github-"));
     await execFileAsync("git", ["init"], { cwd: tempDir, timeoutMs: 10_000 });
@@ -452,6 +482,11 @@ function handleGitHubApi(request: IncomingMessage, response: ServerResponse): vo
       ]);
       return;
     case "GET /api/v3/repos/acme/project/pulls/2":
+      if (request.headers.accept === "application/vnd.github.diff") {
+        response.writeHead(200, { "content-type": "text/x-patch" });
+        response.end("diff --git a/src/foo.ts b/src/foo.ts\n+added line\n");
+        return;
+      }
       sendJson(response, {
         number: 2,
         title: "Fix",

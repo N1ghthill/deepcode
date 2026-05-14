@@ -20,6 +20,7 @@ import {
   listIssuesCommand,
   listPrsCommand,
   mergePrCommand,
+  reviewPrCommand,
   solveIssueCommand,
 } from "./commands/github.js";
 import { runCommand } from "./commands/run.js";
@@ -227,6 +228,27 @@ export function createProgram(): Command {
     .option("--base <base>", "base branch", "main")
     .action(async (options: { title: string; body: string; head: string; base: string }) => {
       await createPrCommand(options, { cwd: program.opts().cwd, config: program.opts().config });
+    });
+  github
+    .command("review")
+    .description("AI code review of a pull request")
+    .argument("<number>", "PR number")
+    .option(
+      "--focus <area>",
+      "focus area: security, performance, correctness, style; repeat for multiple",
+      collectOption,
+      [],
+    )
+    .action(async (number: string, options: { focus: string[] }) => {
+      const prNumber = Number.parseInt(number, 10);
+      if (!Number.isInteger(prNumber) || prNumber <= 0) {
+        throw new Error(`Invalid PR number: ${number}`);
+      }
+      await reviewPrCommand(prNumber, {
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+        focus: options.focus,
+      });
     });
   github
     .command("solve")

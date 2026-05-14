@@ -103,6 +103,16 @@ export class GitHubClient {
     }));
   }
 
+  async getPullRequestDiff(input: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<string> {
+    return this.requestText(`/repos/${input.owner}/${input.repo}/pulls/${input.number}`, {
+      headers: { accept: "application/vnd.github.diff" },
+    });
+  }
+
   async getPullRequest(input: {
     owner: string;
     repo: string;
@@ -200,6 +210,27 @@ export class GitHubClient {
     }
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
+  }
+
+  private async requestText(path: string, init: RequestInit = {}): Promise<string> {
+    if (!this.options.token) {
+      throw new Error(
+        "GitHub token is required. Set GITHUB_TOKEN or .deepcode/config.json github.token.",
+      );
+    }
+    const response = await fetch(`${this.apiBase}${path}`, {
+      ...init,
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${this.options.token}`,
+        "x-github-api-version": "2022-11-28",
+        ...init.headers,
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`GitHub request failed: ${response.status} ${await response.text()}`);
+    }
+    return response.text();
   }
 }
 
