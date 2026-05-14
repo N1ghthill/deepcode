@@ -25,6 +25,12 @@ const DIRECT_SHELL_COMMAND_PATTERN = /^(?:ls|dir|pwd|date|tree|find|rg|grep|cat|
 const DIRECT_UTILITY_PATH_PATTERN = /(?:^|\s)(?:~\/|\.{1,2}\/|\/)[^\s]*/;
 const DIRECT_UTILITY_VERB_PATTERN = /\b(?:list|lista|liste|listar|mostre|mostrar|show|display|open|abrir|abra|read|leia|print|imprima|exiba)\b/i;
 const DATE_TIME_QUESTION_PATTERN = /\b(?:que dia e hoje|que dia é hoje|data de hoje|dia de hoje|what day is it|what day is today|today'?s date|current date|que horas sao|que horas são|hora atual|current time|what time is it)\b/i;
+// Shell-style single-step commands (bypass planning phase)
+const SIMPLE_SHELL_COMMAND_PATTERN = /^(?:mkdir|touch|rmdir|cp|mv|chmod|chown|echo|ln|git\s+(?:init|clone|add|commit|push|pull|checkout|branch|stash|tag))\b/i;
+// Action verbs for single-step natural-language commands (after normalization)
+const SIMPLE_ACTION_VERB_RE = /^(?:cria|crie|criar|apaga|apague|apagar|deleta|delete|deletar|remove|mova|move|renomeia|renomeie|renomear|create|rename|mkdir|make)\b/;
+// Compound connectors that indicate multi-step intent
+const COMPOUND_CONNECTOR_RE = /\b(?:entao|depois|tambem|alem|seguida|and then|also|afterwards|next step|subsequently)\b/;
 
 export function resolveTurnStrategy(
   input: string,
@@ -35,7 +41,7 @@ export function resolveTurnStrategy(
     if (policy.mode === "always-tools") {
       return {
         allowTools: true,
-        shouldPlan: true,
+        shouldPlan: false,
         systemPrompt: BUILD_SYSTEM_PROMPT_ALWAYS_TOOLS,
         kind: "task",
       };
@@ -56,6 +62,15 @@ export function resolveTurnStrategy(
         shouldPlan: false,
         systemPrompt: UTILITY_SYSTEM_PROMPT,
         kind: "utility",
+      };
+    }
+
+    if (isSimpleDirectCommand(input)) {
+      return {
+        allowTools: true,
+        shouldPlan: false,
+        systemPrompt: BUILD_SYSTEM_PROMPT,
+        kind: "task",
       };
     }
 
@@ -288,4 +303,15 @@ function normalizeTurnInput(input: string): string {
 
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isSimpleDirectCommand(input: string): boolean {
+  const trimmed = input.trim();
+  if (SIMPLE_SHELL_COMMAND_PATTERN.test(trimmed)) return true;
+
+  const normalized = normalizeTurnInput(trimmed);
+  if (!SIMPLE_ACTION_VERB_RE.test(normalized)) return false;
+  if (COMPOUND_CONNECTOR_RE.test(normalized)) return false;
+
+  return normalized.split(/\s+/).length <= 20;
 }

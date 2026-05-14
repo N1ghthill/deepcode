@@ -30,7 +30,7 @@ export type AgentMode = z.infer<typeof AgentModeSchema>;
 export const ToolChoiceModeSchema = z.enum(["auto", "required", "none"]);
 export type ToolChoiceMode = z.infer<typeof ToolChoiceModeSchema>;
 
-export const BuildTurnPolicyModeSchema = z.enum(["heuristic", "always-tools"]).default("heuristic");
+export const BuildTurnPolicyModeSchema = z.enum(["heuristic", "always-tools"]).default("always-tools");
 export type BuildTurnPolicyMode = z.infer<typeof BuildTurnPolicyModeSchema>;
 
 export const ToolCallSchema = z.object({
@@ -296,7 +296,7 @@ export const DeepCodeConfigSchema = z
     maxIterations: z.number().int().positive().default(20),
     providerRetries: z.number().int().min(0).max(5).default(2),
     temperature: z.number().min(0).max(2).default(0.2),
-    maxTokens: z.number().int().positive().default(4096),
+    maxTokens: z.number().int().positive().default(2048),
     cache: z
       .object({
         enabled: z.boolean().default(true),

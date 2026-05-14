@@ -246,10 +246,11 @@ describe("Agent tool loop", () => {
 
     const output = await agent.run({ session, input: "oi" });
 
-    expect(output).toContain("All tasks completed successfully");
+    // always-tools now skips planning and runs executeTraditional directly,
+    // but still forces tool use even for conversational inputs
+    expect(output).toContain("echo:hello");
     expect(session.messages.some((message) => message.role === "tool")).toBe(true);
     expect(session.activities.some((activity) => activity.metadata?.tool === "echo_tool")).toBe(true);
-    expect(fakeProvider.calls.some((call) => call.some((message) => message.source === "agent_internal"))).toBe(true);
   });
 
   it("forces required tool choice on the first planned task turn for gpt-family models", async () => {

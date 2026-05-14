@@ -42,6 +42,7 @@ import {
 } from "./context-manager.js";
 import { SessionBudget } from "./token-budget.js";
 import {
+  XmlToolCallStreamFilter,
   applyFallbackToolCallParsing,
   buildFallbackToolCallPrompt,
   compactToolDescription,
@@ -140,7 +141,7 @@ export class Agent {
         plan = await this.planner.plan(options.input, (prompt) =>
           planningProvider.complete(prompt, {
             model: resolvedModel,
-            maxTokens: Math.min(this.config.maxTokens, 2048),
+            maxTokens: Math.min(this.config.maxTokens, 512),
             temperature: 0,
             signal: options.signal,
           }),
@@ -334,11 +335,15 @@ Execute this task using the available tools. Return a summary of what was done.`
 
       let assistantText = "";
       const toolCalls: ToolCall[] = [];
+      const xmlFilter = textToolFallbackEnabled ? new XmlToolCallStreamFilter() : null;
 
       for await (const chunk of chunks) {
         if (chunk.type === "delta") {
           assistantText += chunk.content;
-          if (!textToolFallbackEnabled) {
+          if (textToolFallbackEnabled) {
+            const visible = xmlFilter!.filter(chunk.content);
+            if (visible) options.onChunk?.(visible);
+          } else {
             options.onChunk?.(chunk.content);
           }
         }
@@ -351,6 +356,11 @@ Execute this task using the available tools. Return a summary of what was done.`
         }
       }
 
+      if (textToolFallbackEnabled) {
+        const flushed = xmlFilter!.flush();
+        if (flushed) options.onChunk?.(flushed);
+      }
+
       const turnResult = textToolFallbackEnabled
         ? applyFallbackToolCallParsing(assistantText, toolCalls, allowedToolNames)
         : { assistantText, toolCalls };
@@ -358,10 +368,6 @@ Execute this task using the available tools. Return a summary of what was done.`
       const nextToolCalls = [...turnResult.toolCalls];
       toolCalls.length = 0;
       toolCalls.push(...nextToolCalls);
-
-      if (textToolFallbackEnabled && assistantText) {
-        options.onChunk?.(assistantText);
-      }
 
       if (assistantText.trim() || toolCalls.length > 0) {
         this.sessions.addMessage(session.id, {
@@ -460,10 +466,17 @@ Execute this task using the available tools. Return a summary of what was done.`
 
       let assistantText = "";
       const toolCalls: ToolCall[] = [];
+      const xmlFilter = textToolFallbackEnabled ? new XmlToolCallStreamFilter() : null;
       for await (const chunk of chunks) {
         if (chunk.type === "delta") {
           assistantText += chunk.content;
-          if (!textToolFallbackEnabled) {
+          if (textToolFallbackEnabled) {
+            const visible = xmlFilter!.filter(chunk.content);
+            if (visible) {
+              finalText += visible;
+              options.onChunk?.(visible);
+            }
+          } else {
             finalText += chunk.content;
             options.onChunk?.(chunk.content);
           }
@@ -477,6 +490,14 @@ Execute this task using the available tools. Return a summary of what was done.`
         }
       }
 
+      if (textToolFallbackEnabled) {
+        const flushed = xmlFilter!.flush();
+        if (flushed) {
+          finalText += flushed;
+          options.onChunk?.(flushed);
+        }
+      }
+
       const turnResult = textToolFallbackEnabled
         ? applyFallbackToolCallParsing(assistantText, toolCalls, allowedToolNames)
         : { assistantText, toolCalls };
@@ -484,11 +505,6 @@ Execute this task using the available tools. Return a summary of what was done.`
       const nextToolCalls = [...turnResult.toolCalls];
       toolCalls.length = 0;
       toolCalls.push(...nextToolCalls);
-
-      if (textToolFallbackEnabled && assistantText) {
-        finalText += assistantText;
-        options.onChunk?.(assistantText);
-      }
 
       if (assistantText.trim() || toolCalls.length > 0) {
         this.sessions.addMessage(session.id, {
@@ -709,7 +725,7 @@ Execute this task using the available tools. Return a summary of what was done.`
 
   private allowedToolNamesForTaskType(mode: AgentMode, taskType?: Task["type"]): Set<string> {
     if (taskType === "research") return new Set([...PLAN_ALLOWED_TOOLS]);
-    if (taskType === "verify") return new Set(["read_file", "analyze_code", "search_text"]);
+    if (taskType === "verify") return new Set(["read_file", "list_dir", "analyze_code", "search_text", "bash"]);
     return this.allowedToolNamesForMode(mode);
   }
 

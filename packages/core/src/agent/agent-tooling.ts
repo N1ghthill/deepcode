@@ -4,6 +4,54 @@ import type { ToolSchemaMode } from "../providers/model-execution-profile.js";
 
 const MAX_TOOL_OUTPUT_LENGTH = 16_000;
 
+const TOOL_CALL_OPEN = "<tool_call>";
+const TOOL_CALL_CLOSE = "</tool_call>";
+
+/**
+ * Filters out <tool_call>...</tool_call> XML from a streaming response so that
+ * visible text can be forwarded to the UI in real-time without exposing raw XML.
+ * Maintains internal state across chunks to handle boundaries correctly.
+ */
+export class XmlToolCallStreamFilter {
+  private buffer = "";
+  private inToolCall = false;
+
+  filter(text: string): string {
+    this.buffer += text;
+    let result = "";
+
+    while (true) {
+      if (!this.inToolCall) {
+        const start = this.buffer.indexOf(TOOL_CALL_OPEN);
+        if (start === -1) {
+          // No tool_call opener — emit everything except a boundary-guard tail
+          const safe = Math.max(0, this.buffer.length - TOOL_CALL_OPEN.length);
+          result += this.buffer.slice(0, safe);
+          this.buffer = this.buffer.slice(safe);
+          break;
+        }
+        result += this.buffer.slice(0, start);
+        this.buffer = this.buffer.slice(start);
+        this.inToolCall = true;
+      } else {
+        const end = this.buffer.indexOf(TOOL_CALL_CLOSE);
+        if (end === -1) break;
+        this.buffer = this.buffer.slice(end + TOOL_CALL_CLOSE.length);
+        this.inToolCall = false;
+      }
+    }
+
+    return result;
+  }
+
+  flush(): string {
+    if (this.inToolCall) return "";
+    const result = this.buffer.trim();
+    this.buffer = "";
+    return result;
+  }
+}
+
 export function compactToolDescription(description: string, schemaMode: ToolSchemaMode): string {
   const maxLength = schemaMode === "full" ? 240 : schemaMode === "compact" ? 140 : 96;
   if (description.length <= maxLength) {
