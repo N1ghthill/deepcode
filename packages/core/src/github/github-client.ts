@@ -144,7 +144,7 @@ export class GitHubClient {
 }
 
 export function parseGitHubRemote(remote: string): { owner: string; repo: string } {
-  const https = remote.match(/^https:\/\/[^/]+\/([^/]+)\/(.+?)(?:\.git)?$/);
+  const https = remote.match(/^https?:\/\/[^/]+\/([^/]+)\/(.+?)(?:\.git)?$/);
   if (https) return { owner: https[1]!, repo: https[2]! };
   const ssh = remote.match(/^git@[^:]+:([^/]+)\/(.+?)(?:\.git)?$/);
   if (ssh) return { owner: ssh[1]!, repo: ssh[2]! };
