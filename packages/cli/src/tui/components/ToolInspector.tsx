@@ -25,6 +25,28 @@ function formatValue(v: unknown, max = 60): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
+function toolIcon(name: string): string {
+  if (name === "bash" || name === "shell" || name.includes("bash")) return "⚡";
+  if (name.includes("read") || name.includes("file")) return "📄";
+  if (name.includes("write") || name.includes("edit")) return "✏";
+  if (name.includes("search") || name.includes("grep")) return "🔍";
+  if (name.includes("git")) return "⎇";
+  if (name.includes("web") || name.includes("fetch")) return "🌐";
+  return "◆";
+}
+
+function toolPreview(name: string, args: Record<string, unknown>): string {
+  if (name === "bash" || name === "shell") {
+    const cmd = args.command ?? args.cmd ?? args.input;
+    return typeof cmd === "string" ? cmd.slice(0, 40) : "";
+  }
+  const path = args.path ?? args.file_path ?? args.filePath ?? args.filename;
+  if (typeof path === "string") return path.split("/").slice(-2).join("/");
+  const query = args.query ?? args.pattern ?? args.search ?? args.command;
+  if (typeof query === "string") return query.slice(0, 40);
+  return "";
+}
+
 export function ToolInspector({
   toolCalls,
   toolExecuting,
@@ -55,13 +77,13 @@ export function ToolInspector({
 
   let parsedArgs: Record<string, unknown> = {};
   try { parsedArgs = JSON.parse(selected?.args ?? "{}"); } catch { /* ignore */ }
+  const preview = selected ? toolPreview(selected.name, parsedArgs) : "";
 
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1}>
-      {/* Header */}
       <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
         <Text bold color={theme.primary}>{t("toolInspectorTitle")}</Text>
-        <Text color={theme.fgMuted} dimColor>{t("toolInspectorHint")}</Text>
+        <Text color={theme.fgMuted} dimColor>{toolCalls.length > 0 ? `${toolCalls.length}` : ""}</Text>
       </Box>
 
       {toolCalls.length === 0 ? (
@@ -70,36 +92,53 @@ export function ToolInspector({
         </Text>
       ) : (
         <>
-          {/* Tool list */}
           <Box flexDirection="column" marginBottom={1}>
             {visible.map((tc, i) => {
               const absIdx = windowStart + i;
               const sel = absIdx === clamped;
               const done = tc.result !== undefined;
+              const running = toolExecuting && absIdx === toolCalls.length - 1;
+              let tcArgs: Record<string, unknown> = {};
+              try { tcArgs = JSON.parse(tc.args ?? "{}"); } catch { /* ignore */ }
+              const linePreview = toolPreview(tc.name, tcArgs);
               return (
-                <Box key={tc.id} flexDirection="row" gap={1}>
-                  <Text color={sel ? theme.primary : theme.fgMuted}>{sel ? "▶" : " "}</Text>
-                  <Text color={done ? theme.success : theme.warning}>
-                    {done ? "✓" : toolExecuting && absIdx === toolCalls.length - 1 ? "…" : "○"}
-                  </Text>
-                  <Text color={sel ? theme.fg : theme.fgMuted} bold={sel}>
-                    {tc.name}
-                  </Text>
+                <Box key={tc.id} flexDirection="column">
+                  <Box flexDirection="row" gap={1}>
+                    <Text color={done ? theme.success : running ? theme.warning : theme.fgMuted}>
+                      {done ? "✓" : running ? "…" : "○"}
+                    </Text>
+                    <Text color={theme.accent}>{toolIcon(tc.name)}</Text>
+                    <Text color={sel ? theme.fg : theme.fgMuted} bold={sel}>
+                      {tc.name}
+                    </Text>
+                    {linePreview && (
+                      <Text color={theme.fgMuted} dimColor wrap="truncate">
+                        {linePreview}
+                      </Text>
+                    )}
+                  </Box>
                 </Box>
               );
             })}
           </Box>
 
-          {/* Selected detail */}
           {selected && (
             <Box flexDirection="column" borderStyle="single" borderColor={theme.border} paddingX={1}>
-              <Text bold color={theme.fg}>{selected.name}</Text>
-              <Text> </Text>
+              <Box flexDirection="row" gap={1}>
+                <Text color={theme.accent}>{toolIcon(selected.name)}</Text>
+                <Text bold color={theme.fg}>{selected.name}</Text>
+              </Box>
 
-              {Object.entries(parsedArgs).slice(0, 5).map(([k, v]) => (
+              {preview && (
+                <Box marginTop={1}>
+                  <Text color={theme.warning} wrap="wrap">{preview}</Text>
+                </Box>
+              )}
+
+              {Object.entries(parsedArgs).slice(0, 4).map(([k, v]) => (
                 <Box key={k} flexDirection="row" gap={1}>
-                  <Text color={theme.accent}>{k}:</Text>
-                  <Text color={theme.fgMuted} wrap="truncate">{formatValue(v)}</Text>
+                  <Text color={theme.fgMuted}>{k}:</Text>
+                  <Text color={theme.fgMuted} dimColor wrap="truncate">{formatValue(v)}</Text>
                 </Box>
               ))}
 
@@ -108,7 +147,7 @@ export function ToolInspector({
                   <Text> </Text>
                   <Text bold color={theme.fg}>{t("toolInspectorResult")}</Text>
                   <Text color={theme.fgMuted} wrap="wrap">
-                    {formatValue(selected.result, 300)}
+                    {formatValue(selected.result, 200)}
                   </Text>
                 </>
               )}

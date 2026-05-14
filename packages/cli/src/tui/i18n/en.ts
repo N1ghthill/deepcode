@@ -404,7 +404,7 @@ export const en = {
   modelSelectorFree: "free",
   emptyChatSlashHint: "/provider \u2022 /model \u2022 /config \u2022 /help",
   deepCodeLabel: "DeepCode",
-  scrollHint: "PgUp/PgDn to scroll",
+  scrollHint: "PgUp/PgDn · Ctrl+↑/↓ to scroll",
   normalModeIndicator: "NORMAL",
   normalModeHint: "press i to insert",
   streamingIndicator: "generating...",

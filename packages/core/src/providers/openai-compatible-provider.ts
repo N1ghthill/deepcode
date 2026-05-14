@@ -245,11 +245,19 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   private async fetchJson(url: string, init: RequestInit): Promise<Response> {
+    const connectionTimeout = AbortSignal.timeout(30_000);
+    const signal = init.signal
+      ? AbortSignal.any([init.signal, connectionTimeout])
+      : connectionTimeout;
     try {
-      return await fetch(url, init);
+      return await fetch(url, { ...init, signal });
     } catch (error) {
       if (isAbortError(error)) {
-        throw new ProviderError(`${this.name} request timed out or was cancelled`, this.id, error);
+        const timedOut = connectionTimeout.aborted;
+        const msg = timedOut
+          ? `${this.name} connection timed out after 30s. Check the provider URL and network connectivity.`
+          : `${this.name} request timed out or was cancelled`;
+        throw new ProviderError(msg, this.id, error);
       }
       const message = `${this.name} network request failed: ${error instanceof Error ? error.message : String(error)}`;
       throw new ProviderError(redactText(message, this.secretValues()), this.id, error);

@@ -19,11 +19,10 @@ export interface UIStoreState {
   resizePanel: (direction: "left" | "right") => void;
 }
 
-// Detail panel is hidden by default — revealed by /timeline, /diff, Ctrl+L
 const DEFAULT_PANELS: Record<PanelId, UIPanelState> = {
-  context: { widthPercent: 28, collapsed: false },
-  execution: { widthPercent: 44, collapsed: false },
-  detail: { widthPercent: 28, collapsed: true },
+  context: { widthPercent: 22, collapsed: false },
+  execution: { widthPercent: 50, collapsed: false },
+  detail: { widthPercent: 28, collapsed: false },
 };
 
 const MIN_WIDTH = 15;

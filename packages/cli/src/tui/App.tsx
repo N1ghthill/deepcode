@@ -732,7 +732,7 @@ export function App(props: AppProps) {
   }
 
   const activeApproval = approvals[0];
-  const hasParallelTasks = Object.keys(taskBuffers).length > 1;
+  const hasParallelTasks = Object.keys(taskBuffers).length > 0;
 
   const approvalHasDiff = Boolean(activeApproval?.diff);
 
@@ -776,7 +776,7 @@ export function App(props: AppProps) {
       toolCalls={toolCalls}
       toolExecuting={toolExecuting}
       theme={theme}
-      isActive={detailContent === "none" && !activeModal}
+      isActive={false}
       onClose={() => useUIStore.getState().closePanel("detail")}
     />
   );

@@ -58,8 +58,8 @@ export function useVirtualScroll<T>(
 
   useInput(
     (inputChar, key) => {
-      if (key.pageUp) { scrollUp(); return; }
-      if (key.pageDown) { scrollDown(); return; }
+      if (key.pageUp || (key.ctrl && key.upArrow)) { scrollUp(); return; }
+      if (key.pageDown || (key.ctrl && key.downArrow)) { scrollDown(); return; }
 
       if (vimMode !== "normal") return;
 

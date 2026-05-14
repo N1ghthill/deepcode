@@ -415,7 +415,7 @@ export const ptBR: I18nDict = {
   modelSelectorFree: "gr\u00E1tis",
   emptyChatSlashHint: "/provider \u2022 /model \u2022 /config \u2022 /help",
   deepCodeLabel: "DeepCode",
-  scrollHint: "PgUp/PgDn para rolar",
+  scrollHint: "PgUp/PgDn · Ctrl+↑/↓ para rolar",
   normalModeIndicator: "NORMAL",
   normalModeHint: "pressione i para inserir",
   streamingIndicator: "gerando...",

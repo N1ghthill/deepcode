@@ -60,12 +60,8 @@ export function MessageList({
       )}
       {canScrollUp && (
         <Box flexDirection="row" gap={1} paddingX={1}>
-          <Text color={theme.fgMuted} dimColor>
-            ╴╴╴
-          </Text>
-          <Text color={theme.fgMuted} dimColor>
-            ↑ {t("scrollHint")}
-          </Text>
+          <Text color={theme.fgMuted}>╴╴╴</Text>
+          <Text color={theme.accent}>↑ {t("scrollHint")}</Text>
         </Box>
       )}
 
@@ -97,12 +93,8 @@ export function MessageList({
 
       {canScrollDown && (
         <Box flexDirection="row" gap={1} paddingX={1}>
-          <Text color={theme.fgMuted} dimColor>
-            ╴╴╴
-          </Text>
-          <Text color={theme.fgMuted} dimColor>
-            ↓ {t("scrollHint")}
-          </Text>
+          <Text color={theme.fgMuted}>╴╴╴</Text>
+          <Text color={theme.accent}>↓ {t("scrollHint")}</Text>
         </Box>
       )}
     </Box>

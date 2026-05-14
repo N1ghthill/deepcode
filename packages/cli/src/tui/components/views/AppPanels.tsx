@@ -431,35 +431,104 @@ export function ConfigEditor({
   );
 }
 
+const CMD_W = 20;
+const DESC_W = 44;
+
+function HelpRow({ keys, desc, theme, accent = false }: { keys: string; desc: string; theme: ThemeColors; accent?: boolean }) {
+  return (
+    <Box flexDirection="row">
+      <Box width={CMD_W} flexShrink={0}>
+        <Text color={accent ? theme.accent : theme.primary} bold={accent}>{keys}</Text>
+      </Box>
+      <Text color={theme.fgMuted}>{desc}</Text>
+    </Box>
+  );
+}
+
+function HelpSection({ label, theme }: { label: string; theme: ThemeColors }) {
+  return (
+    <Box flexDirection="row" gap={1} marginTop={1}>
+      <Text color={theme.accent} bold>▌</Text>
+      <Text color={theme.fg} bold>{label}</Text>
+    </Box>
+  );
+}
+
 export function HelpView({ theme }: { theme: ThemeColors }) {
   return (
-    <Box width="65%" flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
-      <Text bold>{t("help")}</Text>
-      <Text> </Text>
-      <Text bold>{t("commands")}</Text>
-      <Text>{t("helpCommand")}</Text>
-      <Text>{t("clearCommand")}</Text>
-      <Text>{t("newCommand")}</Text>
-      <Text>{t("sessionsCommand")}</Text>
-      <Text>{t("configCommand")}</Text>
-      <Text> </Text>
-      <Text bold>{t("generalShortcuts")}</Text>
-      <Text>{t("ctrlShortcuts")}</Text>
-      <Text>{t("ctrlHelpTelemetry")}</Text>
-      <Text>{t("numberTabs")}</Text>
-      <Text> </Text>
-      <Text bold>{t("vimBindingsChat")}</Text>
-      <Text>{t("vimInsertMode")}</Text>
-      <Text> </Text>
-      <Text bold>{t("vimBindingsConfig")}</Text>
-      <Text>{t("vimConfigNav")}</Text>
-      <Text> </Text>
-      <Text bold>{t("approvals")}</Text>
-      <Text>{t("approvalKeys")}</Text>
-      <Text> </Text>
-      <Text bold>{t("availableThemes")}</Text>
-      <Text>{themeNames.join(", ")}</Text>
-      <Text>{t("changeThemeHint")}</Text>
+    <Box flexDirection="column" borderStyle="single" paddingX={1} borderColor={theme.border}>
+      <Box flexDirection="row" gap={1}>
+        <Text color={theme.primary} bold>◆</Text>
+        <Text color={theme.fg} bold>Ajuda — DeepCode</Text>
+        <Text color={theme.fgMuted} dimColor>  Esc · Enter · q para fechar</Text>
+      </Box>
+
+      <HelpSection label="COMANDOS SLASH" theme={theme} />
+      <HelpRow keys="/help"          desc="Abre esta ajuda"                               theme={theme} />
+      <HelpRow keys="/provider"      desc="Configura provider e API key"                  theme={theme} />
+      <HelpRow keys="/model"         desc="Seleciona modelo ativo"                        theme={theme} />
+      <HelpRow keys="/mode plan"     desc="Modo PLAN — analisa sem editar arquivos"       theme={theme} />
+      <HelpRow keys="/mode build"    desc="Modo BUILD — edita, executa e valida"          theme={theme} />
+      <HelpRow keys="/config"        desc="Abre editor de configuração"                   theme={theme} />
+      <HelpRow keys="/sessions"      desc="Lista e troca entre sessões salvas"            theme={theme} />
+      <HelpRow keys="/new"           desc="Cria uma sessão nova"                          theme={theme} />
+      <HelpRow keys="/clear"         desc="Limpa o chat sem apagar a sessão"              theme={theme} />
+      <HelpRow keys="/undo"          desc="Reverte a última alteração de arquivo"         theme={theme} />
+      <HelpRow keys="/diff"          desc="Mostra resumo de todas as alterações pendentes" theme={theme} />
+      <HelpRow keys="/timeline"      desc="Linha do tempo de ações da sessão"             theme={theme} />
+      <HelpRow keys="/github-login"  desc="Autenticar GitHub via OAuth"                  theme={theme} />
+
+      <HelpSection label="ATALHOS GLOBAIS" theme={theme} />
+      <HelpRow keys="Ctrl+C"     desc="Cancelar execução em curso · Ctrl+Q para sair"  theme={theme} accent />
+      <HelpRow keys="Ctrl+H"     desc="Abrir esta ajuda"                               theme={theme} accent />
+      <HelpRow keys="Ctrl+O"     desc="Seletor de sessões"                             theme={theme} accent />
+      <HelpRow keys="Ctrl+N"     desc="Nova sessão"                                    theme={theme} accent />
+      <HelpRow keys="Ctrl+P"     desc="Modal de provider"                              theme={theme} accent />
+      <HelpRow keys="Ctrl+M"     desc="Seletor de modelo"                              theme={theme} accent />
+      <HelpRow keys="Ctrl+T"     desc="Painel de telemetria"                           theme={theme} accent />
+      <HelpRow keys="Ctrl+R"     desc="Buscar no histórico de prompts"                 theme={theme} accent />
+      <HelpRow keys="Tab"        desc="Alternar entre modos PLAN ↔ BUILD"              theme={theme} accent />
+
+      <HelpSection label="PAINÉIS  (L=esquerdo  C=central  D=direito)" theme={theme} />
+      <HelpRow keys="Ctrl+1/2/3"   desc="Fechar/abrir painel L / C / D"               theme={theme} accent />
+      <HelpRow keys="Ctrl+B"       desc="Toggle sidebar (painel L)"                    theme={theme} accent />
+      <HelpRow keys="Ctrl+F"       desc="Alternar sidebar ↔ árvore de arquivos"        theme={theme} accent />
+      <HelpRow keys="Ctrl+L"       desc="Toggle timeline no painel D"                  theme={theme} accent />
+      <HelpRow keys="Ctrl+,"       desc="Toggle configuração no painel D"              theme={theme} accent />
+      <HelpRow keys="Ctrl+←/→"    desc="Redimensionar painel ativo"                   theme={theme} accent />
+
+      <HelpSection label="SCROLL DO CHAT" theme={theme} />
+      <HelpRow keys="PgUp / PgDn"    desc="Rolar para cima/baixo"                      theme={theme} />
+      <HelpRow keys="Ctrl+↑ / Ctrl+↓" desc="Rolar para cima/baixo (alternativo)"       theme={theme} />
+      <HelpRow keys="Esc → j / k"    desc="Vim normal mode: j baixo · k cima"          theme={theme} />
+      <HelpRow keys="Esc → G / gg"   desc="Ir ao fim / topo da conversa"               theme={theme} />
+      <HelpRow keys="Esc → Ctrl+D/U" desc="Meio-página para baixo / cima"              theme={theme} />
+
+      <HelpSection label="VIM  (Esc = insert→normal · i = normal→insert)" theme={theme} />
+      <HelpRow keys="i / a / A"   desc="Insert: na pos / após cursor / no fim"         theme={theme} />
+      <HelpRow keys="I / S"       desc="Insert: no início / limpar tudo + insert"      theme={theme} />
+      <HelpRow keys="h / l"       desc="Mover cursor ← / →"                            theme={theme} />
+      <HelpRow keys="w / b / e"   desc="Palavra: próxima / anterior / fim"             theme={theme} />
+      <HelpRow keys="0 / $ / ^"   desc="Início / fim / 1º char não-vazio da linha"     theme={theme} />
+      <HelpRow keys="x / X"       desc="Deletar char sob cursor / à esquerda"          theme={theme} />
+      <HelpRow keys="D / C"       desc="Deletar / mudar até o fim da linha"            theme={theme} />
+      <HelpRow keys="dd / dw"     desc="Deletar linha inteira / palavra"               theme={theme} />
+      <HelpRow keys="cc / cw / cb" desc="Mudar linha / palavra / trás"                 theme={theme} />
+      <HelpRow keys="r<c>"        desc="Substituir o char sob o cursor"                theme={theme} />
+
+      <HelpSection label="APROVAÇÕES  (quando o agente pede permissão)" theme={theme} />
+      <HelpRow keys="a"     desc="Aprovar uma vez"                                     theme={theme} />
+      <HelpRow keys="l"     desc="Aprovar sempre (adicionar ao allow-list)"            theme={theme} />
+      <HelpRow keys="s"     desc="Aprovar nesta sessão"                                theme={theme} />
+      <HelpRow keys="d / n / Esc" desc="Negar"                                         theme={theme} />
+
+      <HelpSection label="TEMAS" theme={theme} />
+      <Box paddingLeft={2} marginBottom={1}>
+        <Text color={theme.fgMuted}>{themeNames.join("  ·  ")}</Text>
+      </Box>
+      <Box paddingLeft={2}>
+        <Text color={theme.fgMuted} dimColor>Alterar: /config → tui.theme</Text>
+      </Box>
     </Box>
   );
 }
