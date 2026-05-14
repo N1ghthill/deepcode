@@ -23,10 +23,24 @@ import {
 } from "../../src/tui/components/modals/ModelSelector.js";
 
 describe("App component", () => {
-  it("should integrate UI state persistence", () => {
-    // This is a placeholder test
-    // In a real implementation, we would test the integration with ink-testing-library
-    expect(true).toBe(true);
+  it("disables sidebar hotkeys when streaming, awaiting approval, or a modal is open", () => {
+    const base = {
+      viewMode: "chat" as const,
+      vimMode: "insert" as const,
+      input: "",
+      activeModal: null as any,
+      streaming: false,
+      showInputPreview: false,
+      approvalCount: 0,
+      oauthActive: false,
+    };
+
+    expect(isSidebarHotkeysEnabled({ ...base, streaming: true })).toBe(false);
+    expect(isSidebarHotkeysEnabled({ ...base, approvalCount: 1 })).toBe(false);
+    expect(isSidebarHotkeysEnabled({ ...base, oauthActive: true })).toBe(false);
+    expect(isSidebarHotkeysEnabled({ ...base, showInputPreview: true })).toBe(false);
+    expect(isSidebarHotkeysEnabled({ ...base, activeModal: "provider" as any })).toBe(false);
+    expect(isSidebarHotkeysEnabled(base)).toBe(true);
   });
 
   it("records agent run failures in the active session without throwing", async () => {

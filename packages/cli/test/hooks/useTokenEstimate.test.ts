@@ -1,21 +1,60 @@
 import { describe, it, expect } from "vitest";
+import React from "react";
+import { render } from "ink-testing-library";
+import { Text } from "ink";
+import { useTokenEstimate } from "../../src/tui/hooks/useTokenEstimate.js";
+import { settleInk } from "../settle-ink.js";
+
+function TokenDisplay({ text }: { text: string }) {
+  const tokens = useTokenEstimate(text);
+  return React.createElement(Text, null, `tokens:${tokens}`);
+}
 
 describe("useTokenEstimate", () => {
-  it("should estimate tokens correctly", () => {
-    const text = "Hello world";
-    const expected = Math.ceil(text.length / 4);
-    expect(expected).toBe(3);
+  it("returns 0 for empty string", async () => {
+    const { lastFrame, unmount } = render(React.createElement(TokenDisplay, { text: "" }));
+    try {
+      await settleInk();
+      expect(lastFrame()).toContain("tokens:0");
+    } finally {
+      unmount();
+    }
   });
 
-  it("should return 0 for empty string", () => {
-    const text = "";
-    const expected = Math.ceil(text.length / 4);
-    expect(expected).toBe(0);
+  it("estimates tokens for short text", async () => {
+    const { lastFrame, unmount } = render(
+      React.createElement(TokenDisplay, { text: "Hello world" }),
+    );
+    try {
+      await settleInk();
+      expect(lastFrame()).toContain("tokens:3");
+    } finally {
+      unmount();
+    }
   });
 
-  it("should handle longer text", () => {
-    const text = "this is a longer text for testing";
-    const expected = Math.ceil(text.length / 4);
-    expect(expected).toBe(9);
+  it("estimates tokens for longer text", async () => {
+    const { lastFrame, unmount } = render(
+      React.createElement(TokenDisplay, { text: "this is a longer text for testing" }),
+    );
+    try {
+      await settleInk();
+      expect(lastFrame()).toContain("tokens:9");
+    } finally {
+      unmount();
+    }
+  });
+
+  it("rounds up to the nearest whole token", async () => {
+    // "abc" has length 3 → Math.ceil(3/4) = 1
+    const { lastFrame, unmount } = render(
+      React.createElement(TokenDisplay, { text: "abc" }),
+    );
+    try {
+      await settleInk();
+      expect(lastFrame()).toContain("tokens:1");
+    } finally {
+      unmount();
+    }
   });
 });
