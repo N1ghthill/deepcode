@@ -10,6 +10,7 @@ interface InputFieldProps {
   onChange: (v: string) => void;
   onSubmit: (v: string) => void;
   vimMode: VimMode;
+  cursorOffset: number;
   streaming: boolean;
   focused: boolean;
   theme: ThemeColors;
@@ -21,6 +22,7 @@ export function InputField({
   onChange,
   onSubmit,
   vimMode,
+  cursorOffset,
   streaming,
   focused,
   theme,
@@ -40,7 +42,17 @@ export function InputField({
           <Text backgroundColor={theme.warning} color="black" bold>
             {" "}NORMAL{" "}
           </Text>
-          <Text color={theme.fgMuted}>{value || t("normalModeHint")}</Text>
+          {value.length === 0 ? (
+            <Text color={theme.fgMuted}>{t("normalModeHint")}</Text>
+          ) : (
+            <Text>
+              <Text color={theme.fg}>{value.slice(0, cursorOffset)}</Text>
+              <Text backgroundColor={theme.fg} color={theme.bg}>
+                {value[cursorOffset] ?? " "}
+              </Text>
+              <Text color={theme.fg}>{value.slice(cursorOffset + 1)}</Text>
+            </Text>
+          )}
         </Box>
       ) : streaming ? (
         <Box flexDirection="row" gap={1}>

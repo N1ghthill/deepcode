@@ -49,6 +49,7 @@ export interface AgentStoreState {
   history: string[];
   historyIndex: number | null;
   vimMode: VimMode;
+  cursorOffset: number;
   sidebarTab: SidebarTab;
   sidebarVisible: boolean;
   activeModal: ModalType;
@@ -91,6 +92,7 @@ export interface AgentStoreState {
   setHistory: (h: string[] | ((prev: string[]) => string[])) => void;
   setHistoryIndex: (i: number | null) => void;
   setVimMode: (v: VimMode) => void;
+  setCursorOffset: (n: number) => void;
   setSidebarTab: (t: SidebarTab) => void;
   setSidebarVisible: (v: boolean | ((prev: boolean) => boolean)) => void;
   setActiveModal: (m: ModalType) => void;
@@ -136,6 +138,7 @@ export const useAgentStore = create<AgentStoreState>()((set) => ({
   history: [],
   historyIndex: null,
   vimMode: "insert",
+  cursorOffset: 0,
   sidebarTab: "sessions",
   sidebarVisible: false,
   activeModal: null,
@@ -171,6 +174,7 @@ export const useAgentStore = create<AgentStoreState>()((set) => ({
   setHistory: (h) => set((state) => ({ history: resolveUpdater(h, state.history) })),
   setHistoryIndex: (i) => set({ historyIndex: i }),
   setVimMode: (v) => set({ vimMode: v }),
+  setCursorOffset: (n) => set({ cursorOffset: n }),
   setSidebarTab: (t) => set({ sidebarTab: t }),
   setSidebarVisible: (v) => set((state) => ({ sidebarVisible: resolveUpdater(v, state.sidebarVisible) })),
   setActiveModal: (m) => set({ activeModal: m }),

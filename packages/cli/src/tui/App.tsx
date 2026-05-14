@@ -121,6 +121,7 @@ export function App(props: AppProps) {
   const viewMode = useAgentStore((s) => s.viewMode);
   const selectedSessionIndex = useAgentStore((s) => s.selectedSessionIndex);
   const vimMode = useAgentStore((s) => s.vimMode);
+  const cursorOffset = useAgentStore((s) => s.cursorOffset);
   const sidebarTab = useAgentStore((s) => s.sidebarTab);
   // sidebarVisible is kept in store for potential consumers but layout is now UIStore-driven
   const activeModal = useAgentStore((s) => s.activeModal);
@@ -1260,6 +1261,7 @@ export function App(props: AppProps) {
                 onChange={setInput}
                 onSubmit={(v) => void handleSubmit(v)}
                 vimMode={vimMode}
+                cursorOffset={cursorOffset}
                 streaming={streaming}
                 focused={viewMode === "chat" && !activeModal && !showInputPreview}
                 theme={theme}
