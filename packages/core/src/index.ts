@@ -1,4 +1,7 @@
 export * from "./agent/agent.js";
+export * from "./mcp/mcp-client.js";
+export * from "./mcp/mcp-manager.js";
+export * from "./mcp/mcp-tool-adapter.js";
 export * from "./agent/subagent-manager.js";
 export * from "./agent/task-planner.js";
 export * from "./cache/tool-cache.js";

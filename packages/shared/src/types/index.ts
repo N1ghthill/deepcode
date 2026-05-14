@@ -259,6 +259,17 @@ export const BuildTurnPolicySchema = z
   .default({});
 export type BuildTurnPolicy = z.infer<typeof BuildTurnPolicySchema>;
 
+/* ── MCP ─────────────────────────────────────────────────────────────── */
+export const McpServerConfigSchema = z
+  .object({
+    name: z.string().min(1),
+    command: z.string().min(1),
+    args: z.array(z.string()).default([]),
+    env: z.record(z.string()).optional(),
+  })
+  .strict();
+export type McpServerConfig = z.infer<typeof McpServerConfigSchema>;
+
 /* ── DeepCodeConfig ──────────────────────────────────────────────────── */
 const ModeProviderOverrideSchema = z
   .object({
@@ -416,6 +427,7 @@ export const DeepCodeConfigSchema = z
     strictMode: z.boolean().default(false).describe("When true, stop execution on first task failure"),
     taskRetries: z.number().int().min(0).max(3).default(1).describe("Number of retry attempts per task on failure"),
     subagentConcurrency: z.number().int().positive().max(16).default(4).describe("Maximum parallel sub-agents when running tasks"),
+    mcpServers: z.array(McpServerConfigSchema).default([]),
     telemetry: z
       .object({
         enabled: z.boolean().default(true),

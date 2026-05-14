@@ -4,6 +4,7 @@ import {
   AuditLogger,
   ConfigLoader,
   EventBus,
+  McpManager,
   PathSecurity,
   PermissionGateway,
   ProviderManager,
@@ -29,6 +30,7 @@ export interface DeepCodeRuntime {
   agent: Agent;
   subagents: SubagentManager;
   permissions: PermissionGateway;
+  mcp: McpManager;
 }
 
 export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRuntime> {
@@ -49,6 +51,13 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
   await sessions.loadAll();
   const providers = new ProviderManager(config);
   const tools = createDefaultToolRegistry();
+  const mcp = new McpManager(events);
+  if (config.mcpServers.length > 0) {
+    const mcpTools = await mcp.connect(config.mcpServers);
+    for (const tool of mcpTools) {
+      tools.register(tool);
+    }
+  }
   const agent = new Agent(
     providers,
     tools,
@@ -67,5 +76,5 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
     defaultTarget.model,
     config.subagentConcurrency,
   );
-  return { config, events, sessions, cache, providers, agent, subagents, permissions };
+  return { config, events, sessions, cache, providers, agent, subagents, permissions, mcp };
 }

@@ -258,6 +258,7 @@ function createConfig(overrides: { providers?: Record<string, { apiKey?: string;
     strictMode: false,
     taskRetries: 1,
     subagentConcurrency: 4,
+    mcpServers: [],
     telemetry: { enabled: true, persistHistory: true },
     ...restOverrides,
   };
