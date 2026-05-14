@@ -28,8 +28,8 @@
     "package.json"
   ],
   "bin": {
-    "deepcode": "./dist/index.js",
-    "deepcode-ai": "./dist/index.js"
+    "deepcode": "dist/index.js",
+    "deepcode-ai": "dist/index.js"
   },
   "scripts": {
     "build": "tsup",
