@@ -78,7 +78,7 @@ export const UTILITY_SYSTEM_PROMPT = [
 ].join("\n");
 
 export function failoverOrder(primary: ProviderId): ProviderId[] {
-  return (["openrouter", "anthropic", "openai", "deepseek", "opencode"] as ProviderId[]).filter(
+  return (["openrouter", "anthropic", "openai", "deepseek", "opencode", "groq", "ollama"] as ProviderId[]).filter(
     (provider) => provider !== primary,
   );
 }
