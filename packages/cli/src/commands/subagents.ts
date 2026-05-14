@@ -1,5 +1,6 @@
 import { collectSecretValues, redactText } from "@deepcode/core";
 import { createRuntime } from "../runtime.js";
+import { writeStdoutLine } from "../stream-flush.js";
 
 export async function subagentsRunCommand(options: {
   cwd: string;
@@ -36,11 +37,11 @@ export async function subagentsRunCommand(options: {
   const secretValues = collectSecretValues(runtime.config);
 
   for (const result of results) {
-    console.log(`## ${result.taskId} (${result.sessionId})`);
+    await writeStdoutLine(`## ${result.taskId} (${result.sessionId})`);
     if (result.error) {
-      console.log(`error: ${redactText(result.error, secretValues)}`);
+      await writeStdoutLine(`error: ${redactText(result.error, secretValues)}`);
       continue;
     }
-    console.log(result.output ? redactText(result.output, secretValues) : "(no output)");
+    await writeStdoutLine(result.output ? redactText(result.output, secretValues) : "(no output)");
   }
 }

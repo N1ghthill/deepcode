@@ -22,10 +22,20 @@ import {
 } from "./commands/github.js";
 import { runCommand } from "./commands/run.js";
 import { subagentsRunCommand } from "./commands/subagents.js";
+import {
+  flushStandardStreams,
+  writeStderrLine,
+  writeStderrSync,
+  writeStdoutSync,
+} from "./stream-flush.js";
 import { App } from "./tui/App.js";
 
 export function createProgram(): Command {
   const program = new Command();
+  program.configureOutput({
+    writeOut: writeStdoutSync,
+    writeErr: writeStderrSync,
+  });
   program
     .name("deepcode")
     .description("AI coding agent for the terminal")
@@ -222,8 +232,10 @@ export async function main(argv = process.argv): Promise<void> {
   try {
     await createProgram().parseAsync(argv);
   } catch (error) {
-    console.error(redactText(error instanceof Error ? error.message : String(error)));
+    await writeStderrLine(redactText(error instanceof Error ? error.message : String(error)));
     process.exitCode = 1;
+  } finally {
+    await flushStandardStreams();
   }
 }
 

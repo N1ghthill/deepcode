@@ -19,6 +19,7 @@ export interface OpenAICompatibleProviderOptions {
   config: ProviderConfig;
   extraHeaders?: Record<string, string>;
   normalizeModelId?: (model: string) => string;
+  apiKeyOptional?: boolean;
   buildRequestBody?: (
     body: Record<string, unknown>,
     context: { model: string; options: ProviderChatOptions },
@@ -42,6 +43,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
   private readonly extraHeaders: Record<string, string>;
   private readonly normalizeModelId?: (model: string) => string;
   private readonly buildRequestBody?: OpenAICompatibleProviderOptions["buildRequestBody"];
+  private readonly apiKeyOptional: boolean;
 
   constructor(options: OpenAICompatibleProviderOptions) {
     this.id = options.id;
@@ -52,10 +54,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.extraHeaders = options.extraHeaders ?? {};
     this.normalizeModelId = options.normalizeModelId;
     this.buildRequestBody = options.buildRequestBody;
+    this.apiKeyOptional = options.apiKeyOptional ?? false;
   }
 
   async *chat(messages: Message[], options: ProviderChatOptions): AsyncIterable<Chunk> {
-    this.requireApiKey();
+    if (!this.apiKeyOptional) this.requireApiKey();
     const model = this.resolveModel(options.model);
     const requestBody = this.buildRequestBody?.({
       model,
@@ -165,7 +168,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   async listModels(options: { signal?: AbortSignal } = {}): Promise<Model[]> {
-    this.requireApiKey();
+    if (!this.apiKeyOptional) this.requireApiKey();
     const response = await this.fetchJson(`${this.baseUrl}/models`, {
       headers: this.headers(),
       signal: options.signal,
@@ -193,7 +196,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   async validateConfig(options: { signal?: AbortSignal } = {}): Promise<boolean> {
-    if (!this.apiKey) return false;
+    if (!this.apiKeyOptional && !this.apiKey) return false;
     try {
       await this.listModels(options);
       return true;
@@ -203,10 +206,10 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   private headers(): HeadersInit {
-    this.requireApiKey();
+    if (!this.apiKeyOptional) this.requireApiKey();
     return {
       "content-type": "application/json",
-      authorization: `Bearer ${this.apiKey}`,
+      ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
       ...this.extraHeaders,
     };
   }
@@ -231,9 +234,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
   private async assertOk(response: Response): Promise<void> {
     if (!response.ok) {
       const body = await response.text();
+      const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
       throw new ProviderError(
         redactText(formatProviderHttpError(this.name, response.status, body), this.secretValues()),
         this.id,
+        undefined,
+        { statusCode: response.status, retryAfterMs },
       );
     }
   }
@@ -266,10 +272,27 @@ function formatProviderHttpError(provider: string, status: number, body: string)
   if (status === 400 || status === 422) {
     return `${provider} rejected the request (${status}). Check the configured model and request options. ${detail}`;
   }
+  if (status === 429) {
+    return `${provider} rate limit exceeded (429). Request will be retried. ${detail}`;
+  }
   if (status >= 500) {
     return `${provider} service failed (${status}). Try again later. ${detail}`;
   }
   return `${provider} request failed: ${status} ${detail}`;
+}
+
+function parseRetryAfter(header: string | null, maxMs = 60_000): number | undefined {
+  if (!header) return undefined;
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds) && seconds > 0) {
+    return Math.min(seconds * 1_000, maxMs);
+  }
+  const date = new Date(header).getTime();
+  if (!Number.isNaN(date)) {
+    const ms = date - Date.now();
+    return ms > 0 ? Math.min(ms, maxMs) : undefined;
+  }
+  return undefined;
 }
 
 function isAbortError(error: unknown): boolean {

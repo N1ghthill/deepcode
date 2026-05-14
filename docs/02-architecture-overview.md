@@ -76,7 +76,7 @@ Tool Request → Permission Check → Path Validation → Audit Log → Execute
 - **Tool Result Cache**: Cache de resultados
 - **Event Bus**: Comunicação entre componentes
 
-**Tecnologia**: Effect + Solid.js signals
+**Tecnologia**: Effect no runtime/core, Zustand na TUI e estado em memória para sessões/eventos.
 
 ### Camada 3: Ferramentas e Capacidades
 

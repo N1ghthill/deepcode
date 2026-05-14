@@ -52,7 +52,7 @@ export function resolveEffectiveModeSelection(
   mode: AgentMode,
 ): ModelSelection | null {
   const preferred = resolveModeSelection(config, session, mode);
-  if (preferred && hasProviderCredentials(config.providers[preferred.provider]) && preferred.model) {
+  if (preferred && hasProviderCredentials(config.providers[preferred.provider], preferred.provider) && preferred.model) {
     return preferred;
   }
 

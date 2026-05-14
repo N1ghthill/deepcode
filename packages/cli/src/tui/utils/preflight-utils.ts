@@ -29,7 +29,7 @@ export function getChatPreflightIssue(
     };
   }
 
-  if (!hasProviderCredentials(providerConfig)) {
+  if (!hasProviderCredentials(providerConfig, providerId)) {
     return {
       message: t("preflightProviderNotConfigured", { provider: providerName }),
       notice: t("preflightProviderNoCredential", { provider: providerName }),

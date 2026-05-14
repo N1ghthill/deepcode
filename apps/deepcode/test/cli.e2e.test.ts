@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
@@ -9,6 +9,9 @@ import { afterEach, describe, expect, it } from "vitest";
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const bin = path.join(appRoot, "dist", "index.js");
 let tempDir: string | undefined;
+const localBindingSupported = await canBindLocalBinding();
+const describeWithLocalBinding = localBindingSupported ? describe : describe.skip;
+const itWithLocalBinding = localBindingSupported ? it : it.skip;
 
 afterEach(async () => {
   if (tempDir) {
@@ -172,7 +175,7 @@ describe("deepcode CLI e2e", () => {
     expect(doctor.stderr).toBe("");
   }, 10_000);
 
-  it("runs GitHub CLI commands against a configured local enterprise API", async () => {
+  itWithLocalBinding("runs GitHub CLI commands against a configured local enterprise API", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-cli-"));
     await createTypeScriptFixture(tempDir);
     const server = await startGitHubTestServer();
@@ -465,6 +468,15 @@ function handleGitHubApi(request: IncomingMessage, response: ServerResponse): vo
         },
       ]);
       return;
+    case "GET /api/v3/repos/acme/fixture/issues/7":
+      sendJson(response, {
+        number: 7,
+        title: "E2E issue",
+        body: "Exercise GitHub CLI",
+        state: "open",
+        html_url: `${baseUrl}/issues/7`,
+      });
+      return;
     case "POST /api/v3/repos/acme/fixture/pulls":
       sendJson(response, {
         number: 9,
@@ -472,6 +484,9 @@ function handleGitHubApi(request: IncomingMessage, response: ServerResponse): vo
         state: "open",
         html_url: `${baseUrl}/pull/9`,
       });
+      return;
+    case "POST /api/v3/repos/acme/fixture/issues/7/comments":
+      sendJson(response, { id: 42, body: "PR created." });
       return;
     default:
       response.writeHead(404, { "content-type": "application/json" });
@@ -595,7 +610,7 @@ async function configureLLM(tempDir: string, serverUrl: string): Promise<void> {
 
 // ── deepcode run E2E tests ────────────────────────────────────────────────────
 
-describe("deepcode run with mock LLM", () => {
+describeWithLocalBinding("deepcode run with mock LLM", () => {
   it("streams a direct text response and exits 0", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
     await createTypeScriptFixture(tempDir);
@@ -687,3 +702,191 @@ describe("deepcode run with mock LLM", () => {
     }
   }, 20_000);
 });
+
+// ── github solve E2E ─────────────────────────────────────────────────────────
+
+describeWithLocalBinding("deepcode github solve", () => {
+  it("creates branch, runs agent, commits, pushes, and creates PR for an issue", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-solve-"));
+
+    // Local bare repo organised as <root>/acme/fixture.git so git-http-backend
+    // resolves it with PATH_INFO = /acme/fixture.git
+    const repoRoot = path.join(tempDir, "git");
+    const bareDir = path.join(repoRoot, "acme", "fixture.git");
+    await mkdir(bareDir, { recursive: true });
+    await runCommand("git", ["init", "--bare", bareDir], bareDir);
+    await runCommand("git", ["config", "http.receivepack", "true"], bareDir);
+
+    // Serve the bare repo over HTTP so the remote URL is parseable as GitHub-style
+    const gitServer = await startGitHttpServer(repoRoot);
+
+    // Working repo with remote pointing to the local HTTP git server
+    const workDir = path.join(tempDir, "work");
+    await mkdir(workDir, { recursive: true });
+    await runCommand("git", ["init"], workDir);
+    await runCommand("git", ["remote", "add", "origin", `${gitServer.url}/acme/fixture.git`], workDir);
+
+    await runCommand("git", ["config", "user.email", "test@deepcode.local"], workDir);
+    await runCommand("git", ["config", "user.name", "DeepCode Test"], workDir);
+
+    // Seed working tree with TS fixture files
+    await mkdir(path.join(workDir, "src"), { recursive: true });
+    await writeFile(
+      path.join(workDir, "src", "index.ts"),
+      "export function add(a: number, b: number): number { return a + b; }\n",
+      "utf8",
+    );
+
+    // Initial commit + push so origin/main exists (solve does git fetch + checkout)
+    await runCommand("git", ["add", "."], workDir);
+    await runCommand("git", ["commit", "-m", "Initial commit"], workDir);
+    await runCommand("git", ["push", "origin", "HEAD:main"], workDir);
+
+    const ghServer = await startGitHubTestServer();
+    const llm = await startLLMTestServer();
+
+    try {
+      await runCli(["--cwd", workDir, "config", "set", "github.token", "solve-e2e-token"]);
+      await runCli(["--cwd", workDir, "config", "set", "github.enterpriseUrl", ghServer.url]);
+      await configureLLM(workDir, llm.url);
+
+      // Planning call returns plain text — fails gracefully, falls back to tool loop
+      llm.queueText("Planning to fix the issue.");
+      // Agent writes a file so git status detects changes
+      llm.queueToolCall("write_file", {
+        path: "src/fix.ts",
+        content: "// Fix for issue #7\nexport const FIX = true;\n",
+      });
+      // Agent signals completion
+      llm.queueText("Done. Fixed the issue in src/fix.ts.");
+
+      const result = await runCli(["--cwd", workDir, "github", "solve", "7", "--yes"]);
+
+      expect(result.exitCode, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`).toBe(0);
+      expect(result.stdout).toContain("Solving issue #7");
+      expect(result.stdout).toContain("PR created:");
+      expect(result.stdout).not.toContain("solve-e2e-token");
+
+      const requestLines = ghServer.requests.map((r) => `${r.method} ${r.url}`);
+      expect(requestLines).toContain("GET /api/v3/repos/acme/fixture/issues/7");
+      expect(requestLines).toContain("POST /api/v3/repos/acme/fixture/pulls");
+      expect(requestLines).toContain("POST /api/v3/repos/acme/fixture/issues/7/comments");
+
+      const prRequest = ghServer.requests.find(
+        (r) => r.method === "POST" && r.url === "/api/v3/repos/acme/fixture/pulls",
+      );
+      expect(prRequest?.body).toMatchObject({
+        title: expect.stringContaining("E2E issue"),
+        head: expect.stringContaining("issue-7"),
+        base: "main",
+      });
+
+      expect(ghServer.requests.every((r) => r.authorization === "Bearer solve-e2e-token")).toBe(true);
+    } finally {
+      await ghServer.close();
+      await llm.close();
+      await gitServer.close();
+    }
+  }, 60_000);
+});
+
+// ── Local git HTTP server (git-http-backend CGI) ─────────────────────────────
+
+interface GitHttpServer {
+  url: string;
+  close: () => Promise<void>;
+}
+
+const GIT_HTTP_BACKEND = "/usr/lib/git-core/git-http-backend";
+
+async function startGitHttpServer(projectRoot: string): Promise<GitHttpServer> {
+  const server = createServer((request, response) => {
+    const urlWithQuery = request.url ?? "/";
+    const qMark = urlWithQuery.indexOf("?");
+    const pathInfo = qMark >= 0 ? urlWithQuery.slice(0, qMark) : urlWithQuery;
+    const queryString = qMark >= 0 ? urlWithQuery.slice(qMark + 1) : "";
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      GIT_HTTP_EXPORT_ALL: "1",
+      GIT_HTTP_RECEIVE_PACK: "1",
+      GIT_PROJECT_ROOT: projectRoot,
+      PATH_INFO: pathInfo,
+      REQUEST_METHOD: request.method ?? "GET",
+      CONTENT_TYPE: request.headers["content-type"] ?? "",
+      QUERY_STRING: queryString,
+      HTTP_GIT_PROTOCOL: request.headers["git-protocol"] ?? "",
+      CONTENT_LENGTH: request.headers["content-length"] ?? "",
+    };
+
+    const backend = spawn(GIT_HTTP_BACKEND, [], { env, stdio: ["pipe", "pipe", "pipe"] });
+    request.pipe(backend.stdin);
+
+    // CGI response: text headers (\r\n\r\n), then binary body
+    let headerBuf = "";
+    let headersDone = false;
+
+    backend.stdout.on("data", (chunk: Buffer) => {
+      if (headersDone) {
+        response.write(chunk);
+        return;
+      }
+      headerBuf += chunk.toString("binary");
+      const sep = headerBuf.indexOf("\r\n\r\n");
+      if (sep === -1) return;
+
+      headersDone = true;
+      let status = 200;
+      const headers: [string, string][] = [];
+
+      for (const line of headerBuf.slice(0, sep).split("\r\n")) {
+        if (line.startsWith("Status: ")) {
+          status = parseInt(line.slice(8));
+        } else {
+          const colon = line.indexOf(": ");
+          if (colon > 0) headers.push([line.slice(0, colon), line.slice(colon + 2)]);
+        }
+      }
+
+      response.writeHead(status, headers);
+      const body = headerBuf.slice(sep + 4);
+      if (body) response.write(Buffer.from(body, "binary"));
+    });
+
+    backend.stdout.on("end", () => response.end());
+    backend.stderr.on("data", (d: Buffer) => process.stderr.write(d));
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Git HTTP server bind failed");
+
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
+  };
+}
+
+async function canBindLocalBinding(): Promise<boolean> {
+  const server = createServer((_request, response) => response.end("ok"));
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    return true;
+  } catch {
+    try {
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+    } catch {
+      // Ignore close errors during capability probe.
+    }
+    return false;
+  }
+}

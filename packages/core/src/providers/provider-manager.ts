@@ -6,6 +6,19 @@ import {
   type ProviderId,
 } from "@deepcode/shared";
 import { ProviderError } from "../errors.js";
+
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
+
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof ProviderError && error.statusCode !== undefined) {
+    return RETRYABLE_STATUS_CODES.has(error.statusCode);
+  }
+  return !(error instanceof ProviderError);
+}
+
+function getRetryAfterMs(error: unknown): number | undefined {
+  return error instanceof ProviderError ? error.retryAfterMs : undefined;
+}
 import { AnthropicProvider } from "./anthropic-provider.js";
 import { OpenAICompatibleProvider } from "./openai-compatible-provider.js";
 import type { LLMProvider, ProviderChatOptions } from "./provider.js";
@@ -88,6 +101,25 @@ export class ProviderManager {
         }),
       }),
     );
+    this.register(
+      new OpenAICompatibleProvider({
+        id: "groq",
+        name: "Groq",
+        defaultBaseUrl: "https://api.groq.com/openai/v1",
+        defaultModel: resolveConfiguredModelForProvider(config, "groq"),
+        config: config.providers.groq,
+      }),
+    );
+    this.register(
+      new OpenAICompatibleProvider({
+        id: "ollama",
+        name: "Ollama",
+        defaultBaseUrl: "http://localhost:11434/v1",
+        defaultModel: resolveConfiguredModelForProvider(config, "ollama"),
+        config: config.providers.ollama,
+        apiKeyOptional: true,
+      }),
+    );
   }
 
   register(provider: LLMProvider): void {
@@ -126,10 +158,14 @@ export class ProviderManager {
           if (emitted) {
             throw error;
           }
-          if (attempt >= this.retries || options.signal?.aborted) {
+          if (options.signal?.aborted || !isRetryableError(error)) {
             break;
           }
-          await delay(backoffMs(attempt), options.signal);
+          if (attempt >= this.retries) {
+            break;
+          }
+          const waitMs = getRetryAfterMs(error) ?? backoffMs(attempt);
+          await delay(waitMs, options.signal);
         }
       }
     }
@@ -154,23 +190,19 @@ export class ProviderManager {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000);
     try {
-      const models = await provider.listModels({ signal: controller.signal });
-      const modelFound = models.some((item) => item.id === model || item.id === configuredModel);
-      if (!modelFound) {
-        throw new ProviderError(
-          `Model not found for ${provider.name}: ${configuredModel}`,
-          providerId,
-        );
-      }
-      const responseText = await provider.complete("Reply exactly with: OK", {
-        model,
-        maxTokens: 16,
-        temperature: 0,
-        signal: controller.signal,
-      });
+      const [models, responseText] = await Promise.all([
+        provider.listModels({ signal: controller.signal }).catch(() => [] as import("@deepcode/shared").Model[]),
+        provider.complete("Reply exactly with: OK", {
+          model,
+          maxTokens: 16,
+          temperature: 0,
+          signal: controller.signal,
+        }),
+      ]);
       if (!responseText.trim()) {
         throw new ProviderError(`${provider.name} returned an empty validation response`, providerId);
       }
+      const modelFound = models.length === 0 || models.some((item) => item.id === model || item.id === configuredModel);
       return {
         provider: providerId,
         model,

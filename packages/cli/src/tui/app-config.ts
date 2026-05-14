@@ -12,6 +12,8 @@ export type ConfigEditField =
   | "providers.openai.apiKey"
   | "providers.deepseek.apiKey"
   | "providers.opencode.apiKey"
+  | "providers.groq.apiKey"
+  | "providers.ollama.baseUrl"
   | "cache.enabled"
   | "cache.ttlSeconds"
   | "permissions.read"
@@ -108,23 +110,29 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
   openai: "OpenAI",
   deepseek: "DeepSeek",
   opencode: "OpenCode",
+  groq: "Groq",
+  ollama: "Ollama",
 };
 
 export const PROVIDER_IDS = Object.keys(PROVIDER_LABELS) as ProviderId[];
 
 export const CONFIG_FIELDS: ConfigFieldDef[] = [
-  { key: "defaultProvider", get label() { return t("configFieldDefaultProvider"); }, type: "select", options: ["openrouter", "anthropic", "openai", "deepseek", "opencode"] },
+  { key: "defaultProvider", get label() { return t("configFieldDefaultProvider"); }, type: "select", options: ["openrouter", "anthropic", "openai", "deepseek", "opencode", "groq", "ollama"] },
   { key: "defaultModels.openrouter", get label() { return t("configFieldOpenRouterModel"); }, type: "text" },
   { key: "defaultModels.anthropic", get label() { return t("configFieldAnthropicModel"); }, type: "text" },
   { key: "defaultModels.openai", get label() { return t("configFieldOpenAIModel"); }, type: "text" },
   { key: "defaultModels.deepseek", get label() { return t("configFieldDeepSeekModel"); }, type: "text" },
   { key: "defaultModels.opencode", get label() { return t("configFieldOpenCodeModel"); }, type: "text" },
+  { key: "defaultModels.groq", get label() { return t("configFieldGroqModel"); }, type: "text" },
+  { key: "defaultModels.ollama", get label() { return t("configFieldOllamaModel"); }, type: "text" },
   { key: "buildTurnPolicy.mode", get label() { return t("configFieldBuildTurnPolicy"); }, type: "select", options: ["heuristic", "always-tools"] },
   { key: "providers.openrouter.apiKey", get label() { return t("configFieldOpenRouterApiKey"); }, type: "text" },
   { key: "providers.anthropic.apiKey", get label() { return t("configFieldAnthropicApiKey"); }, type: "text" },
   { key: "providers.openai.apiKey", get label() { return t("configFieldOpenAIApiKey"); }, type: "text" },
   { key: "providers.deepseek.apiKey", get label() { return t("configFieldDeepSeekApiKey"); }, type: "text" },
   { key: "providers.opencode.apiKey", get label() { return t("configFieldOpenCodeApiKey"); }, type: "text" },
+  { key: "providers.groq.apiKey", get label() { return t("configFieldGroqApiKey"); }, type: "text" },
+  { key: "providers.ollama.baseUrl", get label() { return t("configFieldOllamaBaseUrl"); }, type: "text" },
   { key: "cache.enabled", get label() { return t("configFieldCache"); }, type: "toggle" },
   { key: "cache.ttlSeconds", get label() { return t("configFieldCacheTtl"); }, type: "number" },
   { key: "permissions.read", get label() { return t("configFieldReadPerm"); }, type: "select", options: ["allow", "ask", "deny"] },

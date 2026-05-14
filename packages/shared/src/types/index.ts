@@ -8,10 +8,12 @@ export const MessageSourceSchema = z.enum(["user", "assistant", "tool", "ui", "a
 export type MessageSource = z.infer<typeof MessageSourceSchema>;
 
 export const ProviderIdSchema = z.enum([
-  "openrouter", "anthropic", "openai", "deepseek", "opencode",
+  "openrouter", "anthropic", "openai", "deepseek", "opencode", "groq", "ollama",
 ]);
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
 export const PROVIDER_IDS = ProviderIdSchema.options;
+
+export const CREDENTIAL_FREE_PROVIDERS: ReadonlySet<ProviderId> = new Set(["ollama"]);
 
 export const OperationLevelSchema = z.enum(["read", "write", "git_local", "shell", "dangerous"]);
 export type OperationLevel = z.infer<typeof OperationLevelSchema>;
@@ -63,6 +65,8 @@ const ProviderModelDefaultsSchema = z
     openai: z.string().optional(),
     deepseek: z.string().optional(),
     opencode: z.string().optional(),
+    groq: z.string().optional(),
+    ollama: z.string().optional(),
   })
   .strict()
   .default({});
@@ -286,6 +290,8 @@ export const DeepCodeConfigSchema = z
         openai: ProviderConfigSchema.default({}),
         deepseek: ProviderConfigSchema.default({}),
         opencode: ProviderConfigSchema.default({}),
+        groq: ProviderConfigSchema.default({}),
+        ollama: ProviderConfigSchema.default({ baseUrl: "http://localhost:11434/v1" }),
       })
       .strict()
       .default({}),
@@ -451,14 +457,18 @@ export function resolveConfiguredModelForProvider(
 /* ── Credential helpers ──────────────────────────────────────────────── */
 export function hasProviderCredentials(
   providerConfig: { apiKey?: string; apiKeyFile?: string } | undefined,
+  providerId?: ProviderId,
 ): boolean {
+  if (providerId && CREDENTIAL_FREE_PROVIDERS.has(providerId)) return true;
   return Boolean(providerConfig?.apiKey?.trim() || providerConfig?.apiKeyFile?.trim());
 }
 
 export function hasAnyProviderCredentials(
   config: Pick<DeepCodeConfig, "providers">,
 ): boolean {
-  return PROVIDER_IDS.some((id) => hasProviderCredentials(config.providers[id]));
+  return PROVIDER_IDS.some(
+    (id) => !CREDENTIAL_FREE_PROVIDERS.has(id) && hasProviderCredentials(config.providers[id], id),
+  );
 }
 
 export interface ResolvedProviderTarget {
@@ -476,26 +486,29 @@ export function resolveUsableProviderTarget(
     config.defaultProvider,
     ...PROVIDER_IDS,
   ]);
-  let firstConfiguredProvider: ResolvedProviderTarget | undefined;
+  let firstWithCredentials: ResolvedProviderTarget | undefined;
+  let firstWithModel: ResolvedProviderTarget | undefined;
 
   for (const providerId of orderedProviders) {
     const target: ResolvedProviderTarget = {
       provider: providerId,
       model: resolveConfiguredModelForProvider(config, providerId),
-      hasCredentials: hasProviderCredentials(config.providers[providerId]),
+      hasCredentials: hasProviderCredentials(config.providers[providerId], providerId),
     };
 
     if (target.hasCredentials && target.model) return target;
-    if (target.hasCredentials && !firstConfiguredProvider) firstConfiguredProvider = target;
+    if (target.model && !firstWithModel) firstWithModel = target;
+    if (target.hasCredentials && !firstWithCredentials) firstWithCredentials = target;
   }
 
-  if (firstConfiguredProvider) return firstConfiguredProvider;
+  if (firstWithModel) return firstWithModel;
+  if (firstWithCredentials) return firstWithCredentials;
 
   const fallbackProvider = orderedProviders[0] ?? config.defaultProvider;
   return {
     provider: fallbackProvider,
     model: resolveConfiguredModelForProvider(config, fallbackProvider),
-    hasCredentials: hasProviderCredentials(config.providers[fallbackProvider]),
+    hasCredentials: hasProviderCredentials(config.providers[fallbackProvider], fallbackProvider),
   };
 }
 
@@ -594,6 +607,8 @@ export type ConfigEditField =
   | "providers.openai.apiKey"
   | "providers.deepseek.apiKey"
   | "providers.opencode.apiKey"
+  | "providers.groq.apiKey"
+  | "providers.ollama.baseUrl"
   | "cache.enabled"
   | "cache.ttlSeconds"
   | "permissions.read"

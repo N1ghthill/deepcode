@@ -32,7 +32,7 @@ DeepCode is a terminal-first AI coding agent for local software development. It 
 ```bash
 pnpm install
 pnpm build
-pnpm --filter deepcode exec deepcode init
+pnpm --filter deepcode-ai exec deepcode init
 cp .env.example .env
 pnpm dev
 ```

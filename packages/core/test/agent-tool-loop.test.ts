@@ -776,17 +776,18 @@ describe("ProviderManager reload", () => {
     );
   });
 
-  it("reports a missing configured model before making a completion call", async () => {
+  it("passes validation when the completion call succeeds even if the model is absent from the provider list", async () => {
     const config = createConfig();
     const providers = new ProviderManager(config);
     providers.register(new SingleModelProvider());
 
-    await expect(
-      providers.validateProviderModel("openrouter", {
-        model: "missing-model",
-        timeoutMs: 1_000,
-      }),
-    ).rejects.toThrow("Model not found");
+    const result = await providers.validateProviderModel("openrouter", {
+      model: "missing-model",
+      timeoutMs: 1_000,
+    });
+
+    expect(result.modelFound).toBe(false);
+    expect(result.responseText).toBeTruthy();
   });
 });
 
@@ -1044,7 +1045,7 @@ class SingleModelProvider extends ToolAwareProvider {
   }
 
   override async complete(): Promise<string> {
-    throw new Error("complete should not be called for a missing model");
+    return "OK";
   }
 }
 

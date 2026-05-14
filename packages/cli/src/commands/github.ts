@@ -9,6 +9,7 @@ import {
 } from "@deepcode/core";
 import { resolveUsableProviderTarget } from "@deepcode/shared";
 import { createRuntime } from "../runtime.js";
+import { writeStdout, writeStdoutLine } from "../stream-flush.js";
 
 export async function githubLoginCommand(options: {
   cwd: string;
@@ -23,7 +24,7 @@ export async function githubLoginCommand(options: {
   const effectiveConfig = await loader.load(loadOptions);
   const clientId = options.clientId ?? effectiveConfig.github.oauthClientId;
   if (!clientId) {
-    console.log("No DeepCode OAuth app configured; using GitHub CLI browser login.");
+    await writeStdoutLine("No DeepCode OAuth app configured; using GitHub CLI browser login.");
     const token = await loginWithGitHubCli({
       cwd: options.cwd,
       enterpriseUrl: effectiveConfig.github.enterpriseUrl,
@@ -31,7 +32,7 @@ export async function githubLoginCommand(options: {
         options.scopes && options.scopes.length > 0
           ? options.scopes
           : effectiveConfig.github.oauthScopes,
-      onOutput: (chunk) => process.stdout.write(chunk),
+      onOutput: (chunk) => void writeStdout(chunk),
     });
     const client = new GitHubClient({
       token,
@@ -50,7 +51,7 @@ export async function githubLoginCommand(options: {
             : fileConfig.github.oauthScopes,
       },
     });
-    console.log(`GitHub token saved to ${savedPath}`);
+    await writeStdoutLine(`GitHub token saved to ${savedPath}`);
     return;
   }
   const scopes =
@@ -61,21 +62,21 @@ export async function githubLoginCommand(options: {
     enterpriseUrl: effectiveConfig.github.enterpriseUrl,
     openBrowser: options.openBrowser ?? true,
     onBrowserOpenError: (error) => {
-      console.log(`Unable to open browser automatically: ${error.message}`);
-      console.log("Continue with the URL and code shown above.");
+      void writeStdoutLine(`Unable to open browser automatically: ${error.message}`);
+      void writeStdoutLine("Continue with the URL and code shown above.");
     },
   });
   const token = await flow.authorize({
     clientId,
     scopes,
     onVerification: (code) => {
-      console.log(`Open ${code.verificationUri}`);
-      console.log(`Enter code: ${code.userCode}`);
-      console.log(`Code expires in ${Math.round(code.expiresIn / 60)} minutes.`);
+      void writeStdoutLine(`Open ${code.verificationUri}`);
+      void writeStdoutLine(`Enter code: ${code.userCode}`);
+      void writeStdoutLine(`Code expires in ${Math.round(code.expiresIn / 60)} minutes.`);
     },
     onPoll: ({ attempt, nextIntervalSeconds }) => {
       if (attempt === 1) {
-        console.log(`Waiting for GitHub authorization; polling every ${nextIntervalSeconds}s.`);
+        void writeStdoutLine(`Waiting for GitHub authorization; polling every ${nextIntervalSeconds}s.`);
       }
     },
   });
@@ -91,7 +92,7 @@ export async function githubLoginCommand(options: {
           : fileConfig.github.oauthScopes,
     },
   });
-  console.log(`GitHub token saved to ${savedPath}`);
+  await writeStdoutLine(`GitHub token saved to ${savedPath}`);
 }
 
 export async function githubWhoamiCommand(options: {
@@ -109,8 +110,8 @@ export async function githubWhoamiCommand(options: {
     worktree: options.cwd,
   });
   const user = await client.getAuthenticatedUser();
-  console.log(`${user.login} (${user.id})`);
-  console.log(user.url);
+  await writeStdoutLine(`${user.login} (${user.id})`);
+  await writeStdoutLine(user.url);
 }
 
 export async function listIssuesCommand(options: {
@@ -131,8 +132,8 @@ export async function listIssuesCommand(options: {
   const repo = await client.detectRepo();
   const issues = await client.listIssues({ ...repo, state: options.state });
   for (const issue of issues) {
-    console.log(`#${issue.number} ${issue.state} ${issue.title}`);
-    console.log(issue.url);
+    await writeStdoutLine(`#${issue.number} ${issue.state} ${issue.title}`);
+    await writeStdoutLine(issue.url);
   }
 }
 
@@ -152,8 +153,8 @@ export async function createPrCommand(
   });
   const repo = await client.detectRepo();
   const pr = await client.createPullRequest({ ...repo, ...input });
-  console.log(`#${pr.number} ${pr.title}`);
-  console.log(pr.url);
+  await writeStdoutLine(`#${pr.number} ${pr.title}`);
+  await writeStdoutLine(pr.url);
 }
 
 export async function solveIssueCommand(
@@ -209,13 +210,13 @@ export async function solveIssueCommand(
     "- Execute validações adequadas.",
   ].join("\n");
 
-  process.stdout.write(`Solving issue #${issue.number} on ${branch}\n`);
+  await writeStdoutLine(`Solving issue #${issue.number} on ${branch}`);
   await runtime.agent.run({
     session,
     input: prompt,
-    onChunk: (text) => process.stdout.write(redactText(text, secretValues)),
+    onChunk: (text) => void writeStdout(redactText(text, secretValues)),
   });
-  process.stdout.write("\n");
+  await writeStdout("\n");
 
   const status = await runGit(options.cwd, ["status", "--porcelain"]);
   if (!status.stdout.trim()) {
@@ -250,7 +251,7 @@ export async function solveIssueCommand(
     number: issue.number,
     body: `DeepCode opened PR #${pr.number}: ${pr.url}`,
   });
-  console.log(`PR created: ${pr.url}`);
+  await writeStdoutLine(`PR created: ${pr.url}`);
 }
 
 async function runGit(cwd: string, args: string[]) {

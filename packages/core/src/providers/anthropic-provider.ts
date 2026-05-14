@@ -165,9 +165,12 @@ export class AnthropicProvider implements LLMProvider {
 
   private async assertOk(response: Response): Promise<void> {
     if (!response.ok) {
+      const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
       throw new ProviderError(
         redactText(formatAnthropicHttpError(response.status, await response.text()), this.secretValues()),
         this.id,
+        undefined,
+        { statusCode: response.status, retryAfterMs },
       );
     }
   }
@@ -207,10 +210,27 @@ function formatAnthropicHttpError(status: number, body: string): string {
   if (status === 400 || status === 422) {
     return `Anthropic rejected the request (${status}). Check the configured model and request options. ${detail}`;
   }
+  if (status === 429) {
+    return `Anthropic rate limit exceeded (429). Request will be retried. ${detail}`;
+  }
   if (status >= 500) {
     return `Anthropic service failed (${status}). Try again later. ${detail}`;
   }
   return `Anthropic request failed: ${status} ${detail}`;
+}
+
+function parseRetryAfter(header: string | null, maxMs = 60_000): number | undefined {
+  if (!header) return undefined;
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds) && seconds > 0) {
+    return Math.min(seconds * 1_000, maxMs);
+  }
+  const date = new Date(header).getTime();
+  if (!Number.isNaN(date)) {
+    const ms = date - Date.now();
+    return ms > 0 ? Math.min(ms, maxMs) : undefined;
+  }
+  return undefined;
 }
 
 function toAnthropicMessages(messages: Message[]): Array<{ role: "user" | "assistant"; content: unknown }> {

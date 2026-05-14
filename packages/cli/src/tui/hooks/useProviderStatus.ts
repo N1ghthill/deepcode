@@ -70,6 +70,8 @@ export function useProviderStatus(): UseProviderStatusResult {
     openai: { ...EMPTY_PROVIDER_STATUS },
     deepseek: { ...EMPTY_PROVIDER_STATUS },
     opencode: { ...EMPTY_PROVIDER_STATUS },
+    groq: { ...EMPTY_PROVIDER_STATUS },
+    ollama: { ...EMPTY_PROVIDER_STATUS },
   });
 
   const checkStatus = useCallback(async (

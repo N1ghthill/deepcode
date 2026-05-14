@@ -9,6 +9,8 @@ import { GitHubOAuthDeviceFlow, normalizeGitHubWebBase } from "../src/github/oau
 import { execFileAsync } from "../src/tools/process.js";
 
 let tempDir: string | undefined;
+const localBindingSupported = await canBindLocalBinding();
+const describeWithLocalBinding = localBindingSupported ? describe : describe.skip;
 
 afterEach(async () => {
   if (tempDir) {
@@ -53,7 +55,7 @@ describe("parseGitHubRemote", () => {
   });
 });
 
-describe("GitHubClient", () => {
+describeWithLocalBinding("GitHubClient", () => {
   it("uses GitHub API contracts for issues, pull requests, comments, and auth", async () => {
     const requests: Array<{ method: string; url: string; authorization: string; body: unknown }> =
       [];
@@ -166,7 +168,7 @@ describe("GitHubClient", () => {
   });
 });
 
-describe("GitHubOAuthDeviceFlow", () => {
+describeWithLocalBinding("GitHubOAuthDeviceFlow", () => {
   it("opens the verification URL and exchanges the device code without exposing the token", async () => {
     const opened: string[] = [];
     const requests: string[] = [];
@@ -398,4 +400,28 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   }
   if (chunks.length === 0) return undefined;
   return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+}
+
+async function canBindLocalBinding(): Promise<boolean> {
+  const server = createServer((_request, response) => response.end("ok"));
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    return true;
+  } catch {
+    try {
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+    } catch {
+      // Ignore close errors during capability probe.
+    }
+    return false;
+  }
 }

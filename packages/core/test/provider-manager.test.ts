@@ -5,6 +5,7 @@ import type {
   Message,
   Model,
 } from "@deepcode/shared";
+import { ProviderError } from "../src/errors.js";
 import { ProviderManager } from "../src/providers/provider-manager.js";
 import type {
   LLMProvider,
@@ -35,6 +36,56 @@ describe("ProviderManager", () => {
     expect(chunks).toEqual([{ type: "delta", content: "partial" }]);
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain("stream disconnected");
+  });
+
+  it("retries on 429 rate-limit errors up to the configured retry limit", async () => {
+    let calls = 0;
+    const manager = new ProviderManager(createConfig({ providerRetries: 2 }));
+    manager.register(makeCountingProvider("openrouter", () => {
+      calls++;
+      throw new ProviderError("rate limited", "openrouter", undefined, { statusCode: 429, retryAfterMs: 0 });
+    }));
+
+    let caught: unknown;
+    try {
+      for await (const _ of manager.chat([], { preferredProvider: "openrouter" })) { void _; }
+    } catch (e) { caught = e; }
+
+    expect(calls).toBe(3); // initial attempt + 2 retries
+    expect(caught).toBeInstanceOf(ProviderError);
+  });
+
+  it("does not retry on 401 authentication errors", async () => {
+    let calls = 0;
+    const manager = new ProviderManager(createConfig({ providerRetries: 2 }));
+    manager.register(makeCountingProvider("openrouter", () => {
+      calls++;
+      throw new ProviderError("unauthorized", "openrouter", undefined, { statusCode: 401 });
+    }));
+
+    let caught: unknown;
+    try {
+      for await (const _ of manager.chat([], { preferredProvider: "openrouter" })) { void _; }
+    } catch (e) { caught = e; }
+
+    expect(calls).toBe(1); // no retries for auth errors
+    expect(caught).toBeInstanceOf(ProviderError);
+  });
+
+  it("still fails over to the next provider after a non-retryable error", async () => {
+    const results: string[] = [];
+    const manager = new ProviderManager(createConfig({ providerRetries: 2 }));
+    manager.register(makeCountingProvider("openrouter", () => {
+      results.push("primary-fail");
+      throw new ProviderError("unauthorized", "openrouter", undefined, { statusCode: 401 });
+    }));
+    manager.register(makeStreamingProvider("openai", "ok from fallback"));
+
+    for await (const chunk of manager.chat([], { preferredProvider: "openrouter", failover: ["openai"] })) {
+      if (chunk.type === "delta") results.push(chunk.content);
+    }
+
+    expect(results).toEqual(["primary-fail", "ok from fallback"]);
   });
 
   it("accepts OpenCode model identifiers with the documented opencode-go/ prefix", async () => {
@@ -167,6 +218,8 @@ function createConfig(overrides: { providers?: Record<string, { apiKey?: string;
     openai: {},
     deepseek: {},
     opencode: {},
+    groq: {},
+    ollama: {},
     ...overrideProviders,
   };
 
@@ -207,5 +260,49 @@ function createConfig(overrides: { providers?: Record<string, { apiKey?: string;
     subagentConcurrency: 4,
     telemetry: { enabled: true, persistHistory: true },
     ...restOverrides,
+  };
+}
+
+const BASE_CAPABILITIES: ProviderCapabilities = {
+  streaming: true,
+  functionCalling: true,
+  jsonMode: true,
+  vision: false,
+  maxContextLength: 128_000,
+};
+
+function makeCountingProvider(
+  id: "openrouter" | "openai" | "anthropic" | "deepseek" | "opencode",
+  onChat: () => void,
+): LLMProvider {
+  return {
+    id,
+    name: `CountingProvider(${id})`,
+    capabilities: BASE_CAPABILITIES,
+    async *chat(): AsyncIterable<Chunk> {
+      onChat();
+      yield { type: "done" };
+    },
+    async complete() { return ""; },
+    async listModels() { return []; },
+    async validateConfig() { return true; },
+  };
+}
+
+function makeStreamingProvider(
+  id: "openrouter" | "openai" | "anthropic" | "deepseek" | "opencode",
+  content: string,
+): LLMProvider {
+  return {
+    id,
+    name: `StreamingProvider(${id})`,
+    capabilities: BASE_CAPABILITIES,
+    async *chat(): AsyncIterable<Chunk> {
+      yield { type: "delta", content };
+      yield { type: "done" };
+    },
+    async complete() { return content; },
+    async listModels() { return []; },
+    async validateConfig() { return true; },
   };
 }
