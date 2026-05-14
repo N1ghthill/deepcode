@@ -130,11 +130,14 @@ describe("useModels", () => {
     const { lastFrame, unmount: u2 } = render(
       React.createElement(ModelsDisplay, { providerId: "anthropic", provider }),
     );
-    await settleInk(50);
-    u2();
 
-    expect(provider.listModels).toHaveBeenCalledTimes(1);
-    expect(lastFrame()).toContain("count:1");
+    try {
+      await settleInk(50);
+      expect(provider.listModels).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).toContain("count:1");
+    } finally {
+      u2();
+    }
   });
 
   it("refetches after refresh clears cache", async () => {
@@ -291,11 +294,14 @@ describe("useModelCatalog", () => {
     const { lastFrame, unmount: u2 } = render(
       React.createElement(CatalogDisplay, { entries: [entry] }),
     );
-    await settleInk(80);
-    u2();
 
-    expect(provider.listModels).toHaveBeenCalledTimes(1);
-    expect(lastFrame()).toContain("count:1");
+    try {
+      await settleInk(80);
+      expect(provider.listModels).toHaveBeenCalledTimes(1);
+      expect(lastFrame()).toContain("count:1");
+    } finally {
+      u2();
+    }
   });
 
   it("skips disabled entries even when provider is set", async () => {
