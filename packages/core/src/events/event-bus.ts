@@ -36,6 +36,8 @@ export interface AppEvents {
   "approval:decision": { requestId: string; decision: ApprovalDecision };
   "app:error": { error: Error; context?: Record<string, unknown> };
   "app:warn": { message: string; context?: Record<string, unknown> };
+  "budget:warning": { kind: "inputTokens" | "outputTokens" | "cost"; used: number; limit: number; fraction: number };
+  "budget:exceeded": { kind: "inputTokens" | "outputTokens" | "cost"; used: number; limit: number };
 }
 
 export class EventBus {
@@ -48,6 +50,8 @@ export class EventBus {
     // We use "app:error" to avoid colliding with Node's built-in "error" semantics.
     this.emitter.on("app:error", () => {});
     this.emitter.on("app:warn", () => {});
+    this.emitter.on("budget:warning", () => {});
+    this.emitter.on("budget:exceeded", () => {});
   }
 
   emit<K extends keyof AppEvents>(event: K, payload: AppEvents[K]): void {

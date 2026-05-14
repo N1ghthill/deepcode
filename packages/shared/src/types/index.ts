@@ -428,6 +428,15 @@ export const DeepCodeConfigSchema = z
     taskRetries: z.number().int().min(0).max(3).default(1).describe("Number of retry attempts per task on failure"),
     subagentConcurrency: z.number().int().positive().max(16).default(4).describe("Maximum parallel sub-agents when running tasks"),
     contextWindowThreshold: z.number().min(0.5).max(0.95).default(0.8).describe("Fraction of estimated context window at which to auto-summarize history"),
+    tokenBudget: z
+      .object({
+        maxInputTokens: z.number().int().positive().optional(),
+        maxOutputTokens: z.number().int().positive().optional(),
+        maxCostUsd: z.number().positive().optional(),
+        warnAtFraction: z.number().min(0).max(1).default(0.8),
+      })
+      .strict()
+      .default({}),
     mcpServers: z.array(McpServerConfigSchema).default([]),
     telemetry: z
       .object({

@@ -41,6 +41,7 @@ import {
   shouldCompressContext,
   splitForCompression,
 } from "./context-manager.js";
+import { SessionBudget } from "./token-budget.js";
 import {
   applyFallbackToolCallParsing,
   buildFallbackToolCallPrompt,
@@ -90,6 +91,8 @@ export class Agent {
   private readonly planner = new TaskPlanner();
   /** Per-session undo stacks. Each write_file / edit_file pushes one entry. */
   private readonly undoStacks = new Map<string, UndoEntry[]>();
+  /** Active token budget for the current run(), keyed by sessionId. */
+  private readonly activeBudgets = new Map<string, SessionBudget>();
 
   constructor(
     private readonly providerManager: ProviderManager,
@@ -151,6 +154,8 @@ export class Agent {
       }
     }
 
+    this.activeBudgets.set(session.id, new SessionBudget(this.config.tokenBudget));
+
     let finalText = "";
     let iterations = 0;
     const maxIterations = this.config.maxIterations;
@@ -169,6 +174,7 @@ export class Agent {
     session.status = "idle";
     this.sessions.save(session);
     await this.sessions.persist(session.id);
+    this.activeBudgets.delete(session.id);
     return finalText.trim();
   }
 
@@ -342,6 +348,7 @@ Execute this task using the available tools. Return a summary of what was done.`
         }
         if (chunk.type === "usage") {
           options.onUsage?.(chunk.inputTokens, chunk.outputTokens);
+          this.activeBudgets.get(session.id)?.add(chunk.inputTokens, chunk.outputTokens);
         }
       }
 
@@ -408,6 +415,21 @@ Execute this task using the available tools. Return a summary of what was done.`
     while (iterations < maxIterations) {
       iterations += 1;
       options.onIteration?.(iterations, maxIterations);
+
+      const budget = this.activeBudgets.get(session.id);
+      if (budget) {
+        const budgetStatus = budget.check();
+        if (budgetStatus.status === "exceeded") {
+          this.eventBus.emit("budget:exceeded", budgetStatus);
+          throw new Error(
+            `Token budget exceeded (${budgetStatus.kind}): used ${budgetStatus.used.toFixed(budgetStatus.kind === "cost" ? 4 : 0)}, limit ${budgetStatus.limit}`,
+          );
+        }
+        if (budgetStatus.status === "warning") {
+          this.eventBus.emit("budget:warning", budgetStatus);
+        }
+      }
+
       await this.compressContextIfNeeded(session, turnStrategy.systemPrompt, options);
       const chunks = this.providerManager.chat(
         this.messagesForSystemPrompt(
@@ -452,6 +474,7 @@ Execute this task using the available tools. Return a summary of what was done.`
         }
         if (chunk.type === "usage") {
           options.onUsage?.(chunk.inputTokens, chunk.outputTokens);
+          this.activeBudgets.get(session.id)?.add(chunk.inputTokens, chunk.outputTokens);
         }
       }
 

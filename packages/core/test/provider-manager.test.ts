@@ -259,6 +259,7 @@ function createConfig(overrides: { providers?: Record<string, { apiKey?: string;
     taskRetries: 1,
     subagentConcurrency: 4,
     contextWindowThreshold: 0.8,
+    tokenBudget: { warnAtFraction: 0.8 },
     mcpServers: [],
     telemetry: { enabled: true, persistHistory: true },
     ...restOverrides,
