@@ -137,6 +137,55 @@ export async function listIssuesCommand(options: {
   }
 }
 
+export async function listPrsCommand(options: {
+  cwd: string;
+  config?: string;
+  state?: "open" | "closed" | "all";
+}): Promise<void> {
+  const runtime = await createRuntime({
+    cwd: options.cwd,
+    configPath: options.config,
+    interactive: false,
+  });
+  const client = new GitHubClient({
+    token: runtime.config.github.token,
+    enterpriseUrl: runtime.config.github.enterpriseUrl,
+    worktree: options.cwd,
+  });
+  const repo = await client.detectRepo();
+  const prs = await client.listPullRequests({ ...repo, state: options.state });
+  for (const pr of prs) {
+    await writeStdoutLine(`#${pr.number} ${pr.state} ${pr.title}`);
+    await writeStdoutLine(pr.url);
+  }
+}
+
+export async function mergePrCommand(
+  prNumber: number,
+  input: { method?: "merge" | "squash" | "rebase"; title?: string },
+  options: { cwd: string; config?: string },
+): Promise<void> {
+  const runtime = await createRuntime({
+    cwd: options.cwd,
+    configPath: options.config,
+    interactive: false,
+  });
+  const client = new GitHubClient({
+    token: runtime.config.github.token,
+    enterpriseUrl: runtime.config.github.enterpriseUrl,
+    worktree: options.cwd,
+  });
+  const repo = await client.detectRepo();
+  const result = await client.mergePullRequest({
+    ...repo,
+    number: prNumber,
+    mergeMethod: input.method,
+    commitTitle: input.title,
+  });
+  await writeStdoutLine(result.message);
+  await writeStdoutLine(result.sha);
+}
+
 export async function createPrCommand(
   input: { title: string; body: string; head: string; base: string },
   options: { cwd: string; config?: string },

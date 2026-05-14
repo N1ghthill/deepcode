@@ -188,10 +188,20 @@ export type Issue = z.infer<typeof IssueSchema>;
 export const PullRequestSchema = z.object({
   number: z.number(),
   title: z.string(),
+  body: z.string().nullable().optional(),
   state: z.string(),
   url: z.string(),
+  head: z.string().optional(),
+  base: z.string().optional(),
+  mergeable: z.boolean().nullable().optional(),
 });
 export type PullRequest = z.infer<typeof PullRequestSchema>;
+
+export interface MergeResult {
+  merged: boolean;
+  sha: string;
+  message: string;
+}
 
 /* ── ChatOptions ─────────────────────────────────────────────────────── */
 export const ChatOptionsSchema = z.object({

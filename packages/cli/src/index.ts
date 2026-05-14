@@ -18,6 +18,8 @@ import {
   githubLoginCommand,
   githubWhoamiCommand,
   listIssuesCommand,
+  listPrsCommand,
+  mergePrCommand,
   solveIssueCommand,
 } from "./commands/github.js";
 import { runCommand } from "./commands/run.js";
@@ -187,6 +189,33 @@ export function createProgram(): Command {
         tasks: options.task,
         concurrency: options.concurrency,
         yes: options.yes,
+      });
+    });
+  github
+    .command("prs")
+    .description("list pull requests")
+    .option("--state <state>", "open, closed, or all", "open")
+    .action(async (options: { state: "open" | "closed" | "all" }) => {
+      await listPrsCommand({
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+        state: options.state,
+      });
+    });
+  github
+    .command("merge")
+    .description("merge a pull request")
+    .argument("<number>", "PR number")
+    .option("--method <method>", "merge method: merge, squash, or rebase", "merge")
+    .option("--title <title>", "commit title for squash/merge")
+    .action(async (number: string, options: { method?: "merge" | "squash" | "rebase"; title?: string }) => {
+      const prNumber = Number.parseInt(number, 10);
+      if (!Number.isInteger(prNumber) || prNumber <= 0) {
+        throw new Error(`Invalid PR number: ${number}`);
+      }
+      await mergePrCommand(prNumber, options, {
+        cwd: program.opts().cwd,
+        config: program.opts().config,
       });
     });
   github

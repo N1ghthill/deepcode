@@ -151,6 +151,61 @@ describeWithLocalBinding("GitHubClient", () => {
     expect(requests[4]?.body).toEqual({ body: "Solved in PR" });
   });
 
+  it("lists, gets, and merges pull requests", async () => {
+    const requests: Array<{ method: string; url: string; body: unknown }> = [];
+    const server = createServer(async (request, response) => {
+      const body = await readJsonBody(request);
+      requests.push({ method: request.method ?? "GET", url: request.url ?? "", body });
+      handleGitHubApi(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Unable to bind local GitHub test server");
+    const enterpriseUrl = `http://127.0.0.1:${address.port}`;
+    const client = new GitHubClient({ token: "test-token", enterpriseUrl, worktree: process.cwd() });
+
+    try {
+      await expect(client.listPullRequests({ owner: "acme", repo: "project" })).resolves.toEqual([
+        {
+          number: 2,
+          title: "Fix",
+          body: "Details",
+          state: "open",
+          url: `${enterpriseUrl}/pull/2`,
+          head: "fix-branch",
+          base: "main",
+          mergeable: true,
+        },
+      ]);
+      await expect(client.getPullRequest({ owner: "acme", repo: "project", number: 2 })).resolves.toEqual({
+        number: 2,
+        title: "Fix",
+        body: "Details",
+        state: "open",
+        url: `${enterpriseUrl}/pull/2`,
+        head: "fix-branch",
+        base: "main",
+        mergeable: true,
+      });
+      await expect(
+        client.mergePullRequest({ owner: "acme", repo: "project", number: 2, mergeMethod: "squash" }),
+      ).resolves.toEqual({
+        merged: true,
+        sha: "abc123def456",
+        message: "Pull Request successfully merged",
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
+
+    expect(requests.map((r) => `${r.method} ${r.url}`)).toEqual([
+      "GET /api/v3/repos/acme/project/pulls?state=open",
+      "GET /api/v3/repos/acme/project/pulls/2",
+      "PUT /api/v3/repos/acme/project/pulls/2/merge",
+    ]);
+    expect(requests[2]?.body).toEqual({ merge_method: "squash" });
+  });
+
   it("detects repository coordinates from a temporary git repository", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-github-"));
     await execFileAsync("git", ["init"], { cwd: tempDir, timeoutMs: 10_000 });
@@ -381,6 +436,39 @@ function handleGitHubApi(request: IncomingMessage, response: ServerResponse): vo
     case "POST /api/v3/repos/acme/project/issues/1/comments":
       response.writeHead(204);
       response.end();
+      return;
+    case "GET /api/v3/repos/acme/project/pulls?state=open":
+      sendJson(response, [
+        {
+          number: 2,
+          title: "Fix",
+          body: "Details",
+          state: "open",
+          html_url: `${enterpriseUrl}/pull/2`,
+          head: { ref: "fix-branch" },
+          base: { ref: "main" },
+          mergeable: true,
+        },
+      ]);
+      return;
+    case "GET /api/v3/repos/acme/project/pulls/2":
+      sendJson(response, {
+        number: 2,
+        title: "Fix",
+        body: "Details",
+        state: "open",
+        html_url: `${enterpriseUrl}/pull/2`,
+        head: { ref: "fix-branch" },
+        base: { ref: "main" },
+        mergeable: true,
+      });
+      return;
+    case "PUT /api/v3/repos/acme/project/pulls/2/merge":
+      sendJson(response, {
+        merged: true,
+        sha: "abc123def456",
+        message: "Pull Request successfully merged",
+      });
       return;
     default:
       response.writeHead(404, { "content-type": "application/json" });

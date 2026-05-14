@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Issue, PullRequest } from "@deepcode/shared";
+import type { Issue, MergeResult, PullRequest } from "@deepcode/shared";
 import { execFileAsync } from "../tools/process.js";
 
 export interface GitHubAuthenticatedUser {
@@ -81,6 +81,66 @@ export class GitHubClient {
       }),
     });
     return { number: pr.number, title: pr.title, state: pr.state, url: pr.html_url };
+  }
+
+  async listPullRequests(input: {
+    owner: string;
+    repo: string;
+    state?: "open" | "closed" | "all";
+  }): Promise<PullRequest[]> {
+    const data = await this.request<any[]>(
+      `/repos/${input.owner}/${input.repo}/pulls?state=${input.state ?? "open"}`,
+    );
+    return data.map((pr) => ({
+      number: pr.number,
+      title: pr.title,
+      body: pr.body ?? null,
+      state: pr.state,
+      url: pr.html_url,
+      head: pr.head?.ref,
+      base: pr.base?.ref,
+      mergeable: pr.mergeable ?? null,
+    }));
+  }
+
+  async getPullRequest(input: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<PullRequest> {
+    const pr = await this.request<any>(
+      `/repos/${input.owner}/${input.repo}/pulls/${input.number}`,
+    );
+    return {
+      number: pr.number,
+      title: pr.title,
+      body: pr.body ?? null,
+      state: pr.state,
+      url: pr.html_url,
+      head: pr.head?.ref,
+      base: pr.base?.ref,
+      mergeable: pr.mergeable ?? null,
+    };
+  }
+
+  async mergePullRequest(input: {
+    owner: string;
+    repo: string;
+    number: number;
+    mergeMethod?: "merge" | "squash" | "rebase";
+    commitTitle?: string;
+    commitMessage?: string;
+  }): Promise<MergeResult> {
+    const body: Record<string, string> = {
+      merge_method: input.mergeMethod ?? "merge",
+    };
+    if (input.commitTitle) body.commit_title = input.commitTitle;
+    if (input.commitMessage) body.commit_message = input.commitMessage;
+    const result = await this.request<any>(
+      `/repos/${input.owner}/${input.repo}/pulls/${input.number}/merge`,
+      { method: "PUT", body: JSON.stringify(body) },
+    );
+    return { merged: result.merged, sha: result.sha, message: result.message };
   }
 
   async addIssueComment(input: {
