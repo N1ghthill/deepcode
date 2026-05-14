@@ -163,6 +163,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     ];
     for await (const chunk of this.chat(messages, options)) {
       if (chunk.type === "delta") output += chunk.content;
+      if (chunk.type === "usage") options.onUsage?.(chunk.inputTokens, chunk.outputTokens);
     }
     return output;
   }

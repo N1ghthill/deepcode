@@ -38,6 +38,15 @@ export function resolveTurnStrategy(
   policy: BuildTurnPolicy,
 ): TurnStrategy {
   if (mode === "build") {
+    if (isDirectUtilityRequest(input, policy)) {
+      return {
+        allowTools: true,
+        shouldPlan: false,
+        systemPrompt: UTILITY_SYSTEM_PROMPT,
+        kind: "utility",
+      };
+    }
+
     if (policy.mode === "always-tools") {
       return {
         allowTools: true,
@@ -53,15 +62,6 @@ export function resolveTurnStrategy(
         shouldPlan: false,
         systemPrompt: BUILD_SYSTEM_PROMPT_CONVERSATIONAL,
         kind: "chat",
-      };
-    }
-
-    if (isDirectUtilityRequest(input, policy)) {
-      return {
-        allowTools: true,
-        shouldPlan: false,
-        systemPrompt: UTILITY_SYSTEM_PROMPT,
-        kind: "utility",
       };
     }
 

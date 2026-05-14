@@ -53,3 +53,10 @@ export class ProviderError extends DeepCodeError {
     this.retryAfterMs = options?.retryAfterMs;
   }
 }
+
+export class BudgetExceededError extends DeepCodeError {
+  constructor(message: string) {
+    super(message, "TOKEN_BUDGET_EXCEEDED");
+    this.name = "BudgetExceededError";
+  }
+}

@@ -432,7 +432,6 @@ export function ConfigEditor({
 }
 
 const CMD_W = 20;
-const DESC_W = 44;
 
 function HelpRow({ keys, desc, theme, accent = false }: { keys: string; desc: string; theme: ThemeColors; accent?: boolean }) {
   return (

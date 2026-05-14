@@ -77,6 +77,17 @@ describe("ConfigLoader", () => {
     });
   });
 
+  it("initializes the default build turn policy in heuristic mode", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-config-"));
+    await new ConfigLoader().init(tempDir);
+
+    await expect(new ConfigLoader().loadFile({ cwd: tempDir })).resolves.toMatchObject({
+      buildTurnPolicy: {
+        mode: "heuristic",
+      },
+    });
+  });
+
   it("loads provider API keys from configured files without writing the secret into config", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-config-"));
     await new ConfigLoader().init(tempDir);

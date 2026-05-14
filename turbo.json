@@ -13,7 +13,7 @@
       "outputs": []
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["build", "^build"],
       "outputs": ["coverage/**"]
     },
     "dev": {

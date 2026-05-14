@@ -21,19 +21,27 @@ interface JsonRpcResponse {
   error?: { code: number; message: string };
 }
 
+export type McpSpawn = typeof spawn;
+
 export class McpClient {
   private readonly process: ChildProcess;
+  private readonly ready: Promise<void>;
   private nextId = 1;
   private readonly pending = new Map<
     number,
     { resolve: (v: unknown) => void; reject: (e: Error) => void }
   >();
 
-  constructor(command: string, args: string[], env?: Record<string, string>) {
-    this.process = spawn(command, args, {
+  constructor(command: string, args: string[], env?: Record<string, string>, spawnProcess: McpSpawn = spawn) {
+    this.process = spawnProcess(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, ...env },
     });
+    this.ready = new Promise((resolve, reject) => {
+      this.process.once("spawn", () => resolve());
+      this.process.once("error", reject);
+    });
+    let exitCode: number | null = null;
 
     const rejectAll = (error: Error) => {
       for (const { reject } of this.pending.values()) reject(error);
@@ -41,9 +49,7 @@ export class McpClient {
     };
     this.process.on("error", (err) => rejectAll(err));
     this.process.on("exit", (code) => {
-      if (this.pending.size > 0) {
-        rejectAll(new Error(`MCP server exited unexpectedly (code ${code ?? "null"})`));
-      }
+      exitCode = code ?? null;
     });
 
     const rl = createInterface({ input: this.process.stdout!, terminal: false });
@@ -64,9 +70,15 @@ export class McpClient {
         // ignore malformed lines
       }
     });
+    rl.on("close", () => {
+      if (this.pending.size > 0) {
+        rejectAll(new Error(`MCP server exited unexpectedly (code ${exitCode ?? this.process.exitCode ?? "null"})`));
+      }
+    });
   }
 
   async initialize(): Promise<void> {
+    await this.ready;
     await this.request("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
@@ -100,7 +112,8 @@ export class McpClient {
     this.pending.clear();
   }
 
-  private request(method: string, params?: unknown): Promise<unknown> {
+  private async request(method: string, params?: unknown): Promise<unknown> {
+    await this.ready;
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });

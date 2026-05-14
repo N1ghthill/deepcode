@@ -21,6 +21,7 @@ import type { PathSecurity } from "../security/path-security.js";
 import type { SessionManager } from "../sessions/session-manager.js";
 import type { ProviderToolChoice } from "../providers/provider.js";
 import type { ToolContext, ToolRegistry } from "../tools/tool.js";
+import { BudgetExceededError } from "../errors.js";
 import {
   resolveModelExecutionProfile,
   type ToolSchemaMode,
@@ -131,51 +132,63 @@ export class Agent {
     session.status = "planning";
     session.metadata.plan = undefined;
     session.metadata.planError = undefined;
-
-    // Planning phase
-    const planningProvider = this.providerManager.get(resolvedTarget.provider);
-    let plan: TaskPlan | undefined;
-
-    if (turnStrategy.shouldPlan) {
-      try {
-        plan = await this.planner.plan(options.input, (prompt) =>
-          planningProvider.complete(prompt, {
-            model: resolvedModel,
-            maxTokens: Math.min(this.config.maxTokens, 512),
-            temperature: 0,
-            signal: options.signal,
-          }),
-        );
-        session.metadata.plan = plan;
-      } catch (error) {
-        session.metadata.planError = error instanceof Error ? error.message : String(error);
-        // Continue without plan if planning fails
-        this.eventBus.emit("app:warn", { message: `Task planning failed: ${session.metadata.planError}. Continuing without structured plan.` });
-      }
-    }
-
     this.activeBudgets.set(session.id, new SessionBudget(this.config.tokenBudget));
 
-    let finalText = "";
-    let iterations = 0;
-    const maxIterations = this.config.maxIterations;
-    session.status = "executing";
+    try {
+      // Planning phase
+      const planningProvider = this.providerManager.get(resolvedTarget.provider);
+      let plan: TaskPlan | undefined;
 
-    if (turnStrategy.kind === "utility") {
-      finalText = await this.executeUtilityTurn(session, options.input, mode, options);
-    } else if (plan && mode === "build") {
-      // Execute tasks from plan if available
-      finalText = await this.executePlan(plan, session, mode, options);
-    } else {
-      // Fallback to traditional execution loop
-      finalText = await this.executeTraditional(session, mode, maxIterations, iterations, options, turnStrategy);
+      if (turnStrategy.shouldPlan) {
+        try {
+          plan = await this.planner.plan(options.input, (prompt) =>
+            planningProvider.complete(prompt, {
+              model: resolvedModel,
+              maxTokens: Math.min(this.config.maxTokens, 512),
+              temperature: 0,
+              signal: options.signal,
+              onUsage: (inputTokens, outputTokens) => {
+                this.recordUsage(session.id, inputTokens, outputTokens);
+              },
+            }),
+          );
+          session.metadata.plan = plan;
+        } catch (error) {
+          if (error instanceof BudgetExceededError) {
+            throw error;
+          }
+          session.metadata.planError = error instanceof Error ? error.message : String(error);
+          // Continue without plan if planning fails
+          this.eventBus.emit("app:warn", { message: `Task planning failed: ${session.metadata.planError}. Continuing without structured plan.` });
+        }
+      }
+
+      let finalText = "";
+      let iterations = 0;
+      const maxIterations = this.config.maxIterations;
+      session.status = "executing";
+
+      if (turnStrategy.kind === "utility") {
+        finalText = await this.executeUtilityTurn(session, options.input, mode, options);
+      } else if (plan && mode === "build") {
+        // Execute tasks from plan if available
+        finalText = await this.executePlan(plan, session, mode, options);
+      } else {
+        // Fallback to traditional execution loop
+        finalText = await this.executeTraditional(session, mode, maxIterations, iterations, options, turnStrategy);
+      }
+
+      session.status = "idle";
+      this.sessions.save(session);
+      await this.sessions.persist(session.id);
+      return finalText.trim();
+    } catch (error) {
+      session.status = "error";
+      this.sessions.save(session);
+      throw error;
+    } finally {
+      this.activeBudgets.delete(session.id);
     }
-
-    session.status = "idle";
-    this.sessions.save(session);
-    await this.sessions.persist(session.id);
-    this.activeBudgets.delete(session.id);
-    return finalText.trim();
   }
 
   /**
@@ -214,7 +227,7 @@ export class Agent {
       const progress = this.planner.getProgress(plan);
       const parallel = runnableTasks.length > 1;
       const taskLines = await Promise.all(
-        runnableTasks.map(async (task) => {
+        runnableTasks.map(async (task, taskIndex) => {
           const taskPrompt = this.buildTaskPrompt(plan, task, progress);
           const executionSession = parallel ? this.createChildSession(session, task.id) : session;
           const maxAttempts = 1 + this.config.taskRetries;
@@ -231,15 +244,18 @@ export class Agent {
               const result = await this.executeTaskWithLLM(prompt, executionSession, mode, taskOptions, task.type);
               this.planner.updateTaskStatus(plan, task.id, "completed", result);
               options.onTaskUpdate?.(task, plan);
-              return `[${progress.completed + 1}/${progress.total}] ✓ ${task.description}`;
+              return `[${progress.completed + taskIndex + 1}/${progress.total}] ✓ ${task.description}`;
             } catch (error) {
+              if (error instanceof BudgetExceededError) {
+                throw error;
+              }
               lastError = error instanceof Error ? error.message : String(error);
             }
           }
 
           this.planner.updateTaskStatus(plan, task.id, "failed", undefined, lastError);
           options.onTaskUpdate?.(task, plan);
-          return `[${progress.completed + 1}/${progress.total}] ✗ ${task.description} — ${lastError}`;
+          return `[${progress.completed + taskIndex + 1}/${progress.total}] ✗ ${task.description} — ${lastError}`;
         }),
       );
 
@@ -306,6 +322,7 @@ Execute this task using the available tools. Return a summary of what was done.`
 
     while (taskIterations < maxTaskIterations) {
       taskIterations++;
+      this.enforceBudget(session.id);
 
       const chunks = this.providerManager.chat(
         this.messagesForSystemPrompt(
@@ -352,7 +369,7 @@ Execute this task using the available tools. Return a summary of what was done.`
         }
         if (chunk.type === "usage") {
           options.onUsage?.(chunk.inputTokens, chunk.outputTokens);
-          this.activeBudgets.get(session.id)?.add(chunk.inputTokens, chunk.outputTokens);
+          this.recordUsage(session.id, chunk.inputTokens, chunk.outputTokens);
         }
       }
 
@@ -420,20 +437,7 @@ Execute this task using the available tools. Return a summary of what was done.`
     while (iterations < maxIterations) {
       iterations += 1;
       options.onIteration?.(iterations, maxIterations);
-
-      const budget = this.activeBudgets.get(session.id);
-      if (budget) {
-        const budgetStatus = budget.check();
-        if (budgetStatus.status === "exceeded") {
-          this.eventBus.emit("budget:exceeded", budgetStatus);
-          throw new Error(
-            `Token budget exceeded (${budgetStatus.kind}): used ${budgetStatus.used.toFixed(budgetStatus.kind === "cost" ? 4 : 0)}, limit ${budgetStatus.limit}`,
-          );
-        }
-        if (budgetStatus.status === "warning") {
-          this.eventBus.emit("budget:warning", budgetStatus);
-        }
-      }
+      this.enforceBudget(session.id);
 
       await this.compressContextIfNeeded(session, turnStrategy.systemPrompt, options);
       const chunks = this.providerManager.chat(
@@ -486,7 +490,7 @@ Execute this task using the available tools. Return a summary of what was done.`
         }
         if (chunk.type === "usage") {
           options.onUsage?.(chunk.inputTokens, chunk.outputTokens);
-          this.activeBudgets.get(session.id)?.add(chunk.inputTokens, chunk.outputTokens);
+          this.recordUsage(session.id, chunk.inputTokens, chunk.outputTokens);
         }
       }
 
@@ -850,6 +854,9 @@ Execute this task using the available tools. Return a summary of what was done.`
     );
     for await (const chunk of summaryChunks) {
       if (chunk.type === "delta") summary += chunk.content;
+      if (chunk.type === "usage") {
+        this.recordUsage(session.id, chunk.inputTokens, chunk.outputTokens);
+      }
     }
 
     const summaryMessage = buildSummaryMessage(summary);
@@ -945,6 +952,33 @@ Execute this task using the available tools. Return a summary of what was done.`
 
   private utilityDateResponse(): string {
     return utilityDateResponse();
+  }
+
+  private recordUsage(sessionId: string, inputTokens: number, outputTokens: number): void {
+    const budget = this.activeBudgets.get(sessionId);
+    if (!budget) return;
+    budget.add(inputTokens, outputTokens);
+    this.reportBudgetStatus(budget.check());
+  }
+
+  private enforceBudget(sessionId: string): void {
+    const budget = this.activeBudgets.get(sessionId);
+    if (!budget) return;
+    this.reportBudgetStatus(budget.check());
+  }
+
+  private reportBudgetStatus(status: ReturnType<SessionBudget["check"]>): void {
+    if (status.status === "warning") {
+      this.eventBus.emit("budget:warning", status);
+      return;
+    }
+
+    if (status.status === "exceeded") {
+      this.eventBus.emit("budget:exceeded", status);
+      throw new BudgetExceededError(
+        `Token budget exceeded (${status.kind}): used ${status.used.toFixed(status.kind === "cost" ? 4 : 0)}, limit ${status.limit}`,
+      );
+    }
   }
 }
 

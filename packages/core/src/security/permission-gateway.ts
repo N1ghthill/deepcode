@@ -105,13 +105,11 @@ export class PermissionGateway {
       return { allowed: true };
     }
 
-    const autoAllowedDirectoryListing = isAutoAllowedDirectoryListing(check, pathAccess);
-    if (mode === "allow" && (pathAccess === "allowed" || autoAllowedDirectoryListing)) {
+    if (mode === "allow" && pathAccess === "allowed") {
       await this.audit.log({
         operation: check.operation,
         path: check.path,
         result: "allowed",
-        reason: autoAllowedDirectoryListing ? "directory_probe" : undefined,
       });
       return { allowed: true };
     }
@@ -321,15 +319,6 @@ function isShellWhitelisted(allowList: string[], operation: string): boolean {
   return allowList.some(
     (allowedOperation) => normalizeShellPermissionOperation(allowedOperation) === normalizedOperation,
   );
-}
-
-function isAutoAllowedDirectoryListing(
-  check: PermissionCheck,
-  pathAccess: "allowed" | "outside_whitelist" | "blacklisted",
-): boolean {
-  return pathAccess === "outside_whitelist"
-    && check.kind === "read"
-    && check.operation === "list_dir";
 }
 
 function configDeniedReason(check: PermissionCheck): string {

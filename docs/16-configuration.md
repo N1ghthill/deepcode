@@ -77,6 +77,7 @@ O schema atual suporta duas camadas de selecao:
 
 `buildTurnPolicy` controla como o modo `BUILD` decide entre responder diretamente e usar ferramentas.
 
+- padrao: `mode: "heuristic"`
 - `mode: "heuristic"` usa frases conversacionais, termos de workspace, verbos de tarefa e extensoes de arquivo.
 - `mode: "always-tools"` força o fluxo com tools para todo turno em `BUILD`.
 

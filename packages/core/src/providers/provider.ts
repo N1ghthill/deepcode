@@ -4,6 +4,7 @@ export type ProviderToolChoice = "auto" | "required" | "none";
 
 export type ProviderChatOptions = ChatOptions & {
   toolChoice?: ProviderToolChoice;
+  onUsage?: (inputTokens: number, outputTokens: number) => void;
 };
 
 export interface ProviderCapabilities {

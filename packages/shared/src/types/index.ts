@@ -30,7 +30,7 @@ export type AgentMode = z.infer<typeof AgentModeSchema>;
 export const ToolChoiceModeSchema = z.enum(["auto", "required", "none"]);
 export type ToolChoiceMode = z.infer<typeof ToolChoiceModeSchema>;
 
-export const BuildTurnPolicyModeSchema = z.enum(["heuristic", "always-tools"]).default("always-tools");
+export const BuildTurnPolicyModeSchema = z.enum(["heuristic", "always-tools"]).default("heuristic");
 export type BuildTurnPolicyMode = z.infer<typeof BuildTurnPolicyModeSchema>;
 
 export const ToolCallSchema = z.object({

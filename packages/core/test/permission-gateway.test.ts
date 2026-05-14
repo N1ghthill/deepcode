@@ -56,7 +56,7 @@ describe("PermissionGateway", () => {
     expect(requestSeen).toBe(true);
   });
 
-  it("allows directory listing outside the whitelist when read access is allowed", async () => {
+  it("denies directory listing outside the whitelist in non-interactive mode", async () => {
     worktree = await mkdtemp(path.join(tmpdir(), "deepcode-perm-"));
     externalDir = await mkdtemp(path.join(tmpdir(), "deepcode-external-"));
 
@@ -71,7 +71,10 @@ describe("PermissionGateway", () => {
 
     await expect(
       gateway.check({ operation: "list_dir", kind: "read", path: externalDir }),
-    ).resolves.toEqual({ allowed: true });
+    ).resolves.toEqual({
+      allowed: false,
+      reason: `Path is outside the configured whitelist (\`paths.whitelist\`) and requires approval. Add a matching entry to \`.deepcode/config.json\`, for example: \`{"paths":{"whitelist":["${externalDir!.replaceAll(path.sep, "/")}/**"]}}\`. Use the interactive TUI/chat flow or extend the whitelist.`,
+    });
   });
 
   it("returns an exact whitelist example for outside-whitelist reads", async () => {

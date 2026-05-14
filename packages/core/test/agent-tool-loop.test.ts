@@ -509,11 +509,73 @@ describe("Agent tool loop", () => {
       expect(utilityProvider.completeCalls).toBe(0);
       expect(utilityProvider.toolCounts).toEqual([]);
       expect(utilityProvider.calls).toEqual([]);
-      expect(output).toContain("external.txt");
+      expect(output).toContain("Nao consegui listar");
+      expect(output).toContain("outside the configured whitelist");
       expect(session.messages.some((message) => message.role === "tool")).toBe(true);
     } finally {
       await rm(externalDir, { recursive: true, force: true });
     }
+  });
+
+  it("enforces the token budget during planning calls", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agent-"));
+    const config = createConfig({
+      tokenBudget: {
+        maxInputTokens: 10,
+        warnAtFraction: 0.8,
+      },
+    });
+    const events = new EventBus();
+    const providers = new ProviderManager(config);
+    providers.register(new PlanningBudgetProvider());
+    const tools = new ToolRegistry();
+    const sessions = new SessionManager(tempDir);
+    const pathSecurity = new PathSecurity(tempDir, config.paths);
+    const agent = new Agent(
+      providers,
+      tools,
+      sessions,
+      config,
+      new ToolCache(tempDir, config),
+      new PermissionGateway(config, pathSecurity, new AuditLogger(tempDir), events, false),
+      pathSecurity,
+      events,
+    );
+    const session = sessions.create({ provider: "openrouter", model: "test-model" });
+
+    await expect(agent.run({ session, input: "inspect the repo" })).rejects.toThrow("Token budget exceeded");
+    expect(session.status).toBe("error");
+  });
+
+  it("enforces the token budget immediately after a final model response", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agent-"));
+    const config = createConfig({
+      maxIterations: 1,
+      tokenBudget: {
+        maxOutputTokens: 5,
+        warnAtFraction: 0.8,
+      },
+    });
+    const events = new EventBus();
+    const providers = new ProviderManager(config);
+    providers.register(new FinalUsageBudgetProvider());
+    const tools = new ToolRegistry();
+    const sessions = new SessionManager(tempDir);
+    const pathSecurity = new PathSecurity(tempDir, config.paths);
+    const agent = new Agent(
+      providers,
+      tools,
+      sessions,
+      config,
+      new ToolCache(tempDir, config),
+      new PermissionGateway(config, pathSecurity, new AuditLogger(tempDir), events, false),
+      pathSecurity,
+      events,
+    );
+    const session = sessions.create({ provider: "openrouter", model: "test-model" });
+
+    await expect(agent.run({ session, input: "hello there" })).rejects.toThrow("Token budget exceeded");
+    expect(session.status).toBe("error");
   });
 
   it("filters operational and legacy internal messages out of model context", async () => {
@@ -1024,6 +1086,34 @@ class SingleCallFailingToolProvider extends ToolAwareProvider {
       ]);
     }
     return "unreachable";
+  }
+}
+
+class PlanningBudgetProvider extends ToolAwareProvider {
+  override async complete(
+    prompt: string,
+    options: Omit<ProviderChatOptions, "tools"> = {},
+  ): Promise<string> {
+    options.onUsage?.(24, 0);
+    if (prompt.includes("Create an execution plan")) {
+      return JSON.stringify([
+        { id: "task-1", description: "Inspect the repo", type: "research", dependencies: [] },
+      ]);
+    }
+    return "unused";
+  }
+}
+
+class FinalUsageBudgetProvider extends ToolAwareProvider {
+  override async *chat(messages: Message[], options: ProviderChatOptions = {}): AsyncIterable<Chunk> {
+    this.calls.push(messages.map((message) => ({ ...message })));
+    this.optionCalls.push({
+      toolChoice: options.toolChoice,
+      tools: options.tools,
+    });
+    yield { type: "delta", content: "plain reply" };
+    yield { type: "usage", inputTokens: 0, outputTokens: 12 };
+    yield { type: "done" };
   }
 }
 
