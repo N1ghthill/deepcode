@@ -47,21 +47,21 @@ export function resolveTurnStrategy(
       };
     }
 
-    if (policy.mode === "always-tools") {
-      return {
-        allowTools: true,
-        shouldPlan: false,
-        systemPrompt: BUILD_SYSTEM_PROMPT_ALWAYS_TOOLS,
-        kind: "task",
-      };
-    }
-
     if (isConversationalTurn(input, policy)) {
       return {
         allowTools: true,
         shouldPlan: false,
         systemPrompt: BUILD_SYSTEM_PROMPT_CONVERSATIONAL,
         kind: "chat",
+      };
+    }
+
+    if (policy.mode === "always-tools") {
+      return {
+        allowTools: true,
+        shouldPlan: false,
+        systemPrompt: BUILD_SYSTEM_PROMPT_ALWAYS_TOOLS,
+        kind: "task",
       };
     }
 

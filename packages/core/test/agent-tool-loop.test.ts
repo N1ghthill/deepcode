@@ -246,8 +246,8 @@ describe("Agent tool loop", () => {
 
     const output = await agent.run({ session, input: "oi" });
 
-    // always-tools now skips planning and runs executeTraditional directly,
-    // but still forces tool use even for conversational inputs
+    // always-tools skips planning; conversational phrases like "oi" use toolChoice:"auto"
+    // but the provider still yields a tool call (provider is tool-aware), so echo_tool runs
     expect(output).toContain("echo:hello");
     expect(session.messages.some((message) => message.role === "tool")).toBe(true);
     expect(session.activities.some((activity) => activity.metadata?.tool === "echo_tool")).toBe(true);
