@@ -671,8 +671,7 @@ describeWithLocalBinding("deepcode run with mock LLM", () => {
 
     try {
       await configureLLM(tempDir, llm.url);
-      // Planning phase makes one extra call for workspace requests (file extension detected).
-      llm.queueText("Writing the requested file.");
+      // "create src/generated.ts" matches isSimpleDirectCommand → no planning call, goes straight to execution.
       llm.queueToolCall("write_file", { path: "src/generated.ts", content: "export const ANSWER = 42;\n" });
       llm.queueText("Done. Created src/generated.ts.");
 
