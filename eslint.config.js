@@ -33,14 +33,33 @@ export default [
     plugins: {
       "@typescript-eslint": tsPlugin
     },
+    linterOptions: {
+      reportUnusedDisableDirectives: "off"
+    },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      // TypeScript already reports undefined identifiers; core `no-undef`
+      // does not understand TS globals/types and produces false positives.
+      "no-undef": "off",
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }]
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_"
+        }
+      ]
     }
   },
   {
-    ignores: ["dist/**", "node_modules/**", "coverage/**"]
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      "coverage/**",
+      "**/tui-old/**",
+      "**/test-old/**"
+    ]
   },
   prettier
 ];

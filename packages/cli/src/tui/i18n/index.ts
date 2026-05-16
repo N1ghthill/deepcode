@@ -1,48 +1,33 @@
-import { en } from "./en";
-import { ptBR } from "./pt-br";
+/**
+ * Minimal i18n for the DeepCode TUI.
+ *
+ * Qwen Code ships a full locale system; its translation *keys are English
+ * strings*, so an identity `t()` (with `{{param}}` interpolation) renders
+ * correctly in English without the locale machinery. Locale support can be
+ * layered back in later by replacing this module.
+ */
 
-export type I18nKey = keyof typeof en;
-export type I18nDict = Record<I18nKey, string>;
+export type SupportedLanguage = "en";
 
-export { en };
-export { ptBR };
+export const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = ["en"];
 
-export type Language = "en" | "pt-BR";
-
-export const LANGUAGES: Record<string, string> = {
-  en: "English",
-  "pt-BR": "Portugu\u00EAs (Brasil)",
-};
-
-const dicts: Record<Language, I18nDict> = {
-  en,
-  "pt-BR": ptBR,
-};
-
-let currentLanguage: Language = "en";
-let currentDict: I18nDict = en;
-
-export function setLanguage(lang: Language): void {
-  currentLanguage = lang;
-  currentDict = dicts[lang] ?? en;
+/** Translate (identity) with `{{param}}` interpolation. */
+export function t(key: string, params?: Record<string, string | number>): string {
+  if (!params) return key;
+  return key.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
+    name in params ? String(params[name]) : match,
+  );
 }
 
-export function getLanguage(): Language {
-  return currentLanguage;
+/** Translate to a string array — minimal stub returns the key as one line. */
+export function ta(key: string): string[] {
+  return [key];
 }
 
-export function t(
-  key: I18nKey,
-  params?: Record<string, string | number>,
-): string {
-  let value = currentDict[key] ?? en[key] ?? key;
-  if (params) {
-    for (const [paramKey, paramValue] of Object.entries(params)) {
-      value = value.replace(
-        new RegExp(`\\{${paramKey}\\}`, "g"),
-        String(paramValue),
-      );
-    }
-  }
-  return value;
+export function getCurrentLanguage(): SupportedLanguage {
+  return "en";
 }
+
+export function setLanguage(_lang: SupportedLanguage | "auto"): void {}
+
+export async function initializeI18n(): Promise<void> {}
