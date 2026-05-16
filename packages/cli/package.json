@@ -35,23 +35,32 @@
     "@deepcode/core": "workspace:*",
     "@deepcode/shared": "workspace:*",
     "@types/diff": "^8.0.0",
+    "ansi-regex": "^6.2.2",
     "chalk": "^5.4.1",
+    "cli-spinners": "^2.9.2",
     "commander": "^12.1.0",
     "diff": "^9.0.0",
-    "ink": "^4.4.1",
-    "ink-text-input": "^5.0.1",
-    "react": "^18.3.1",
+    "fzf": "^0.5.2",
+    "highlight.js": "^11.11.1",
+    "ink": "^7.0.3",
+    "ink-spinner": "^5.0.0",
+    "lowlight": "^3.3.0",
+    "react": "^19.2.0",
+    "string-width": "^7.2.0",
+    "strip-ansi": "^7.1.0",
+    "wrap-ansi": "^10.0.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
-    "@types/react": "^18.3.12",
+    "@types/hast": "^3.0.4",
+    "@types/react": "^19.2.0",
     "ink-testing-library": "^4.0.0",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
   "peerDependencies": {
-    "react": "^18.3.0"
+    "react": "^19.0.0"
   }
 }

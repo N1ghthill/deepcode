@@ -58,13 +58,17 @@ export function createProgram(): Command {
     .description("run one non-interactive task")
     .argument("<prompt...>", "task prompt")
     .option("--mode <mode>", "agent mode: plan or build")
+    .option("--provider <provider>", "provider override for this run")
+    .option("--model <model>", "model override for this run (or <provider>/<model>)")
     .option("-y, --yes", "approve permission requests for this run")
-    .action(async (prompt: string[], options: { yes?: boolean; mode?: AgentMode }) => {
+    .action(async (prompt: string[], options: { yes?: boolean; mode?: AgentMode; provider?: string; model?: string }) => {
       await runCommand(prompt.join(" "), {
         cwd: program.opts().cwd,
         config: program.opts().config,
         yes: options.yes,
         mode: options.mode,
+        provider: options.provider,
+        model: options.model,
       });
     });
 
@@ -272,8 +276,17 @@ export function createProgram(): Command {
   program
     .command("chat", { isDefault: true })
     .description("open the terminal UI")
-    .action(() => {
-      render(React.createElement(App, { cwd: program.opts().cwd, config: program.opts().config }));
+    .option("--provider <provider>", "provider override for this chat session")
+    .option("--model <model>", "model override for this chat session (or <provider>/<model>)")
+    .action((options: { provider?: string; model?: string }) => {
+      render(
+        React.createElement(App, {
+          cwd: program.opts().cwd,
+          config: program.opts().config,
+          provider: options.provider,
+          model: options.model,
+        }),
+      );
     });
 
   return program;

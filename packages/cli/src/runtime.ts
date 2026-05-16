@@ -12,6 +12,7 @@ import {
   SubagentManager,
   ToolCache,
   createDefaultToolRegistry,
+  type ToolRegistry,
 } from "@deepcode/core";
 import { resolveUsableProviderTarget, type DeepCodeConfig } from "@deepcode/shared";
 
@@ -26,10 +27,12 @@ export interface DeepCodeRuntime {
   events: EventBus;
   sessions: SessionManager;
   cache: ToolCache;
+  tools: ToolRegistry;
   providers: ProviderManager;
   agent: Agent;
   subagents: SubagentManager;
   permissions: PermissionGateway;
+  pathSecurity: PathSecurity;
   mcp: McpManager;
 }
 
@@ -76,5 +79,17 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
     defaultTarget.model,
     config.subagentConcurrency,
   );
-  return { config, events, sessions, cache, providers, agent, subagents, permissions, mcp };
+  return {
+    config,
+    events,
+    sessions,
+    cache,
+    tools,
+    providers,
+    agent,
+    subagents,
+    permissions,
+    pathSecurity,
+    mcp,
+  };
 }

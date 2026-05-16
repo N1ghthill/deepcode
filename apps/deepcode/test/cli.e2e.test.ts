@@ -58,6 +58,11 @@ describe("deepcode CLI e2e", () => {
     expect(config.exitCode).toBe(0);
     expect(config.stdout).toContain("view and edit .deepcode/config.json");
 
+    const chat = await runCli(["chat", "--help"]);
+    expect(chat.exitCode).toBe(0);
+    expect(chat.stdout).toContain("--provider <provider>");
+    expect(chat.stdout).toContain("--model <model>");
+
     const github = await runCli(["github", "login", "--help"]);
     expect(github.exitCode).toBe(0);
     expect(github.stdout).toContain("OAuth device flow");
@@ -65,7 +70,7 @@ describe("deepcode CLI e2e", () => {
     const whoami = await runCli(["github", "whoami", "--help"]);
     expect(whoami.exitCode).toBe(0);
     expect(whoami.stdout).toContain("real GitHub API");
-  });
+  }, 10_000);
 
   it("edits config values and masks secrets", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-cli-"));
@@ -610,6 +615,16 @@ async function configureLLM(tempDir: string, serverUrl: string): Promise<void> {
   await runCli(["--cwd", tempDir, "config", "set", "providers.openrouter.baseUrl", serverUrl]);
 }
 
+async function configureLLMWithoutDefaultModel(tempDir: string, serverUrl: string): Promise<void> {
+  await runCli(["--cwd", tempDir, "config", "set", "defaultProvider", "openrouter"]);
+  await runCli(["--cwd", tempDir, "config", "unset", "defaultModel"]);
+  await runCli(["--cwd", tempDir, "config", "set", "defaultModels", "{}"]);
+  await runCli(["--cwd", tempDir, "config", "unset", "modeDefaults.build.model"]);
+  await runCli(["--cwd", tempDir, "config", "unset", "modeDefaults.plan.model"]);
+  await runCli(["--cwd", tempDir, "config", "set", "providers.openrouter.apiKey", "fake-e2e-key"]);
+  await runCli(["--cwd", tempDir, "config", "set", "providers.openrouter.baseUrl", serverUrl]);
+}
+
 // ── deepcode run E2E tests ────────────────────────────────────────────────────
 
 describeWithLocalBinding("deepcode run with mock LLM", () => {
@@ -698,6 +713,34 @@ describeWithLocalBinding("deepcode run with mock LLM", () => {
       const result = await runCli(["--cwd", tempDir, "run", "anything", "--yes"]);
 
       expect(result.exitCode).not.toBe(0);
+    } finally {
+      await llm.close();
+    }
+  }, 20_000);
+
+  it("runs with explicit --model even when no default model is configured", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLMWithoutDefaultModel(tempDir, llm.url);
+      llm.queueText("Using explicit model override.");
+
+      const result = await runCli([
+        "--cwd",
+        tempDir,
+        "run",
+        "what model are you using?",
+        "--model",
+        "test-model",
+        "--yes",
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Using explicit model override.");
+      expect(llm.calls).toHaveLength(1);
+      expect(llm.calls[0]?.model).toBe("test-model");
     } finally {
       await llm.close();
     }
