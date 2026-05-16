@@ -1046,6 +1046,15 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
     return Boolean(runtime?.config.providers[provider]?.apiKey?.trim());
   }, [providerConfigVersion]);
 
+  const getProviderKeyHint = useCallback((provider: ProviderId): string | undefined => {
+    const runtime = runtimeRef.current;
+    void providerConfigVersion;
+    const key = runtime?.config.providers[provider]?.apiKey?.trim();
+    if (!key) return undefined;
+    if (key.length <= 8) return "●".repeat(key.length);
+    return `${key.slice(0, 6)}●●●●${key.slice(-4)}`;
+  }, [providerConfigVersion]);
+
   const handleSaveProviderApiKey = useCallback(
     async (provider: ProviderId, apiKey: string) => {
       await persistConfig((cfg) => ({
@@ -1445,6 +1454,7 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
                                 currentProvider={getSessionCommandState().provider}
                                 currentModel={getSessionCommandState().model}
                                 hasApiKey={providerHasApiKey}
+                                getProviderKeyHint={getProviderKeyHint}
                                 onSelectProvider={setSessionProvider}
                                 onSaveApiKey={handleSaveProviderApiKey}
                                 onTestProvider={handleTestProvider}

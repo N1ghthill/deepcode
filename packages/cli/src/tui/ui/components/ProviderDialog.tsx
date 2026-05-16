@@ -1,15 +1,13 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
-import {
-  CREDENTIAL_FREE_PROVIDERS,
-  type ProviderId,
-} from "@deepcode/shared";
+import { CREDENTIAL_FREE_PROVIDERS, type ProviderId } from "@deepcode/shared";
 import { theme } from "../semantic-colors.js";
 import { useKeypress } from "../hooks/useKeypress.js";
-import { RadioButtonSelect, type RadioSelectItem } from "./shared/RadioButtonSelect.js";
+import { BaseSelectionList } from "./shared/BaseSelectionList.js";
+import type { SelectionListItem } from "../hooks/useSelectionList.js";
 
-type ProviderDialogPhase = "providers" | "actions" | "apiKey";
-type ProviderAction = "apiKey" | "test" | "back" | "close";
+type Phase = "providers" | "actions" | "apiKey";
+type ActionId = "editKey" | "test" | "back" | "close";
 
 export interface ProviderTestResult {
   ok: boolean;
@@ -17,15 +15,60 @@ export interface ProviderTestResult {
   latencyMs?: number;
 }
 
-interface ProviderDialogProps {
+interface ProviderListItem extends SelectionListItem<ProviderId> {
+  provider: ProviderId;
+  isCurrent: boolean;
+  isLocal: boolean;
+  keyIsSet: boolean;
+}
+
+interface ActionListItem extends SelectionListItem<ActionId> {
+  icon: string;
+  label: string;
+  hint?: string;
+}
+
+interface StatusMessage {
+  text: string;
+  ok: boolean;
+}
+
+export interface ProviderDialogProps {
   providers: readonly ProviderId[];
   currentProvider: ProviderId;
   currentModel?: string;
   hasApiKey: (provider: ProviderId) => boolean;
+  getProviderKeyHint: (provider: ProviderId) => string | undefined;
   onSelectProvider: (provider: ProviderId) => void;
   onSaveApiKey: (provider: ProviderId, apiKey: string) => Promise<void>;
   onTestProvider: (provider: ProviderId) => Promise<ProviderTestResult>;
   onClose: () => void;
+}
+
+function getStatusMark(
+  provider: ProviderId,
+  keyIsSet: boolean,
+): { icon: string; color: string; label: string } {
+  if (CREDENTIAL_FREE_PROVIDERS.has(provider)) {
+    return { icon: "⊙", color: theme.text.accent, label: "local" };
+  }
+  if (keyIsSet) {
+    return { icon: "●", color: theme.status.success, label: "key set" };
+  }
+  return { icon: "○", color: theme.ui.comment, label: "no key" };
+}
+
+function getLatencyColor(ms: number): string {
+  if (ms < 300) return theme.status.success;
+  if (ms < 800) return theme.status.warning;
+  return theme.status.error;
+}
+
+function maskApiKeyInput(length: number): string {
+  if (length === 0) return "";
+  const dots = Math.min(length, 24);
+  const rest = length > 24 ? ` +${length - 24}` : "";
+  return "●".repeat(dots) + rest;
 }
 
 export const ProviderDialog: React.FC<ProviderDialogProps> = ({
@@ -33,215 +76,348 @@ export const ProviderDialog: React.FC<ProviderDialogProps> = ({
   currentProvider,
   currentModel,
   hasApiKey,
+  getProviderKeyHint,
   onSelectProvider,
   onSaveApiKey,
   onTestProvider,
   onClose,
 }) => {
-  const [phase, setPhase] = useState<ProviderDialogPhase>("providers");
+  const [phase, setPhase] = useState<Phase>("providers");
   const [selectedProvider, setSelectedProvider] = useState<ProviderId>(currentProvider);
   const [apiKeyInput, setApiKeyInput] = useState("");
-  const [message, setMessage] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [status, setStatus] = useState<StatusMessage | null>(null);
 
-  const providerItems = useMemo<Array<RadioSelectItem<ProviderId>>>(
+  const isLocal = CREDENTIAL_FREE_PROVIDERS.has(selectedProvider);
+  const keyIsSet = hasApiKey(selectedProvider);
+  const keyHint = getProviderKeyHint(selectedProvider);
+  const canTest = keyIsSet || isLocal;
+
+  // Provider list items
+  const providerItems = useMemo<ProviderListItem[]>(
     () =>
-      providers.map((provider) => {
-        const current = provider === currentProvider ? "current" : "";
-        const credential = CREDENTIAL_FREE_PROVIDERS.has(provider)
-          ? "local"
-          : hasApiKey(provider)
-            ? "key set"
-            : "no key";
-        return {
-          key: provider,
-          value: provider,
-          label: [provider.padEnd(10), credential, current].filter(Boolean).join("  "),
-        };
-      }),
+      providers.map((p) => ({
+        key: p,
+        value: p,
+        provider: p,
+        isCurrent: p === currentProvider,
+        isLocal: CREDENTIAL_FREE_PROVIDERS.has(p),
+        keyIsSet: hasApiKey(p),
+      })),
     [currentProvider, hasApiKey, providers],
   );
 
-  const actionItems = useMemo<Array<RadioSelectItem<ProviderAction>>>(
+  // Action menu items
+  const actionItems = useMemo<ActionListItem[]>(
     () => [
       {
-        key: "apiKey",
-        value: "apiKey",
-        label: CREDENTIAL_FREE_PROVIDERS.has(selectedProvider)
-          ? "Configurar API KEY (opcional)"
-          : "Configurar API KEY",
+        key: "editKey",
+        value: "editKey" as ActionId,
+        icon: "✎",
+        label: isLocal ? "Edit API key  (optional)" : "Edit API key",
       },
-      { key: "test", value: "test", label: "Testar API" },
-      { key: "back", value: "back", label: "Voltar aos providers" },
-      { key: "close", value: "close", label: "Fechar" },
+      {
+        key: "test",
+        value: "test" as ActionId,
+        icon: "⚡",
+        label: "Test connection",
+        hint: canTest ? undefined : "configure API key first",
+        disabled: !canTest,
+      },
+      {
+        key: "back",
+        value: "back" as ActionId,
+        icon: "←",
+        label: "Back",
+      },
+      {
+        key: "close",
+        value: "close" as ActionId,
+        icon: "✕",
+        label: "Close",
+      },
     ],
-    [selectedProvider],
+    [canTest, isLocal],
   );
 
+  // Handlers
   const selectProvider = useCallback(
     (provider: ProviderId) => {
       setSelectedProvider(provider);
       onSelectProvider(provider);
-      setMessage("");
+      setStatus(null);
       setPhase("actions");
     },
     [onSelectProvider],
   );
 
-  const saveApiKey = useCallback(async () => {
-    const normalized = apiKeyInput.trim();
-    if (!normalized) {
-      setMessage("Informe uma API key para salvar.");
-      return;
-    }
+  const runTest = useCallback(async () => {
     setIsBusy(true);
-    setMessage("Salvando API key...");
-    try {
-      await onSaveApiKey(selectedProvider, normalized);
-      setApiKeyInput("");
-      setMessage(`API key salva para ${selectedProvider}.`);
-      setPhase("actions");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsBusy(false);
-    }
-  }, [apiKeyInput, onSaveApiKey, selectedProvider]);
-
-  const testProvider = useCallback(async () => {
-    setIsBusy(true);
-    setMessage(`Testando ${selectedProvider}...`);
+    setStatus({ text: `Testing ${selectedProvider}…`, ok: true });
     try {
       const result = await onTestProvider(selectedProvider);
-      setMessage(
-        result.ok
-          ? `Ativo: ${result.latencyMs ?? "?"}ms. ${result.detail}`
-          : `Falhou: ${result.detail}`,
-      );
-    } catch (error) {
-      setMessage(`Falhou: ${error instanceof Error ? error.message : String(error)}`);
+      if (result.ok) {
+        const latency = result.latencyMs !== undefined ? ` · ${result.latencyMs}ms` : "";
+        setStatus({ text: `✓ Connected${latency}  ${result.detail}`, ok: true });
+      } else {
+        setStatus({ text: `✗ ${result.detail}`, ok: false });
+      }
+    } catch (err) {
+      setStatus({
+        text: `✗ ${err instanceof Error ? err.message : String(err)}`,
+        ok: false,
+      });
     } finally {
       setIsBusy(false);
     }
   }, [onTestProvider, selectedProvider]);
 
   const selectAction = useCallback(
-    (action: ProviderAction) => {
+    (action: ActionId) => {
       if (isBusy) return;
-      if (action === "apiKey") {
+      if (action === "editKey") {
         setApiKeyInput("");
-        setMessage("");
+        setStatus(null);
         setPhase("apiKey");
         return;
       }
       if (action === "test") {
-        void testProvider();
+        void runTest();
         return;
       }
       if (action === "back") {
-        setMessage("");
+        setStatus(null);
         setPhase("providers");
         return;
       }
       onClose();
     },
-    [isBusy, onClose, testProvider],
+    [isBusy, onClose, runTest],
   );
 
-  const handleEscape = useCallback(
-    (key: { name: string }) => {
+  const saveApiKey = useCallback(async () => {
+    const normalized = apiKeyInput.trim();
+    if (!normalized) {
+      setStatus({ text: "Type a key before saving.", ok: false });
+      return;
+    }
+    setIsBusy(true);
+    setStatus({ text: "Saving…", ok: true });
+    try {
+      await onSaveApiKey(selectedProvider, normalized);
+      setApiKeyInput("");
+      setStatus({ text: `Saved for ${selectedProvider}.`, ok: true });
+      setPhase("actions");
+    } catch (err) {
+      setStatus({ text: err instanceof Error ? err.message : String(err), ok: false });
+    } finally {
+      setIsBusy(false);
+    }
+  }, [apiKeyInput, onSaveApiKey, selectedProvider]);
+
+  // ESC navigation
+  useKeypress(
+    (key) => {
       if (key.name !== "escape" || isBusy) return;
+      setStatus(null);
+      setApiKeyInput("");
       if (phase === "providers") {
         onClose();
-        return;
+      } else if (phase === "apiKey") {
+        setPhase("actions");
+      } else {
+        setPhase("providers");
       }
-      setMessage("");
-      setApiKeyInput("");
-      setPhase("providers");
     },
-    [isBusy, onClose, phase],
+    { isActive: true },
   );
-  useKeypress(handleEscape, { isActive: true });
 
+  // API key raw input
   useInput(
     (input, key) => {
       if (phase !== "apiKey" || isBusy) return;
-      if (key.return) {
-        void saveApiKey();
-        return;
-      }
-      if (key.backspace || key.delete) {
-        setApiKeyInput((prev) => prev.slice(0, -1));
-        return;
-      }
-      if (key.ctrl && input.toLowerCase() === "u") {
-        setApiKeyInput("");
-        return;
-      }
-      if (input && !key.ctrl && !key.meta) {
-        setApiKeyInput((prev) => prev + input);
-      }
+      if (key.return) { void saveApiKey(); return; }
+      if (key.backspace || key.delete) { setApiKeyInput((p) => p.slice(0, -1)); return; }
+      if (key.ctrl && input.toLowerCase() === "u") { setApiKeyInput(""); return; }
+      if (input && !key.ctrl && !key.meta) { setApiKeyInput((p) => p + input); }
     },
     { isActive: phase === "apiKey" },
   );
 
-  const footer = phase === "apiKey"
-    ? "Enter salva - Ctrl+U limpa - Esc volta"
-    : phase === "providers"
-      ? "Up/Down provider - Enter seleciona - Esc fecha"
-      : "Up/Down acao - Enter executa - Esc volta";
+  // Status message color: success messages shown in secondary (dim), errors in red
+  const statusColor = status
+    ? status.ok
+      ? status.text.startsWith("✓")
+        ? theme.status.success
+        : theme.text.secondary
+      : theme.status.error
+    : undefined;
+
+  const footer =
+    phase === "apiKey"
+      ? "Enter save  Ctrl+U clear  Esc cancel"
+      : phase === "providers"
+        ? "↑↓ navigate  Enter select  Esc close"
+        : "↑↓ navigate  Enter confirm  Esc back";
 
   return (
     <Box
       flexDirection="column"
       borderStyle="round"
       borderColor={theme.border.default}
-      paddingX={1}
+      paddingX={2}
+      paddingY={1}
       marginLeft={2}
       marginRight={2}
+      minWidth={44}
     >
-      <Text bold color={theme.text.accent}>
-        Provider
-      </Text>
-      <Text color={theme.text.secondary}>
-        {selectedProvider}
-        {currentModel ? ` - ${currentModel}` : " - model unset"}
-      </Text>
+      {/* ── Header ── */}
+      <Box marginBottom={1} gap={1}>
+        <Text bold color={theme.text.accent}>
+          Providers
+        </Text>
+        {phase !== "providers" && (
+          <>
+            <Text color={theme.text.secondary}>›</Text>
+            <Text bold color={theme.text.primary}>
+              {selectedProvider}
+            </Text>
+          </>
+        )}
+        {phase === "providers" && currentModel && (
+          <Text color={theme.text.secondary}> ({currentModel})</Text>
+        )}
+      </Box>
 
+      {/* ── Phase: provider list ── */}
       {phase === "providers" && (
-        <RadioButtonSelect
+        <BaseSelectionList<ProviderId, ProviderListItem>
           items={providerItems}
           onSelect={selectProvider}
           isFocused
           showNumbers={false}
           maxItemsToShow={8}
+          renderItem={(item, { titleColor }) => {
+            const { icon, color, label } = getStatusMark(item.provider, item.keyIsSet);
+            return (
+              <Box gap={1}>
+                <Text color={color}>{icon}</Text>
+                <Text color={titleColor} bold={item.isCurrent}>
+                  {item.provider.padEnd(12)}
+                </Text>
+                <Text color={color} dimColor={!item.keyIsSet && !item.isLocal}>
+                  {label}
+                </Text>
+                {item.isCurrent && (
+                  <Text color={theme.text.accent}>▶</Text>
+                )}
+              </Box>
+            );
+          }}
         />
       )}
 
+      {/* ── Phase: action menu ── */}
       {phase === "actions" && (
-        <RadioButtonSelect
-          items={actionItems}
-          onSelect={selectAction}
-          isFocused={!isBusy}
-          showNumbers={false}
-        />
+        <>
+          {/* Key hint row */}
+          <Box marginBottom={1} gap={1}>
+            <Text color={theme.ui.comment}>key</Text>
+            {isLocal ? (
+              <Text color={theme.text.accent}>no key required</Text>
+            ) : keyHint ? (
+              <Text color={theme.text.secondary}>{keyHint}</Text>
+            ) : (
+              <Text color={theme.ui.comment} dimColor>not configured</Text>
+            )}
+          </Box>
+
+          <BaseSelectionList<ActionId, ActionListItem>
+            items={actionItems}
+            onSelect={selectAction}
+            isFocused={!isBusy}
+            showNumbers={false}
+            maxItemsToShow={4}
+            renderItem={(item, { titleColor }) => (
+              <Box gap={1}>
+                <Text color={titleColor}>{item.icon}</Text>
+                <Text color={titleColor}>{item.label}</Text>
+                {item.hint && (
+                  <Text color={theme.ui.comment} dimColor>
+                    ({item.hint})
+                  </Text>
+                )}
+              </Box>
+            )}
+          />
+        </>
       )}
 
+      {/* ── Phase: API key input ── */}
       {phase === "apiKey" && (
-        <Box flexDirection="column" marginTop={1}>
-          <Text color={theme.text.primary}>API key para {selectedProvider}</Text>
-          <Text color={theme.text.accent}>
-            {apiKeyInput.length > 0 ? "*".repeat(apiKeyInput.length) : "(digite a chave)"}
-          </Text>
+        <Box flexDirection="column" gap={1} marginBottom={1}>
+          {/* Current key row */}
+          <Box gap={1}>
+            <Text color={theme.ui.comment}>current</Text>
+            {isLocal ? (
+              <Text color={theme.text.accent}>no key required</Text>
+            ) : keyHint ? (
+              <Text color={theme.text.secondary}>{keyHint}</Text>
+            ) : (
+              <Text color={theme.ui.comment} dimColor>not set</Text>
+            )}
+          </Box>
+
+          {/* Input row */}
+          <Box gap={1}>
+            <Text color={theme.ui.comment}>new key</Text>
+            <Box borderStyle="single" borderColor={theme.border.focused} paddingX={1}>
+              <Text color={theme.text.accent}>
+                {apiKeyInput.length > 0
+                  ? maskApiKeyInput(apiKeyInput.length)
+                  : <Text color={theme.ui.comment} dimColor>paste or type…</Text>}
+              </Text>
+            </Box>
+          </Box>
         </Box>
       )}
 
-      {message && (
-        <Text color={message.startsWith("Falhou") ? theme.status.error : theme.text.secondary}>
-          {message}
-        </Text>
+      {/* ── Status message ── */}
+      {status && (
+        <Box marginTop={1}>
+          <Text color={statusColor}>{status.text}</Text>
+        </Box>
       )}
-      <Text color={theme.text.secondary}>{footer}</Text>
+
+      {/* ── Test result latency badge ── */}
+      {phase === "actions" && status?.ok && status.text.startsWith("✓") && status.text.includes("ms") && (() => {
+        const match = status.text.match(/(\d+)ms/);
+        if (!match) return null;
+        const ms = Number(match[1]);
+        return (
+          <Box marginTop={0} gap={1}>
+            <Text color={getLatencyColor(ms)} bold>{ms}ms</Text>
+            <Text color={theme.text.secondary}>
+              {ms < 300 ? "excellent" : ms < 800 ? "good" : "slow"}
+            </Text>
+          </Box>
+        );
+      })()}
+
+      {/* ── Footer ── */}
+      <Box
+        marginTop={1}
+        borderStyle="single"
+        borderTop
+        borderBottom={false}
+        borderLeft={false}
+        borderRight={false}
+        borderColor={theme.ui.comment}
+      >
+        <Text color={theme.ui.comment} dimColor>
+          {footer}
+        </Text>
+      </Box>
     </Box>
   );
 };
