@@ -54,38 +54,35 @@ mesma stack (Ink/React). A TUI antiga foi preservada — **não deletar**.
 
 ## 4. Estado atual (checkpoint 2026-05-16)
 
-`packages/cli/src/tui/` tem ~127 arquivos com a base Qwen portada e bridge
-DeepCode funcional.
+A migração está **funcionalmente completa** — Fases 0–4 do plano de produção
+concluídas. Falta apenas a Fase 5 (validação manual + release).
 
-### Já pronto
+### Pronto
 
-- `App.tsx` ligado ao novo `AppContainer`.
-- `HistoryItemDisplay` + `MainContent` integrados ao fluxo real.
-- Bridge de runtime ativa com `createRuntime()` e execução via
-  `runtime.agent.run(...)` com stream (`onChunk`) e uso (`onUsage`).
-- Aprovação interativa (`approval:request` / `approval:decision`) conectada.
-- Slash commands funcionais:
-  `/help`, `/clear`, `/diff`, `/provider`, `/model`, `/mode`,
+- `App.tsx` → `AppContainer`; `HistoryItemDisplay` / `MainContent` no fluxo real.
+- Bridge de runtime completa: `createRuntime()` + `runtime.agent.run(...)` com
+  **todos** os callbacks ligados — `onChunk`, `onChunkForTask`, `onUsage`
+  (tokens input+output), `onIteration`, `onTaskUpdate`.
+- Render de tools **ao vivo** durante o run via evento `activity`.
+- `TaskPlanPanel`: painel do plano com status por task (plan mode).
+- Aprovação interativa (`approval:request` / `approval:decision`).
+- Slash commands: `/help`, `/clear`, `/diff`, `/provider`, `/model`, `/mode`,
   `/settings`, `/theme`, `/permissions`, `/auth` (alias `/login`).
-- `/help` abre dialog dinâmico (sem lista hardcoded).
-- `/diff` agora implementado no shim com parsing real de git diff
-  (`shortstat/numstat/name-status`, untracked, binary, truncation).
-- Dialogs básicos renderizados em modal textual (`CommandDialog`) e fechamento
-  via `Esc`/`Enter`.
-- `result.type === "tool"` agora executa tool client-side via `ToolRegistry`
-  com output renderizado em `tool_group`.
-- `result.type === "confirm_action"` agora abre confirmação modal com
-  teclado (`y/n/Enter/Esc`) e re-execução do comando com
-  `overwriteConfirmed=true`.
+- Dialogs **interativos**: `ThemeDialog` (preview ao vivo), `PermissionsDialog`
+  (cicla allow/ask/deny), `AuthDialog` (device flow OAuth inline).
+- `/diff` com parsing real de git diff; `result.type` `tool` / `confirm_action`
+  tratados.
+- Robustez: turno parcial renderizado em abort/erro; tools inacabadas →
+  `Canceled`; erro de tool sem render duplicado.
+- Lógica pura da bridge em `tui/bridge.ts` com 34 testes (`test/tui/`).
 
-### Pendências prioritárias (próxima sessão)
+### Pendências (Fase 5)
 
-1. Tornar dialogs interativos (não só informativos):
-   `/theme`, `/permissions`, `/auth`.
-2. Completar bridge de runtime para callbacks adicionais:
-   `onChunkForTask`, `onIteration`, `onTaskUpdate`.
-3. Evoluir mapeamento de mensagens/ferramentas para maior paridade visual
-   com Qwen em cenários longos e multi-tool.
+1. **Smoke test manual** — rodar a TUI interativamente e confirmar input,
+   streaming, dialogs e device flow. As Fases 0–4 foram validadas por gates
+   (typecheck/lint/test/build), não por uso real.
+2. Remover o backup `tui-old/` + `test-old/` quando a nova TUI for validada.
+3. PR para `main`, version bump e release.
 
 ## 5. Stubs e TBDs a revisitar
 
@@ -99,37 +96,31 @@ feature realmente entrar no escopo:
   `AgentViewContext`, `BackgroundTaskViewContext`, `useFollowupSuggestions`.
 - `i18n`: `t()` identidade (keys em inglês); locale completo fica para depois.
 
+### Emendas conhecidas da migração
+
+- **Tema:** `DeepCodeConfig.tui.theme` é um enum fixo legado da TUI antiga
+  (`light|dark|high-contrast|nord|dracula`), incompatível com o set de temas
+  do `themeManager` do Qwen. Como `packages/shared` é congelado, o tema é
+  persistido num arquivo próprio da TUI: `.deepcode/tui-theme.json`.
+- **Testes:** `tsconfig` tem `rootDir: src`, então `test/` não é coberto por
+  `tsc`/`eslint` — os testes são validados apenas pelo vitest.
+
 ## 6. Validação atual
 
-Comandos executados no checkpoint:
+Todos os gates verdes (cli e raiz do monorepo):
 
-- `pnpm --filter @deepcode/cli typecheck` ✅
-- `pnpm --filter @deepcode/cli build` ✅
-- `pnpm --filter @deepcode/cli test` ✅ (`passWithNoTests`)
-- `pnpm --filter @deepcode/cli lint` ❌ (erros preexistentes no port)
+- `pnpm typecheck` ✅
+- `pnpm lint` ✅ — os 3 erros do port foram corrigidos
+- `pnpm test` ✅ — 34 testes em `test/tui/` (`--passWithNoTests` removido)
+- `pnpm build` ✅
 
-Erros de lint atuais:
+## 7. Histórico de fases (branch `feat/tui-qwen-migration`)
 
-- `src/tui/ui/components/InputPrompt.tsx`: regra
-  `react-hooks/exhaustive-deps` não encontrada.
-- `src/tui/ui/components/messages/ToolMessage.tsx`:
-  `ToolInfo` redeclarado.
-- `src/tui/ui/utils/commandUtils.ts`: `CodePage` redeclarado.
-
-## 7. Checklist de retomada rápida
-
-1. Reabrir contexto principal:
-   - `packages/cli/src/tui/AppContainer.tsx`
-   - `packages/cli/src/tui/ui/commands/types.ts`
-   - `packages/cli/src/tui/ui/commands/*`
-2. Escolher 1 pendência prioritária da seção 4 e fechar ponta a ponta
-   (implementação + typecheck/build/test).
-3. Rodar:
-   - `pnpm --filter @deepcode/cli typecheck`
-   - `pnpm --filter @deepcode/cli build`
-   - `pnpm --filter @deepcode/cli test`
-4. Só depois atacar `lint`, porque os 3 erros listados acima não bloqueiam
-   a bridge funcional.
+- **Fase 0** (`0d6d9a9`, `82ec665`) — base estável: lint corrigido, WIP commitado.
+- **Fase 1** (`4635b16`) — bridge do agente completa (tools ao vivo, `TaskPlan`).
+- **Fase 2** (`2650553`) — dialogs interativos (theme/permissions/auth).
+- **Fase 3** (`99f9830`) — robustez de abort/erro.
+- **Fase 4** (`eacd217`) — `tui/bridge.ts` extraído + suíte de 34 testes.
 
 ## 8. Interface do runtime do DeepCode (referência da bridge)
 
