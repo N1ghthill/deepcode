@@ -12,6 +12,7 @@ import {
 } from "react";
 import { Box, Text, useInput, useStdin, type DOMElement } from "ink";
 import {
+  ConfigLoader,
   runToolEffect,
   type ApprovalRequest,
   type TaskPlan,
@@ -24,6 +25,7 @@ import {
   resolveUsableProviderTarget,
   type Activity,
   type AgentMode,
+  type DeepCodeConfig,
   type Message,
   type ProviderId,
   type Session,
@@ -82,6 +84,13 @@ import {
   themeDialogCommand,
 } from "./ui/commands/dialogCommands.js";
 import { CommandDialog } from "./ui/components/CommandDialog.js";
+import { ThemeDialog } from "./ui/components/ThemeDialog.js";
+import {
+  PermissionsDialog,
+  type PermissionModes,
+} from "./ui/components/PermissionsDialog.js";
+import { AuthDialog } from "./ui/components/AuthDialog.js";
+import { themeManager } from "./ui/themes/theme-manager.js";
 
 export interface AppContainerProps {
   cwd: string;
@@ -121,6 +130,14 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
   const [themeName, setThemeName] = useState<string>("(unknown)");
   const [permissionSummary, setPermissionSummary] = useState<string>("(unknown)");
   const [authSummary, setAuthSummary] = useState<string>("(unknown)");
+  const [permissionModes, setPermissionModes] = useState<PermissionModes>({
+    read: "allow",
+    write: "ask",
+    gitLocal: "allow",
+    shell: "ask",
+    dangerous: "ask",
+  });
+  const [, setThemeVersion] = useState(0);
   const [pendingCommandConfirmation, setPendingCommandConfirmation] = useState<{
     rawInvocation: string;
     promptLines: string[];
@@ -376,8 +393,18 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         sessionRef.current = session;
         configAdapterRef.current = new DeepCodeConfigAdapter(cwd);
         setCompactMode(runtime.config.tui.compactMode);
-        setThemeName(runtime.config.tui.theme);
+        const savedTheme = readSavedTheme(cwd) ?? runtime.config.tui.theme;
+        themeManager.setActiveTheme(savedTheme);
+        setThemeName(themeManager.getActiveTheme().name);
+        setThemeVersion((version) => version + 1);
         setPermissionSummary(formatPermissionSummary(runtime.config.permissions));
+        setPermissionModes({
+          read: runtime.config.permissions.read,
+          write: runtime.config.permissions.write,
+          gitLocal: runtime.config.permissions.gitLocal,
+          shell: runtime.config.permissions.shell,
+          dangerous: runtime.config.permissions.dangerous,
+        });
         setAuthSummary(formatAuthSummary(runtime.config.github));
         setAgentMode(runtime.config.agentMode);
         setCurrentModel(session.model ?? "(unconfigured)");
@@ -926,6 +953,88 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
     ],
   );
 
+  const persistConfig = useCallback(
+    async (mutate: (fileConfig: DeepCodeConfig) => DeepCodeConfig) => {
+      const loader = new ConfigLoader();
+      const options = { cwd, configPath: config };
+      const fileConfig = await loader.loadFile(options);
+      await loader.save(options, mutate(fileConfig));
+    },
+    [config, cwd],
+  );
+
+  const handleSelectTheme = useCallback(
+    (nextThemeName: string) => {
+      themeManager.setActiveTheme(nextThemeName);
+      setThemeName(themeManager.getActiveTheme().name);
+      setThemeVersion((version) => version + 1);
+      setHistoryRemountKey((key) => key + 1);
+      setActiveDialog(null);
+      try {
+        writeSavedTheme(cwd, nextThemeName);
+      } catch (error) {
+        historyManager.addItem(
+          {
+            type: "warning",
+            text: `Theme applied but not persisted: ${errorMessage(error)}`,
+          },
+          Date.now(),
+        );
+      }
+    },
+    [cwd, historyManager],
+  );
+
+  const handleSavePermissions = useCallback(
+    (modes: PermissionModes) => {
+      setPermissionModes(modes);
+      setPermissionSummary(formatPermissionSummary(modes));
+      const runtime = runtimeRef.current;
+      if (runtime) {
+        Object.assign(runtime.config.permissions, modes);
+      }
+      setActiveDialog(null);
+      void persistConfig((cfg) => ({
+        ...cfg,
+        permissions: { ...cfg.permissions, ...modes },
+      }))
+        .then(() => {
+          historyManager.addItem(
+            { type: "info", text: "Permission policy updated." },
+            Date.now(),
+          );
+        })
+        .catch((error) => {
+          historyManager.addItem(
+            {
+              type: "warning",
+              text: `Permissions applied but not persisted: ${errorMessage(error)}`,
+            },
+            Date.now(),
+          );
+        });
+    },
+    [historyManager, persistConfig],
+  );
+
+  const handlePersistToken = useCallback(
+    async (token: string | undefined) => {
+      await persistConfig((cfg) => ({
+        ...cfg,
+        github: { ...cfg.github, token },
+      }));
+      const runtime = runtimeRef.current;
+      if (runtime) {
+        runtime.config.github.token = token;
+        setAuthSummary(formatAuthSummary(runtime.config.github));
+      }
+    },
+    [persistConfig],
+  );
+
+  const closeDialog = useCallback(() => setActiveDialog(null), []);
+  const previewTheme = useCallback(() => setThemeVersion((version) => version + 1), []);
+
   useEffect(() => {
     if (
       drainingQueueRef.current
@@ -971,6 +1080,10 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
     }
 
     if (activeDialog) {
+      if (isInteractiveDialog(activeDialog)) {
+        // Interactive dialogs own their own keyboard handling (incl. Esc).
+        return;
+      }
       if (key.escape || key.return || (key.ctrl && input === "c")) {
         setActiveDialog(null);
       }
@@ -1229,6 +1342,35 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
                               <CommandDialog title={dialogModel.title} lines={dialogModel.lines} />
                             )}
 
+                            {activeDialog === "theme" && (
+                              <ThemeDialog
+                                onSelect={handleSelectTheme}
+                                onClose={closeDialog}
+                                onPreview={previewTheme}
+                              />
+                            )}
+
+                            {activeDialog === "permissions" && (
+                              <PermissionsDialog
+                                current={permissionModes}
+                                onSave={handleSavePermissions}
+                                onClose={closeDialog}
+                              />
+                            )}
+
+                            {activeDialog === "auth" && runtimeRef.current && (
+                              <AuthDialog
+                                clientId={runtimeRef.current.config.github.oauthClientId}
+                                scopes={runtimeRef.current.config.github.oauthScopes}
+                                enterpriseUrl={runtimeRef.current.config.github.enterpriseUrl}
+                                worktree={cwd}
+                                statusSummary={authSummary}
+                                hasToken={Boolean(runtimeRef.current.config.github.token)}
+                                onPersistToken={handlePersistToken}
+                                onClose={closeDialog}
+                              />
+                            )}
+
                             {pendingCommandConfirmation && (
                               <CommandDialog
                                 title="Confirm action"
@@ -1484,6 +1626,40 @@ function formatPermissionSummary(config: {
   return `read=${config.read}, write=${config.write}, shell=${config.shell}, dangerous=${config.dangerous}, gitLocal=${config.gitLocal}`;
 }
 
+function isInteractiveDialog(dialog: DialogType): boolean {
+  return dialog === "theme" || dialog === "permissions" || dialog === "auth";
+}
+
+/**
+ * The TUI theme is persisted in a TUI-owned file rather than the core config:
+ * `DeepCodeConfig.tui.theme` is a fixed enum inherited from the legacy TUI and
+ * cannot represent the Qwen theme set, and `packages/shared` must not change.
+ */
+function tuiThemeFilePath(cwd: string): string {
+  return path.join(cwd, ".deepcode", "tui-theme.json");
+}
+
+function readSavedTheme(cwd: string): string | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(tuiThemeFilePath(cwd), "utf8")) as {
+      theme?: unknown;
+    };
+    return typeof parsed.theme === "string" ? parsed.theme : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedTheme(cwd: string, themeName: string): void {
+  const file = tuiThemeFilePath(cwd);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify({ theme: themeName }, null, 2)}\n`);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function buildDialogModel(
   dialog: DialogType | null,
   options: {
@@ -1523,35 +1699,10 @@ function buildDialogModel(
     };
   }
 
-  if (dialog === "theme") {
-    return {
-      title: "Theme",
-      lines: [
-        `Current theme: ${options.themeName}`,
-        "Theme switching from dialog is not wired yet.",
-        "Use config file to persist theme changes for now.",
-      ],
-    };
-  }
-
-  if (dialog === "permissions") {
-    return {
-      title: "Permissions",
-      lines: [
-        `Current policy: ${options.permissionSummary}`,
-        "Runtime permission editing from dialog is not wired yet.",
-      ],
-    };
-  }
-
-  if (dialog === "auth") {
-    return {
-      title: "Authentication",
-      lines: [
-        options.authSummary,
-        "Use `deepcode github login` to run GitHub authentication flow.",
-      ],
-    };
+  // theme / permissions / auth render as interactive components, not as a
+  // static CommandDialog — see the AppContainer JSX.
+  if (dialog === "theme" || dialog === "permissions" || dialog === "auth") {
+    return null;
   }
 
   if (dialog === "provider") {
