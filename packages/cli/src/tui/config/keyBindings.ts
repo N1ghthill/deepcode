@@ -53,6 +53,7 @@ export enum Command {
   RETRY_LAST = 'retryLast',
   TOGGLE_COMPACT_MODE = 'toggleCompactMode',
   TOGGLE_RENDER_MODE = 'toggleRenderMode',
+  OPEN_PROVIDER_DIALOG = 'openProviderDialog',
   /**
    * Promote the running foreground shell command to a background task.
    * The child process keeps running and the agent's turn unblocks; the
@@ -133,8 +134,8 @@ export const defaultKeyBindings: KeyBindingConfig = {
   // Screen control
   [Command.CLEAR_SCREEN]: [{ key: 'l', ctrl: true }],
 
-  // History navigation
-  [Command.HISTORY_UP]: [{ key: 'p', ctrl: true }],
+  // History navigation (Ctrl+P freed for provider dialog; use ↑ arrow or Ctrl+R instead)
+  [Command.HISTORY_UP]: [],
   [Command.HISTORY_DOWN]: [{ key: 'n', ctrl: true }],
   [Command.NAVIGATION_UP]: [{ key: 'up' }],
   [Command.NAVIGATION_DOWN]: [{ key: 'down' }],
@@ -192,6 +193,7 @@ export const defaultKeyBindings: KeyBindingConfig = {
   [Command.RETRY_LAST]: [{ key: 'y', ctrl: true }],
   [Command.TOGGLE_COMPACT_MODE]: [{ key: 'o', ctrl: true }],
   [Command.TOGGLE_RENDER_MODE]: [{ key: 'm', meta: true }],
+  [Command.OPEN_PROVIDER_DIALOG]: [{ key: 'p', ctrl: true }],
   [Command.PROMOTE_SHELL_TO_BACKGROUND]: [{ key: 'b', ctrl: true }],
 
   // Shell commands

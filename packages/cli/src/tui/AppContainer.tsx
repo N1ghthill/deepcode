@@ -1196,6 +1196,11 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
       return;
     }
 
+    if (key.ctrl && input === "p") {
+      setActiveDialog("provider");
+      return;
+    }
+
     if (approvalQueue.length > 0) {
       const pressed = input.toLowerCase();
       if (pressed === "y") {
