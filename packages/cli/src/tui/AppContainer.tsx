@@ -1,14 +1,28 @@
 import fs from "node:fs";
 import path from "node:path";
-import { isValidElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { Box, Text, useInput, useStdin, type DOMElement } from "ink";
-import { runToolEffect, type ApprovalRequest } from "@deepcode/core";
+import {
+  runToolEffect,
+  type ApprovalRequest,
+  type TaskPlan,
+} from "@deepcode/core";
 import { createRuntime, type DeepCodeRuntime } from "../runtime.js";
 import {
   PROVIDER_IDS,
   createId,
   resolveConfiguredModelForProvider,
   resolveUsableProviderTarget,
+  type Activity,
   type AgentMode,
   type Message,
   type ProviderId,
@@ -29,6 +43,7 @@ import { MainContent } from "./ui/components/MainContent.js";
 import { Composer } from "./ui/components/Composer.js";
 import { useTextBuffer } from "./ui/components/shared/text-buffer.js";
 import { calculatePromptWidths } from "./ui/utils/layoutUtils.js";
+import { formatTokenCount } from "./ui/utils/formatters.js";
 import { ConfigContext } from "./ui/contexts/ConfigContext.js";
 import { SettingsContext } from "./ui/contexts/SettingsContext.js";
 import { CompactModeProvider } from "./ui/contexts/CompactModeContext.js";
@@ -92,8 +107,13 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
   const [pendingItem, setPendingItem] = useState<HistoryItemWithoutId | null>(null);
   const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
   const [lastPromptTokenCount, setLastPromptTokenCount] = useState(0);
+  const [lastOutputTokenCount, setLastOutputTokenCount] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isReceivingContent, setIsReceivingContent] = useState(false);
+  const [iterationInfo, setIterationInfo] = useState<{ round: number; max: number } | null>(null);
+  const [liveToolCalls, setLiveToolCalls] = useState<IndividualToolCallDisplay[]>([]);
+  const [taskPlan, setTaskPlan] = useState<TaskPlan | null>(null);
+  const [taskStreams, setTaskStreams] = useState<Record<string, string>>({});
   const [recentSlashCommandsState, setRecentSlashCommandsState] = useState<
     Map<string, RecentSlashCommand>
   >(new Map());
@@ -404,6 +424,11 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
             );
           }),
         );
+        unsubscribers.push(
+          runtime.events.on("activity", (activity) => {
+            applyToolActivity(activity, setLiveToolCalls);
+          }),
+        );
         unsubscribeRef.current = unsubscribers;
 
         setIsInitializing(false);
@@ -475,6 +500,10 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
       setIsRunning(true);
       setIsReceivingContent(false);
       streamingResponseLengthRef.current = 0;
+      setLiveToolCalls([]);
+      setTaskPlan(null);
+      setTaskStreams({});
+      setIterationInfo(null);
 
       const startIndex = session.messages.length;
       const controller = new AbortController();
@@ -491,8 +520,28 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
             setPendingAssistantText((prev) => prev + text);
             setIsReceivingContent(true);
           },
-          onUsage: (inputTokens: number) => {
+          onChunkForTask: (taskId: string, text: string) => {
+            streamingResponseLengthRef.current += text.length;
+            setTaskStreams((prev) => ({
+              ...prev,
+              [taskId]: (prev[taskId] ?? "") + text,
+            }));
+            setIsReceivingContent(true);
+          },
+          onUsage: (inputTokens: number, outputTokens: number) => {
             setLastPromptTokenCount(inputTokens);
+            setLastOutputTokenCount(outputTokens);
+          },
+          onIteration: (round: number, max: number) => {
+            setIterationInfo({ round, max });
+          },
+          onTaskUpdate: (_task, plan) => {
+            setTaskPlan({
+              objective: plan.objective,
+              tasks: plan.tasks.map((task) => ({ ...task })),
+              currentTaskId: plan.currentTaskId,
+              raw: plan.raw,
+            });
           },
         });
 
@@ -512,6 +561,10 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         abortRef.current = null;
         setPendingAssistantText("");
         setIsRunning(false);
+        setLiveToolCalls([]);
+        setTaskPlan(null);
+        setTaskStreams({});
+        setIterationInfo(null);
       }
     },
     [agentMode, appendTurnItems, historyManager],
@@ -561,6 +614,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
       abortRef.current = controller;
       setIsRunning(true);
       setIsReceivingContent(false);
+      setLiveToolCalls([]);
 
       const callId = createId("toolcall");
       const toolCall: ToolCall = {
@@ -605,6 +659,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
       } finally {
         abortRef.current = null;
         setIsRunning(false);
+        setLiveToolCalls([]);
       }
 
       const display = toToolCallDisplay(toolCall);
@@ -1010,7 +1065,9 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
 
       streamingState,
       thought: null,
-      currentLoadingPhrase: "",
+      currentLoadingPhrase: iterationInfo
+        ? `Iteration ${iterationInfo.round}/${iterationInfo.max}`
+        : "",
       elapsedTime,
       streamingResponseLengthRef,
       isReceivingContent,
@@ -1056,6 +1113,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
       isConfigInitialized: !isInitializing && !initError,
       sessionStats: {
         lastPromptTokenCount,
+        lastOutputTokenCount,
       },
 
       dialogsVisible: activeDialog !== null || pendingCommandConfirmation !== null,
@@ -1085,6 +1143,8 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
       isFeedbackDialogOpen,
       isInitializing,
       isReceivingContent,
+      iterationInfo,
+      lastOutputTokenCount,
       lastPromptTokenCount,
       mainAreaWidth,
       messageQueue,
@@ -1128,6 +1188,17 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
                                     ? "waiting-approval"
                                     : "idle"}
                               </Text>
+                              {iterationInfo && (
+                                <Text color={theme.text.secondary}>
+                                  {"  "}iter {iterationInfo.round}/{iterationInfo.max}
+                                </Text>
+                              )}
+                              {lastPromptTokenCount > 0 && (
+                                <Text color={theme.text.secondary}>
+                                  {"  "}↑{formatTokenCount(lastPromptTokenCount)}
+                                  {" ↓"}{formatTokenCount(lastOutputTokenCount)}
+                                </Text>
+                              )}
                             </Box>
 
                             {initError ? (
@@ -1139,6 +1210,9 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
                                 key={historyRemountKey}
                                 history={historyManager.history}
                                 pendingAssistantText={pendingAssistantText}
+                                liveToolCalls={liveToolCalls}
+                                taskPlan={taskPlan}
+                                taskStreams={taskStreams}
                                 terminalWidth={terminalWidth}
                                 mainAreaWidth={mainAreaWidth}
                                 isFocused={approvalQueue.length === 0}
@@ -1250,6 +1324,57 @@ function toToolCallDisplay(call: ToolCall): IndividualToolCallDisplay {
     status: ToolCallStatus.Executing,
     confirmationDetails: undefined,
   };
+}
+
+/**
+ * Translates an `activity` event from the runtime into a live tool-call entry.
+ * `tool_call` appends an executing entry; `tool_result`/`tool_error` resolve
+ * the oldest still-executing entry with the same tool name (the runtime does
+ * not carry a call id on activities, so name + order is the best correlation).
+ */
+function applyToolActivity(
+  activity: Activity,
+  setLiveToolCalls: Dispatch<SetStateAction<IndividualToolCallDisplay[]>>,
+): void {
+  const meta = activity.metadata ?? {};
+  const toolName = typeof meta.tool === "string" ? meta.tool : undefined;
+  if (!toolName) return;
+
+  if (activity.type === "tool_call") {
+    const serialized = safeStringify(meta.args);
+    setLiveToolCalls((prev) => [
+      ...prev,
+      {
+        callId: createId("livetool"),
+        name: toolName,
+        description: serialized ? `${toolName} ${serialized}` : toolName,
+        resultDisplay: undefined,
+        status: ToolCallStatus.Executing,
+        confirmationDetails: undefined,
+      },
+    ]);
+    return;
+  }
+
+  if (activity.type === "tool_result" || activity.type === "tool_error") {
+    const isError = activity.type === "tool_error";
+    const output = isError
+      ? (typeof meta.error === "string" ? meta.error : activity.message)
+      : (typeof meta.result === "string" ? meta.result : "(no output)");
+    setLiveToolCalls((prev) => {
+      const index = prev.findIndex(
+        (tool) => tool.name === toolName && tool.status === ToolCallStatus.Executing,
+      );
+      if (index === -1) return prev;
+      const next = [...prev];
+      next[index] = {
+        ...next[index]!,
+        status: isError ? ToolCallStatus.Error : ToolCallStatus.Success,
+        resultDisplay: output,
+      };
+      return next;
+    });
+  }
 }
 
 function safeStringify(value: unknown, maxLength = 220): string {

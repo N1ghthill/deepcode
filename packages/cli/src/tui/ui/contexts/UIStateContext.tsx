@@ -26,6 +26,7 @@ import type { ApprovalMode } from "@deepcode/tui-shim";
 /** Session statistics surfaced in the footer / stats views. Grows as needed. */
 export interface SessionStatsState {
   lastPromptTokenCount: number;
+  lastOutputTokenCount: number;
 }
 
 export interface UIState {
