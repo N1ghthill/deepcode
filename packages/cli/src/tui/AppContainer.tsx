@@ -1682,20 +1682,10 @@ function buildDialogModel(
     };
   }
 
-  // theme / provider / permissions / auth render as interactive components, not as a
+  // theme / provider / permissions / auth / model render as interactive components, not as a
   // static CommandDialog — see the AppContainer JSX.
-  if (dialog === "theme" || dialog === "provider" || dialog === "permissions" || dialog === "auth") {
+  if (dialog === "theme" || dialog === "provider" || dialog === "permissions" || dialog === "auth" || dialog === "model") {
     return null;
-  }
-
-  if (dialog === "model") {
-    return {
-      title: "Model",
-      lines: [
-        `Current model: ${options.currentModel}`,
-        "Use /model <name> to set model.",
-      ],
-    };
   }
 
   return {
