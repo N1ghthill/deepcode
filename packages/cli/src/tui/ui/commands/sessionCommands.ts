@@ -72,12 +72,7 @@ export const modelCommand: SlashCommand = {
 
     const target = args.trim();
     if (!target) {
-      const state = session.getState();
-      return {
-        type: "message",
-        messageType: "info",
-        content: `Current model: ${state.model ?? "(unset)"}\nUsage: /model <name>`,
-      };
+      return { type: "dialog", dialog: "model" };
     }
 
     session.setModel(target);

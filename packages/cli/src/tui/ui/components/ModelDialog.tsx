@@ -13,13 +13,11 @@ export interface ModelDialogProps {
   onClose: () => void;
 }
 
-type DisplayRow =
-  | { type: "header"; label: string }
-  | { type: "model"; model: Model; modelIndex: number };
+// ── helpers ────────────────────────────────────────────────────────────────
 
-function groupLabel(model: Model): string {
-  const slashIdx = model.id.indexOf("/");
-  return slashIdx !== -1 ? model.id.slice(0, slashIdx) : model.provider;
+function providerGroup(model: Model): string {
+  const slash = model.id.indexOf("/");
+  return slash !== -1 ? model.id.slice(0, slash) : model.provider;
 }
 
 function isFree(model: Model): boolean {
@@ -30,21 +28,48 @@ function isFree(model: Model): boolean {
   );
 }
 
-function buildDisplayRows(models: Model[]): DisplayRow[] {
-  const rows: DisplayRow[] = [];
+// ── flat display list (headers + model rows) ───────────────────────────────
+
+type Row =
+  | { kind: "header"; label: string }
+  | { kind: "item"; model: Model; selIndex: number };
+
+function buildRows(models: Model[], currentId: string | undefined, search: string): Row[] {
+  const q = search.toLowerCase();
+  const filtered = search
+    ? models.filter(
+        (m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q),
+      )
+    : models;
+
+  const rows: Row[] = [];
+  let selIndex = 0;
+
+  if (!search && currentId) {
+    const recent = filtered.find((m) => m.id === currentId);
+    if (recent) {
+      rows.push({ kind: "header", label: "Recent" });
+      rows.push({ kind: "item", model: recent, selIndex: selIndex++ });
+    }
+  }
+
   let lastGroup = "";
-  models.forEach((model, modelIndex) => {
-    const group = groupLabel(model);
+  for (const model of filtered) {
+    if (!search && model.id === currentId) continue; // already in Recent
+    const group = providerGroup(model);
     if (group !== lastGroup) {
-      rows.push({ type: "header", label: group });
+      rows.push({ kind: "header", label: group });
       lastGroup = group;
     }
-    rows.push({ type: "model", model, modelIndex });
-  });
+    rows.push({ kind: "item", model, selIndex: selIndex++ });
+  }
+
   return rows;
 }
 
-const MAX_VISIBLE = 14;
+// ── component ──────────────────────────────────────────────────────────────
+
+const MAX_VISIBLE = 16;
 
 export const ModelDialog: React.FC<ModelDialogProps> = ({
   currentProvider,
@@ -57,88 +82,78 @@ export const ModelDialog: React.FC<ModelDialogProps> = ({
   const [models, setModels] = useState<Model[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
   const [search, setSearch] = useState("");
-  const [activeModelIndex, setActiveModelIndex] = useState(0);
+  const [activeSelIndex, setActiveSelIndex] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Fetch on open
   useEffect(() => {
-    const controller = new AbortController();
-    abortRef.current = controller;
-    onFetchModels(currentProvider, controller.signal)
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    onFetchModels(currentProvider, ctrl.signal)
       .then((fetched) => {
-        if (controller.signal.aborted) return;
+        if (ctrl.signal.aborted) return;
         setModels(fetched);
         setLoadState("ready");
-        const idx = fetched.findIndex((m) => m.id === currentModel);
-        if (idx !== -1) setActiveModelIndex(idx);
       })
       .catch((err) => {
-        if (controller.signal.aborted) return;
+        if (ctrl.signal.aborted) return;
         setErrorMsg(err instanceof Error ? err.message : String(err));
         setLoadState("error");
       });
-    return () => controller.abort();
-  }, [currentProvider, currentModel, onFetchModels]);
+    return () => ctrl.abort();
+  }, [currentProvider, onFetchModels]);
 
-  const filtered = useMemo(() => {
-    if (!search) return models;
-    const q = search.toLowerCase();
-    return models.filter(
-      (m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q),
-    );
-  }, [models, search]);
-
-  useEffect(() => { setActiveModelIndex(0); }, [search]);
-
-  const clampedIndex = Math.min(activeModelIndex, Math.max(0, filtered.length - 1));
-  const displayRows = useMemo(() => buildDisplayRows(filtered), [filtered]);
-
-  // Map activeModelIndex to its position in the display rows (for scroll)
-  const activeRowIndex = useMemo(
-    () => displayRows.findIndex((r) => r.type === "model" && r.modelIndex === clampedIndex),
-    [displayRows, clampedIndex],
+  // Build rows
+  const rows = useMemo(
+    () => buildRows(models, currentModel, search),
+    [models, currentModel, search],
   );
 
-  // Scroll offset so the active row stays visible
-  const scrollOffset = useMemo(() => {
-    if (activeRowIndex < 0) return 0;
-    return Math.max(0, Math.min(activeRowIndex - 4, displayRows.length - MAX_VISIBLE));
-  }, [activeRowIndex, displayRows.length]);
+  const selectableCount = rows.filter((r) => r.kind === "item").length;
+  const clampedIndex = Math.min(activeSelIndex, Math.max(0, selectableCount - 1));
 
-  const visibleRows = displayRows.slice(scrollOffset, scrollOffset + MAX_VISIBLE);
+  // Reset selection on search change
+  useEffect(() => { setActiveSelIndex(0); }, [search]);
 
-  const selectCurrent = useCallback(() => {
-    const model = filtered[clampedIndex];
-    if (!model) return;
-    onSelectModel(model.id);
-  }, [clampedIndex, filtered, onSelectModel]);
+  // Active row position in flat list (for scrolling)
+  const activeRowPos = useMemo(
+    () => rows.findIndex((r) => r.kind === "item" && r.selIndex === clampedIndex),
+    [rows, clampedIndex],
+  );
 
-  const moveUp = useCallback(() => {
-    setActiveModelIndex((i) => {
-      // Skip over headers: find the previous selectable model index
-      let candidate = i - 1;
-      while (candidate >= 0 && filtered[candidate] === undefined) candidate--;
-      return Math.max(0, candidate);
-    });
-  }, [filtered]);
+  const scrollTop = useMemo(
+    () => Math.max(0, Math.min(activeRowPos - 4, rows.length - MAX_VISIBLE)),
+    [activeRowPos, rows.length],
+  );
 
-  const moveDown = useCallback(() => {
-    setActiveModelIndex((i) => Math.min(filtered.length - 1, i + 1));
-  }, [filtered.length]);
+  const visibleRows = rows.slice(scrollTop, scrollTop + MAX_VISIBLE);
 
+  // Confirm selection
+  const confirm = useCallback(() => {
+    const row = rows.find((r) => r.kind === "item" && r.selIndex === clampedIndex);
+    if (row?.kind === "item") onSelectModel(row.model.id);
+  }, [rows, clampedIndex, onSelectModel]);
+
+  // Key handling
   useInput((input, key) => {
     if (loadState !== "ready") {
       if (key.escape) onClose();
       return;
     }
-
     if (key.escape) {
       if (search) { setSearch(""); return; }
       onClose();
       return;
     }
-    if (key.return) { selectCurrent(); return; }
-    if (key.upArrow || (key.ctrl && input === "k")) { moveUp(); return; }
-    if (key.downArrow || (key.ctrl && input === "j")) { moveDown(); return; }
+    if (key.return) { confirm(); return; }
+    if (key.upArrow || (key.ctrl && input === "k")) {
+      setActiveSelIndex((i) => Math.max(0, i - 1));
+      return;
+    }
+    if (key.downArrow || (key.ctrl && input === "j")) {
+      setActiveSelIndex((i) => Math.min(selectableCount - 1, i + 1));
+      return;
+    }
     if (key.backspace || key.delete) { setSearch((s) => s.slice(0, -1)); return; }
     if (key.ctrl && input === "u") { setSearch(""); return; }
     if (input && !key.ctrl && !key.meta && input.length === 1) {
@@ -146,9 +161,8 @@ export const ModelDialog: React.FC<ModelDialogProps> = ({
     }
   }, { isActive: true });
 
-  const hasMore = displayRows.length > MAX_VISIBLE;
-  const canScrollUp = scrollOffset > 0;
-  const canScrollDown = scrollOffset + MAX_VISIBLE < displayRows.length;
+  const canScrollUp = scrollTop > 0;
+  const canScrollDown = scrollTop + MAX_VISIBLE < rows.length;
 
   return (
     <Box
@@ -157,42 +171,32 @@ export const ModelDialog: React.FC<ModelDialogProps> = ({
       borderColor={theme.border.default}
       paddingX={2}
       paddingY={1}
-      marginLeft={2}
-      marginRight={2}
-      minWidth={52}
+      marginLeft={1}
+      marginRight={1}
+      minWidth={58}
     >
-      {/* Header */}
-      <Box marginBottom={1} justifyContent="space-between">
-        <Text bold color={theme.text.accent}>Select model</Text>
+      {/* Title bar */}
+      <Box justifyContent="space-between" marginBottom={1}>
+        <Text bold color={theme.text.primary}>Select model</Text>
         <Text color={theme.ui.comment} dimColor>esc</Text>
       </Box>
 
-      {/* Provider context */}
-      <Box marginBottom={1} gap={1}>
-        <Text color={theme.ui.comment}>{currentProvider}</Text>
-        {currentModel && (
-          <>
-            <Text color={theme.ui.comment}>›</Text>
-            <Text color={theme.text.secondary}>{currentModel}</Text>
-          </>
-        )}
-      </Box>
-
-      {/* Search field */}
+      {/* Search */}
       <Box
-        marginBottom={1}
         borderStyle="single"
         borderColor={search ? theme.border.focused : theme.ui.comment}
         paddingX={1}
+        marginBottom={1}
       >
         <Text color={theme.ui.comment}>⌕ </Text>
-        <Text color={theme.text.primary}>
-          {search || <Text color={theme.ui.comment} dimColor>search</Text>}
-        </Text>
-        {search && <Text color={theme.text.accent}>▌</Text>}
+        {search ? (
+          <Text color={theme.text.primary}>{search}<Text color={theme.text.accent}>▌</Text></Text>
+        ) : (
+          <Text color={theme.ui.comment} dimColor>Search<Text color={theme.text.accent}>▌</Text></Text>
+        )}
       </Box>
 
-      {/* List area */}
+      {/* Body */}
       {loadState === "loading" && (
         <Box marginY={1}>
           <Text color={theme.text.secondary}>Loading models…</Text>
@@ -200,88 +204,95 @@ export const ModelDialog: React.FC<ModelDialogProps> = ({
       )}
 
       {loadState === "error" && (
-        <Box marginY={1} flexDirection="column" gap={0}>
-          <Text color={theme.status.error}>✗ Failed to load models</Text>
+        <Box flexDirection="column" marginY={1}>
+          <Text color={theme.status.error}>✗ Could not load models</Text>
           <Text color={theme.ui.comment} dimColor>{errorMsg}</Text>
         </Box>
       )}
 
-      {loadState === "ready" && filtered.length === 0 && (
+      {loadState === "ready" && selectableCount === 0 && (
         <Box marginY={1}>
           <Text color={theme.ui.comment} dimColor>No models match "{search}"</Text>
         </Box>
       )}
 
-      {loadState === "ready" && filtered.length > 0 && (
+      {loadState === "ready" && selectableCount > 0 && (
         <Box flexDirection="column">
           {canScrollUp && (
-            <Text color={theme.ui.comment} dimColor>  ↑ more</Text>
+            <Text color={theme.ui.comment} dimColor>  ↑</Text>
           )}
 
           {visibleRows.map((row, i) => {
-            if (row.type === "header") {
+            if (row.kind === "header") {
               return (
-                <Box key={`h-${row.label}-${i}`} marginTop={i === 0 ? 0 : 1}>
+                <Box key={`h${i}`} marginTop={i === 0 ? 0 : 1}>
                   <Text color={theme.text.accent} bold>{row.label}</Text>
                 </Box>
               );
             }
 
-            const { model, modelIndex } = row;
-            const isActive = modelIndex === clampedIndex;
+            const { model, selIndex } = row;
+            const isActive = selIndex === clampedIndex;
             const isCurrent = model.id === currentModel;
             const free = isFree(model);
+            const group = providerGroup(model);
 
             return (
               <Box key={model.id} gap={1}>
+                {/* selector */}
                 <Text color={isActive ? theme.text.accent : theme.ui.comment}>
                   {isCurrent ? "●" : isActive ? "›" : " "}
                 </Text>
+
+                {/* model name */}
                 <Box flexGrow={1}>
                   <Text
                     color={isActive ? theme.text.primary : theme.text.secondary}
-                    bold={isActive || isCurrent}
+                    bold={isActive}
                   >
                     {model.name}
                   </Text>
+                  {" "}
+                  <Text color={theme.text.accent} dimColor>
+                    {group}
+                  </Text>
                 </Box>
+
+                {/* free badge */}
                 {free && (
-                  <Text color={theme.status.success} dimColor={!isActive}>Free</Text>
+                  <Text color={theme.status.success} dimColor={!isActive}>
+                    Free
+                  </Text>
                 )}
               </Box>
             );
           })}
 
           {canScrollDown && (
-            <Text color={theme.ui.comment} dimColor>  ↓ more</Text>
+            <Text color={theme.ui.comment} dimColor>  ↓</Text>
           )}
         </Box>
       )}
 
-      {/* Count */}
+      {/* count */}
       {loadState === "ready" && (
-        <Box marginTop={1} gap={1}>
+        <Box marginTop={1}>
           <Text color={theme.ui.comment} dimColor>
-            {filtered.length} model{filtered.length !== 1 ? "s" : ""}
-            {search ? ` matching "${search}"` : ""}
+            {selectableCount} model{selectableCount !== 1 ? "s" : ""}
+            {search ? ` · "${search}"` : ""}
           </Text>
         </Box>
       )}
 
-      {/* Footer */}
+      {/* footer */}
       <Box
         marginTop={1}
         borderStyle="single"
-        borderTop
-        borderBottom={false}
-        borderLeft={false}
-        borderRight={false}
+        borderTop borderBottom={false} borderLeft={false} borderRight={false}
         borderColor={theme.ui.comment}
       >
         <Text color={theme.ui.comment} dimColor>
-          {loadState === "ready"
-            ? "↑↓ navigate  type to search  Enter select  Esc close"
-            : "Esc close"}
+          ↑↓ navigate  type to search  Enter select  Esc close
         </Text>
       </Box>
     </Box>
