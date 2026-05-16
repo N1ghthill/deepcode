@@ -1,15 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import {
-  isValidElement,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from "react";
+import { isValidElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text, useInput, useStdin, type DOMElement } from "ink";
 import {
   ConfigLoader,
@@ -23,10 +14,8 @@ import {
   createId,
   resolveConfiguredModelForProvider,
   resolveUsableProviderTarget,
-  type Activity,
   type AgentMode,
   type DeepCodeConfig,
-  type Message,
   type ProviderId,
   type Session,
   type ToolCall,
@@ -91,6 +80,12 @@ import {
 } from "./ui/components/PermissionsDialog.js";
 import { AuthDialog } from "./ui/components/AuthDialog.js";
 import { themeManager } from "./ui/themes/theme-manager.js";
+import {
+  mapMessagesToHistoryItems,
+  reduceToolActivity,
+  resolveSlashInvocation,
+  toToolCallDisplay,
+} from "./bridge.js";
 
 export interface AppContainerProps {
   cwd: string;
@@ -456,7 +451,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         );
         unsubscribers.push(
           runtime.events.on("activity", (activity) => {
-            applyToolActivity(activity, setLiveToolCalls);
+            setLiveToolCalls((prev) => reduceToolActivity(prev, activity));
           }),
         );
         unsubscribeRef.current = unsubscribers;
@@ -1417,131 +1412,6 @@ function formatNumber(value: number): string {
   return value.toFixed(2);
 }
 
-function mapMessagesToHistoryItems(
-  messages: Message[],
-  options: { aborted?: boolean } = {},
-): HistoryItemWithoutId[] {
-  const items: HistoryItemWithoutId[] = [];
-  const toolByCallId = new Map<string, IndividualToolCallDisplay>();
-
-  for (const message of messages) {
-    if (message.role === "user") {
-      continue;
-    }
-
-    if (message.role === "assistant") {
-      const text = message.content?.trim();
-      if (text) {
-        items.push({ type: "gemini", text });
-      }
-
-      if (message.toolCalls?.length) {
-        const tools = message.toolCalls.map((call) => toToolCallDisplay(call));
-        for (const tool of tools) {
-          toolByCallId.set(tool.callId, tool);
-        }
-        items.push({ type: "tool_group", tools });
-      }
-      continue;
-    }
-
-    if (message.role === "tool" && message.toolCallId) {
-      const tool = toolByCallId.get(message.toolCallId);
-      if (!tool) continue;
-      const output = message.content ?? "";
-      tool.resultDisplay = output;
-      tool.status = output.trimStart().startsWith("Error")
-        ? ToolCallStatus.Error
-        : ToolCallStatus.Success;
-    }
-  }
-
-  for (const tool of toolByCallId.values()) {
-    if (tool.status === ToolCallStatus.Executing || tool.status === ToolCallStatus.Pending) {
-      tool.status = options.aborted ? ToolCallStatus.Canceled : ToolCallStatus.Success;
-      tool.resultDisplay = tool.resultDisplay
-        ?? (options.aborted ? "Cancelled." : "(no output)");
-    }
-  }
-
-  return items;
-}
-
-function toToolCallDisplay(call: ToolCall): IndividualToolCallDisplay {
-  const serializedArgs = safeStringify(call.arguments);
-  return {
-    callId: call.id,
-    name: call.name,
-    description: serializedArgs ? `${call.name} ${serializedArgs}` : call.name,
-    resultDisplay: undefined,
-    status: ToolCallStatus.Executing,
-    confirmationDetails: undefined,
-  };
-}
-
-/**
- * Translates an `activity` event from the runtime into a live tool-call entry.
- * `tool_call` appends an executing entry; `tool_result`/`tool_error` resolve
- * the oldest still-executing entry with the same tool name (the runtime does
- * not carry a call id on activities, so name + order is the best correlation).
- */
-function applyToolActivity(
-  activity: Activity,
-  setLiveToolCalls: Dispatch<SetStateAction<IndividualToolCallDisplay[]>>,
-): void {
-  const meta = activity.metadata ?? {};
-  const toolName = typeof meta.tool === "string" ? meta.tool : undefined;
-  if (!toolName) return;
-
-  if (activity.type === "tool_call") {
-    const serialized = safeStringify(meta.args);
-    setLiveToolCalls((prev) => [
-      ...prev,
-      {
-        callId: createId("livetool"),
-        name: toolName,
-        description: serialized ? `${toolName} ${serialized}` : toolName,
-        resultDisplay: undefined,
-        status: ToolCallStatus.Executing,
-        confirmationDetails: undefined,
-      },
-    ]);
-    return;
-  }
-
-  if (activity.type === "tool_result" || activity.type === "tool_error") {
-    const isError = activity.type === "tool_error";
-    const output = isError
-      ? (typeof meta.error === "string" ? meta.error : activity.message)
-      : (typeof meta.result === "string" ? meta.result : "(no output)");
-    setLiveToolCalls((prev) => {
-      const index = prev.findIndex(
-        (tool) => tool.name === toolName && tool.status === ToolCallStatus.Executing,
-      );
-      if (index === -1) return prev;
-      const next = [...prev];
-      next[index] = {
-        ...next[index]!,
-        status: isError ? ToolCallStatus.Error : ToolCallStatus.Success,
-        resultDisplay: output,
-      };
-      return next;
-    });
-  }
-}
-
-function safeStringify(value: unknown, maxLength = 220): string {
-  try {
-    const serialized = JSON.stringify(value);
-    if (!serialized || serialized === "{}") return "";
-    return serialized.length > maxLength
-      ? `${serialized.slice(0, maxLength)}...`
-      : serialized;
-  } catch {
-    return "";
-  }
-}
-
 function formatToolOutput(value: unknown): string {
   if (typeof value === "string") {
     return value.trim().length > 0 ? value : "(no output)";
@@ -1572,59 +1442,6 @@ function stringifyReactNode(node: unknown): string {
     return stringifyReactNode(node.props.children);
   }
   return "";
-}
-
-interface ResolvedSlashInvocation {
-  command: SlashCommand;
-  name: string;
-  args: string;
-}
-
-function resolveSlashInvocation(
-  rawInput: string,
-  commands: readonly SlashCommand[],
-): ResolvedSlashInvocation | null {
-  const body = rawInput.replace(/^\//, "").trim();
-  if (!body) return null;
-
-  const tokens = body.split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return null;
-
-  let currentLevel: readonly SlashCommand[] | undefined = commands;
-  let matched: SlashCommand | undefined;
-  let consumed = 0;
-
-  for (let i = 0; i < tokens.length; i += 1) {
-    const token = tokens[i]!;
-    const candidate: SlashCommand | undefined = currentLevel?.find(
-      (command: SlashCommand) => matchesSlashToken(command, token),
-    );
-    if (!candidate) {
-      break;
-    }
-
-    matched = candidate;
-    consumed = i + 1;
-    currentLevel = candidate.subCommands;
-
-    if (!candidate.subCommands || candidate.subCommands.length === 0) {
-      break;
-    }
-  }
-
-  if (!matched) return null;
-
-  return {
-    command: matched,
-    name: tokens.slice(0, consumed).join(" "),
-    args: tokens.slice(consumed).join(" "),
-  };
-}
-
-function matchesSlashToken(command: SlashCommand, token: string): boolean {
-  const normalizedToken = token.toLowerCase();
-  if (command.name.toLowerCase() === normalizedToken) return true;
-  return Boolean(command.altNames?.some((alt) => alt.toLowerCase() === normalizedToken));
 }
 
 function formatPermissionSummary(config: {
