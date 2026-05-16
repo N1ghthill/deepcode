@@ -245,14 +245,13 @@ export const ModelDialog: React.FC<ModelDialogProps> = ({
                 </Text>
 
                 {/* model name */}
-                <Box flexGrow={1}>
+                <Box flexGrow={1} gap={1}>
                   <Text
                     color={isActive ? theme.text.primary : theme.text.secondary}
                     bold={isActive}
                   >
                     {model.name}
                   </Text>
-                  {" "}
                   <Text color={theme.text.accent} dimColor>
                     {group}
                   </Text>
