@@ -423,6 +423,9 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         );
         unsubscribers.push(
           runtime.events.on("app:error", (payload) => {
+            // Tool failures already surface in their tool group (Error
+            // status) — skip the redundant standalone error line for those.
+            if (payload.context?.tool) return;
             historyManager.addItem(
               { type: "error", text: payload.error.message || "Unknown runtime error" },
               Date.now(),
@@ -577,6 +580,10 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         appendTurnItems(turnItems);
       } catch (error) {
         const aborted = controller.signal.aborted;
+        // Render whatever the agent committed before the abort/error so the
+        // partial turn is not lost — only the warning would otherwise show.
+        const partialMessages = session.messages.slice(startIndex);
+        appendTurnItems(mapMessagesToHistoryItems(partialMessages, { aborted }));
         const message = aborted
           ? "Execution cancelled."
           : (error instanceof Error ? error.message : String(error));
@@ -1410,7 +1417,10 @@ function formatNumber(value: number): string {
   return value.toFixed(2);
 }
 
-function mapMessagesToHistoryItems(messages: Message[]): HistoryItemWithoutId[] {
+function mapMessagesToHistoryItems(
+  messages: Message[],
+  options: { aborted?: boolean } = {},
+): HistoryItemWithoutId[] {
   const items: HistoryItemWithoutId[] = [];
   const toolByCallId = new Map<string, IndividualToolCallDisplay>();
 
@@ -1448,8 +1458,9 @@ function mapMessagesToHistoryItems(messages: Message[]): HistoryItemWithoutId[] 
 
   for (const tool of toolByCallId.values()) {
     if (tool.status === ToolCallStatus.Executing || tool.status === ToolCallStatus.Pending) {
-      tool.status = ToolCallStatus.Success;
-      tool.resultDisplay = tool.resultDisplay ?? "(no output)";
+      tool.status = options.aborted ? ToolCallStatus.Canceled : ToolCallStatus.Success;
+      tool.resultDisplay = tool.resultDisplay
+        ?? (options.aborted ? "Cancelled." : "(no output)");
     }
   }
 
