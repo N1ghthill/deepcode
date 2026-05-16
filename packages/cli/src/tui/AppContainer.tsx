@@ -82,6 +82,7 @@ import {
   type PermissionModes,
 } from "./ui/components/PermissionsDialog.js";
 import { AuthDialog } from "./ui/components/AuthDialog.js";
+import { ModelDialog } from "./ui/components/ModelDialog.js";
 import { themeManager } from "./ui/themes/theme-manager.js";
 import {
   mapMessagesToHistoryItems,
@@ -1134,6 +1135,27 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
     [],
   );
 
+  const handleFetchModels = useCallback(
+    async (provider: ProviderId, signal: AbortSignal) => {
+      const runtime = runtimeRef.current;
+      if (!runtime) return [];
+      try {
+        return await runtime.providers.get(provider).listModels({ signal });
+      } catch {
+        return [];
+      }
+    },
+    [],
+  );
+
+  const handleSelectModel = useCallback(
+    (modelId: string) => {
+      setSessionModel(modelId);
+      setActiveDialog(null);
+    },
+    [setSessionModel],
+  );
+
   const closeDialog = useCallback(() => setActiveDialog(null), []);
   const previewTheme = useCallback(() => setThemeVersion((version) => version + 1), []);
 
@@ -1467,6 +1489,16 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
                               />
                             )}
 
+                            {activeDialog === "model" && (
+                              <ModelDialog
+                                currentProvider={getSessionCommandState().provider}
+                                currentModel={getSessionCommandState().model}
+                                onFetchModels={handleFetchModels}
+                                onSelectModel={handleSelectModel}
+                                onClose={closeDialog}
+                              />
+                            )}
+
                             {activeDialog === "theme" && (
                               <ThemeDialog
                                 onSelect={handleSelectTheme}
@@ -1578,7 +1610,7 @@ function formatPermissionSummary(config: {
 }
 
 function isInteractiveDialog(dialog: DialogType): boolean {
-  return dialog === "theme" || dialog === "permissions" || dialog === "auth" || dialog === "provider";
+  return dialog === "theme" || dialog === "permissions" || dialog === "auth" || dialog === "provider" || dialog === "model";
 }
 
 /**
