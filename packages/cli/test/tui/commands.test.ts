@@ -51,10 +51,10 @@ function makeContext(session: SessionCommandServices | null): CommandContext {
 const BASE_STATE: SessionCommandState = { provider: "anthropic", model: "x", mode: "build" };
 
 describe("providerCommand", () => {
-  it("lists providers when called with no args", () => {
+  it("opens the provider dialog when called with no args", () => {
     const session = makeSession({ ...BASE_STATE });
     const result = providerCommand.action!(makeContext(session.services), "");
-    expect(result).toMatchObject({ type: "message", messageType: "info" });
+    expect(result).toEqual({ type: "dialog", dialog: "provider" });
   });
 
   it("switches to a valid provider", () => {

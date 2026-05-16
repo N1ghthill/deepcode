@@ -15,7 +15,7 @@ import { cpSlice, cpLen } from '../../utils/textUtils.js';
 import { theme } from '../../semantic-colors.js';
 import { Colors } from '../../colors.js';
 import type { Key } from '../../hooks/useKeypress.js';
-import { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect } from "react";
 
 export interface TextInputProps {
   value: string;

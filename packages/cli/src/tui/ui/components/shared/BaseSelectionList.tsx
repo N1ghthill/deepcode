@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import { Text, Box } from 'ink';
 import { theme } from '../../semantic-colors.js';
 import { useSelectionList } from '../../hooks/useSelectionList.js';

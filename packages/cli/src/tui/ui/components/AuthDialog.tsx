@@ -1,5 +1,4 @@
-import type React from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text } from "ink";
 import {
   GitHubClient,
@@ -129,6 +128,8 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
     },
     [clearToken, onClose, startLogin],
   );
+
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
 
   const handleEscape = useCallback(
     (key: { name: string }) => {

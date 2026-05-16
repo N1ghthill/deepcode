@@ -1,4 +1,4 @@
-import type React from "react";
+import React from "react";
 import { Box, Text } from "ink";
 import type { Task, TaskPlan } from "@deepcode/core";
 import { theme } from "../semantic-colors.js";

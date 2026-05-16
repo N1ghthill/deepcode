@@ -11,14 +11,13 @@ import {
   createDebugLogger,
 } from '@deepcode/tui-shim';
 import { useStdin } from 'ink';
-import type React from 'react';
-import {
+import React, {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useRef,
-} from 'react';
+} from "react";
 import readline from 'node:readline';
 import { PassThrough } from 'node:stream';
 import {

@@ -55,7 +55,8 @@ mesma stack (Ink/React). A TUI antiga foi preservada — **não deletar**.
 ## 4. Estado atual (checkpoint 2026-05-16)
 
 A migração está **funcionalmente completa** — Fases 0–4 do plano de produção
-concluídas. Falta apenas a Fase 5 (validação manual + release).
+concluídas. A validação manual básica da Fase 5 foi executada; faltam apenas
+limpeza final e release.
 
 ### Pronto
 
@@ -68,21 +69,23 @@ concluídas. Falta apenas a Fase 5 (validação manual + release).
 - Aprovação interativa (`approval:request` / `approval:decision`).
 - Slash commands: `/help`, `/clear`, `/diff`, `/provider`, `/model`, `/mode`,
   `/settings`, `/theme`, `/permissions`, `/auth` (alias `/login`).
+- `/provider` abre um diálogo interativo: seleção de provider, configuração de
+  API key e teste de conectividade com latência.
 - Dialogs **interativos**: `ThemeDialog` (preview ao vivo), `PermissionsDialog`
   (cicla allow/ask/deny), `AuthDialog` (device flow OAuth inline).
 - `/diff` com parsing real de git diff; `result.type` `tool` / `confirm_action`
   tratados.
 - Robustez: turno parcial renderizado em abort/erro; tools inacabadas →
   `Canceled`; erro de tool sem render duplicado.
+- Dev mode validado com `pnpm dev`: TUI abre em TTY real, sem `React is not
+  defined` e sem loop de `DeepCode runtime initialized`.
 - Lógica pura da bridge em `tui/bridge.ts` com 34 testes (`test/tui/`).
 
-### Pendências (Fase 5)
+### Pendências
 
-1. **Smoke test manual** — rodar a TUI interativamente e confirmar input,
-   streaming, dialogs e device flow. As Fases 0–4 foram validadas por gates
-   (typecheck/lint/test/build), não por uso real.
-2. Remover o backup `tui-old/` + `test-old/` quando a nova TUI for validada.
-3. PR para `main`, version bump e release.
+1. Remover o backup `tui-old/` + `test-old/` quando a nova TUI for considerada
+   definitiva.
+2. PR para `main`, version bump e release.
 
 ## 5. Stubs e TBDs a revisitar
 
@@ -110,9 +113,10 @@ feature realmente entrar no escopo:
 Todos os gates verdes (cli e raiz do monorepo):
 
 - `pnpm typecheck` ✅
-- `pnpm lint` ✅ — os 3 erros do port foram corrigidos
-- `pnpm test` ✅ — 34 testes em `test/tui/` (`--passWithNoTests` removido)
+- `pnpm lint` ✅
+- `pnpm test` ✅ — suite completa do monorepo, incluindo E2E do app
 - `pnpm build` ✅
+- `pnpm dev` ✅ — smoke interativo curto em TTY real
 
 ## 7. Histórico de fases (branch `feat/tui-qwen-migration`)
 

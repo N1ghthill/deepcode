@@ -1,10 +1,18 @@
 import { collectSecretValues, redactText } from "@deepcode/core";
-import { resolveUsableProviderTarget, type AgentMode } from "@deepcode/shared";
+import type { AgentMode } from "@deepcode/shared";
 import { createRuntime } from "../runtime.js";
+import { resolveSessionTarget } from "../target-resolution.js";
 
 export async function runCommand(
   input: string,
-  options: { cwd: string; config?: string; yes?: boolean; mode?: AgentMode },
+  options: {
+    cwd: string;
+    config?: string;
+    yes?: boolean;
+    mode?: AgentMode;
+    provider?: string;
+    model?: string;
+  },
 ): Promise<void> {
   if (options.mode && options.mode !== "plan" && options.mode !== "build") {
     throw new Error(`Invalid mode: ${options.mode}. Expected plan or build.`);
@@ -22,7 +30,11 @@ export async function runCommand(
       });
     });
   }
-  const target = resolveUsableProviderTarget(runtime.config, [runtime.config.defaultProvider]);
+  const target = resolveSessionTarget(runtime.config, {
+    provider: options.provider,
+    model: options.model,
+  });
+
   const session = runtime.sessions.create({
     provider: target.provider,
     model: target.model,
@@ -32,6 +44,7 @@ export async function runCommand(
     session,
     input,
     mode: options.mode ?? runtime.config.agentMode,
+    provider: target.provider,
     onChunk: (text) => process.stdout.write(redactText(text, secretValues)),
   });
   if (!output) process.stdout.write("\n");

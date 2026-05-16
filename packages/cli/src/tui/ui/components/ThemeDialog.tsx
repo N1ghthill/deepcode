@@ -1,5 +1,4 @@
-import type React from "react";
-import { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import { Box, Text } from "ink";
 import { theme } from "../semantic-colors.js";
 import { themeManager } from "../themes/theme-manager.js";

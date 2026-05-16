@@ -1,10 +1,10 @@
+import React from "react";
 /**
  * @license
  * Copyright 2025 Qwen
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
 import { Box, Text } from 'ink';
 import type { IndividualToolCallDisplay } from '../../types.js';
 import { ToolCallStatus } from '../../types.js';

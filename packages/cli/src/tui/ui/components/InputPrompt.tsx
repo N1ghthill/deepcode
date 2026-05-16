@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Box, Text } from 'ink';
 import { SuggestionsDisplay, MAX_WIDTH } from './SuggestionsDisplay.js';
 import type { RecentSlashCommands } from '../hooks/useSlashCompletion.js';
@@ -102,6 +101,47 @@ export { calculatePromptWidths } from '../utils/layoutUtils.js';
 // Large paste placeholder thresholds
 const LARGE_PASTE_CHAR_THRESHOLD = 1000;
 const LARGE_PASTE_LINE_THRESHOLD = 10;
+
+function matchesSlashCommandToken(command: SlashCommand, token: string): boolean {
+  const normalized = token.toLowerCase();
+  return (
+    command.name.toLowerCase() === normalized ||
+    Boolean(command.altNames?.some((altName) => altName.toLowerCase() === normalized))
+  );
+}
+
+function isExactRunnableSlashCommand(
+  rawInput: string,
+  commands: readonly SlashCommand[],
+): boolean {
+  const trimmed = rawInput.trim();
+  if (!trimmed.startsWith("/") || trimmed.length !== rawInput.length) {
+    return false;
+  }
+
+  const body = trimmed.slice(1);
+  if (!body) {
+    return false;
+  }
+
+  const tokens = body.split(/\s+/).filter(Boolean);
+  let currentLevel: readonly SlashCommand[] | undefined = commands;
+  let matched: SlashCommand | undefined;
+
+  for (const token of tokens) {
+    const candidate: SlashCommand | undefined = currentLevel?.find((command) =>
+      matchesSlashCommandToken(command, token),
+    );
+    if (!candidate) {
+      return false;
+    }
+
+    matched = candidate;
+    currentLevel = candidate.subCommands;
+  }
+
+  return Boolean(matched?.action);
+}
 
 export const InputPrompt: React.FC<InputPromptProps> = ({
   buffer,
@@ -788,6 +828,17 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
         ) {
           return true;
         }
+      }
+
+      // Slash completion updates asynchronously; submit exact runnable commands
+      // directly so Enter cannot be swallowed by a visible completion item.
+      if (
+        keyMatchers[Command.RETURN](key) &&
+        !key.paste &&
+        isExactRunnableSlashCommand(buffer.text, slashCommands)
+      ) {
+        handleSubmitAndClear(buffer.text);
+        return true;
       }
 
       // Export-specific arrow/Tab/Enter handling (Phase 1 + Phase 2).

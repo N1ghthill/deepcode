@@ -40,7 +40,7 @@ export async function doctorCommand(options: { cwd: string; config?: string }): 
   checks.push(await githubCheck(runtime.config.github, options.cwd));
 
   for (const server of runtime.config.lsp.servers) {
-    checks.push(await commandCheck(`lsp:${server.command}`, ["--version"], server.command));
+    checks.push(await lspCommandCheck(server.command));
   }
 
   for (const check of checks) {
@@ -68,6 +68,48 @@ async function providerChecks(
     ];
   }
 
+  if (!target.model) {
+    try {
+      const provider = runtime.providers.get(target.provider);
+      const started = Date.now();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+      let modelsVisible = 0;
+      try {
+        const models = await provider.listModels({ signal: controller.signal });
+        modelsVisible = models.length;
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      return [
+        {
+          name: "provider",
+          ok: true,
+          detail: `${target.provider} authenticated; ${modelsVisible} models visible (${Date.now() - started}ms)`,
+        },
+        {
+          name: "model",
+          ok: false,
+          detail: `missing configured model for ${target.provider}`,
+        },
+      ];
+    } catch (error) {
+      return [
+        {
+          name: "provider",
+          ok: false,
+          detail: redactText(describeError(error)),
+        },
+        {
+          name: "model",
+          ok: false,
+          detail: `missing configured model for ${target.provider}`,
+        },
+      ];
+    }
+  }
+
   try {
     const result = await runtime.providers.validateProviderModel(target.provider, {
       model: target.model,
@@ -79,7 +121,13 @@ async function providerChecks(
         ok: true,
         detail: `${target.provider} authenticated; ${result.modelCount} models visible; model call ok (${result.latencyMs}ms)`,
       },
-      { name: "model", ok: true, detail: result.model },
+      {
+        name: "model",
+        ok: result.modelFound,
+        detail: result.modelFound
+          ? result.model
+          : `${result.model} (not present in provider model catalog)`,
+      },
     ];
   } catch (error) {
     return [
@@ -90,8 +138,10 @@ async function providerChecks(
       },
       {
         name: "model",
-        ok: Boolean(target.model),
-        detail: target.model ?? `missing configured model for ${target.provider}`,
+        ok: false,
+        detail: target.model
+          ? `failed to validate configured model ${target.model}`
+          : `missing configured model for ${target.provider}`,
       },
     ];
   }
@@ -119,6 +169,29 @@ async function commandCheck(
   } catch (error) {
     return { name, ok: false, detail: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function lspCommandCheck(command: string): Promise<DoctorCheck> {
+  const attempts: string[][] = [
+    ["--version"],
+    ["-V"],
+    ["version"],
+    ["--help"],
+  ];
+
+  let lastFailure: DoctorCheck | undefined;
+  for (const args of attempts) {
+    const check = await commandCheck(`lsp:${command}`, args, command);
+    if (check.ok) return check;
+    if (check.detail.includes("ENOENT")) return check;
+    lastFailure = check;
+  }
+
+  return lastFailure ?? {
+    name: `lsp:${command}`,
+    ok: false,
+    detail: "unable to execute language server command",
+  };
 }
 
 async function githubCheck(

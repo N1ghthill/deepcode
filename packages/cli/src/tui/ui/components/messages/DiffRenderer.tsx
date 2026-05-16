@@ -1,10 +1,10 @@
+import React from "react";
 /**
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
 import { Box, Text, useIsScreenReaderEnabled } from 'ink';
 import crypto from 'node:crypto';
 import { colorizeCode, colorizeLine } from '../../utils/CodeColorizer.js';

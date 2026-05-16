@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
 import { Box, Text } from 'ink';
-import { useMemo, useRef } from 'react';
+import React, { useMemo, useRef } from "react";
 import type { IndividualToolCallDisplay } from '../../types.js';
 import { ToolCallStatus } from '../../types.js';
 import { ToolMessage } from './ToolMessage.js';

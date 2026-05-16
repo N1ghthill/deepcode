@@ -5,7 +5,7 @@
  */
 
 import { Box, Text, useIsScreenReaderEnabled } from 'ink';
-import { useCallback, useState } from 'react';
+import React, { useCallback, useState } from "react";
 import { LoadingIndicator } from './LoadingIndicator.js';
 import { InputPrompt } from './InputPrompt.js';
 import { Footer } from './Footer.js';

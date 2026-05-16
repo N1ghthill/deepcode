@@ -6,7 +6,7 @@
  * rather than persisted). Persistence can be layered in later.
  */
 
-import {
+import React, {
   createContext,
   useCallback,
   useContext,

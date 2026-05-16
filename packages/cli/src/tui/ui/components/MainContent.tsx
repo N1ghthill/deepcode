@@ -1,4 +1,4 @@
-import type React from "react";
+import React from "react";
 import { Box, Static } from "ink";
 import type { TaskPlan } from "@deepcode/core";
 import type { HistoryItem, IndividualToolCallDisplay } from "../types.js";

@@ -1,5 +1,4 @@
-import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Box, Text } from "ink";
 import type { PermissionMode } from "@deepcode/shared";
 import { theme } from "../semantic-colors.js";

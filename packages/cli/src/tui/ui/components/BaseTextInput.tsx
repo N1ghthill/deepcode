@@ -19,8 +19,7 @@
  * and AgentComposer (with minimal customization).
  */
 
-import type React from 'react';
-import { useCallback } from 'react';
+import React, { useCallback } from "react";
 import { Box, Text } from 'ink';
 import chalk from 'chalk';
 import type { TextBuffer } from './shared/text-buffer.js';

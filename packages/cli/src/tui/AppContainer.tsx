@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { isValidElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { isValidElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text, useInput, useStdin, type DOMElement } from "ink";
 import {
   ConfigLoader,
@@ -13,7 +13,6 @@ import {
   PROVIDER_IDS,
   createId,
   resolveConfiguredModelForProvider,
-  resolveUsableProviderTarget,
   type AgentMode,
   type DeepCodeConfig,
   type ProviderId,
@@ -75,6 +74,10 @@ import {
 import { CommandDialog } from "./ui/components/CommandDialog.js";
 import { ThemeDialog } from "./ui/components/ThemeDialog.js";
 import {
+  ProviderDialog,
+  type ProviderTestResult,
+} from "./ui/components/ProviderDialog.js";
+import {
   PermissionsDialog,
   type PermissionModes,
 } from "./ui/components/PermissionsDialog.js";
@@ -86,14 +89,18 @@ import {
   resolveSlashInvocation,
   toToolCallDisplay,
 } from "./bridge.js";
+import { resolveSessionTarget } from "../target-resolution.js";
 
 export interface AppContainerProps {
   cwd: string;
   config?: string;
+  provider?: string;
+  model?: string;
 }
 
-export const AppContainer = ({ cwd, config }: AppContainerProps) => {
+export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps) => {
   const historyManager = useHistory();
+  const addHistoryItem = historyManager.addItem;
   const [initError, setInitError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
@@ -132,7 +139,9 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
     shell: "ask",
     dangerous: "ask",
   });
+  const [providerConfigVersion, setProviderConfigVersion] = useState(0);
   const [, setThemeVersion] = useState(0);
+  const [, setDrainTick] = useState(0);
   const [pendingCommandConfirmation, setPendingCommandConfirmation] = useState<{
     rawInvocation: string;
     promptLines: string[];
@@ -378,11 +387,8 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         });
         if (!mounted) return;
 
-        const target = resolveUsableProviderTarget(runtime.config, [runtime.config.defaultProvider]);
-        const session = runtime.sessions.create({
-          provider: target.provider,
-          model: target.model,
-        });
+        const target = resolveSessionTarget(runtime.config, { provider, model });
+        const session = runtime.sessions.create(target);
 
         runtimeRef.current = runtime;
         sessionRef.current = session;
@@ -413,7 +419,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         );
         unsubscribers.push(
           runtime.events.on("app:warn", (payload) => {
-            historyManager.addItem({ type: "warning", text: payload.message }, Date.now());
+            addHistoryItem({ type: "warning", text: payload.message }, Date.now());
           }),
         );
         unsubscribers.push(
@@ -421,7 +427,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
             // Tool failures already surface in their tool group (Error
             // status) — skip the redundant standalone error line for those.
             if (payload.context?.tool) return;
-            historyManager.addItem(
+            addHistoryItem(
               { type: "error", text: payload.error.message || "Unknown runtime error" },
               Date.now(),
             );
@@ -429,7 +435,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         );
         unsubscribers.push(
           runtime.events.on("budget:warning", (payload) => {
-            historyManager.addItem(
+            addHistoryItem(
               {
                 type: "warning",
                 text: `Budget warning (${payload.kind}): ${formatNumber(payload.used)} / ${formatNumber(payload.limit)}`,
@@ -440,7 +446,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         );
         unsubscribers.push(
           runtime.events.on("budget:exceeded", (payload) => {
-            historyManager.addItem(
+            addHistoryItem(
               {
                 type: "error",
                 text: `Budget exceeded (${payload.kind}): ${formatNumber(payload.used)} / ${formatNumber(payload.limit)}`,
@@ -457,7 +463,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         unsubscribeRef.current = unsubscribers;
 
         setIsInitializing(false);
-        historyManager.addItem(
+        addHistoryItem(
           {
             type: "info",
             text: `DeepCode runtime initialized on ${cwd}.`,
@@ -483,7 +489,7 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
       }
       unsubscribeRef.current = [];
     };
-  }, [config, cwd, historyManager]);
+  }, [addHistoryItem, config, cwd, model, provider]);
 
   const resolveApproval = useCallback(
     (decision: { allowed: boolean; scope?: "once" | "session" | "always"; reason?: string }) => {
@@ -1034,6 +1040,91 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
     [persistConfig],
   );
 
+  const providerHasApiKey = useCallback((provider: ProviderId): boolean => {
+    const runtime = runtimeRef.current;
+    void providerConfigVersion;
+    return Boolean(runtime?.config.providers[provider]?.apiKey?.trim());
+  }, [providerConfigVersion]);
+
+  const handleSaveProviderApiKey = useCallback(
+    async (provider: ProviderId, apiKey: string) => {
+      await persistConfig((cfg) => ({
+        ...cfg,
+        providers: {
+          ...cfg.providers,
+          [provider]: {
+            ...cfg.providers[provider],
+            apiKey,
+          },
+        },
+      }));
+
+      const runtime = runtimeRef.current;
+      if (runtime) {
+        runtime.config.providers[provider].apiKey = apiKey;
+        runtime.providers.reload(runtime.config);
+      }
+      setProviderConfigVersion((version) => version + 1);
+      historyManager.addItem(
+        { type: "info", text: `API key updated for ${provider}.` },
+        Date.now(),
+      );
+    },
+    [historyManager, persistConfig],
+  );
+
+  const handleTestProvider = useCallback(
+    async (provider: ProviderId): Promise<ProviderTestResult> => {
+      const runtime = runtimeRef.current;
+      const session = sessionRef.current;
+      if (!runtime) {
+        return { ok: false, detail: "Runtime is not ready." };
+      }
+
+      const started = Date.now();
+      const model = resolveConfiguredModelForProvider(runtime.config, provider)
+        ?? (session?.provider === provider ? session.model : undefined);
+      if (model) {
+        try {
+          const result = await runtime.providers.validateProviderModel(provider, {
+            model,
+            timeoutMs: 15_000,
+          });
+          return {
+            ok: true,
+            latencyMs: result.latencyMs,
+            detail: `${result.modelCount} models visible; model call ok (${result.model})`,
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            detail: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+
+      const providerClient = runtime.providers.get(provider);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+      try {
+        const models = await providerClient.listModels({ signal: controller.signal });
+        return {
+          ok: true,
+          latencyMs: Date.now() - started,
+          detail: `${models.length} models visible; configure a model to run a model call.`,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          detail: error instanceof Error ? error.message : String(error),
+        };
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+    [],
+  );
+
   const closeDialog = useCallback(() => setActiveDialog(null), []);
   const previewTheme = useCallback(() => setThemeVersion((version) => version + 1), []);
 
@@ -1057,6 +1148,10 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
         await executeSubmission(next);
       } finally {
         drainingQueueRef.current = false;
+        // Slash commands don't set isRunning, so they don't naturally trigger
+        // a re-render when they finish. Bump this counter so the effect re-runs
+        // and picks up the next queued message.
+        setDrainTick((n) => n + 1);
       }
     })();
   }, [
@@ -1344,6 +1439,19 @@ export const AppContainer = ({ cwd, config }: AppContainerProps) => {
                               <CommandDialog title={dialogModel.title} lines={dialogModel.lines} />
                             )}
 
+                            {activeDialog === "provider" && (
+                              <ProviderDialog
+                                providers={listAvailableProviders()}
+                                currentProvider={getSessionCommandState().provider}
+                                currentModel={getSessionCommandState().model}
+                                hasApiKey={providerHasApiKey}
+                                onSelectProvider={setSessionProvider}
+                                onSaveApiKey={handleSaveProviderApiKey}
+                                onTestProvider={handleTestProvider}
+                                onClose={closeDialog}
+                              />
+                            )}
+
                             {activeDialog === "theme" && (
                               <ThemeDialog
                                 onSelect={handleSelectTheme}
@@ -1455,7 +1563,7 @@ function formatPermissionSummary(config: {
 }
 
 function isInteractiveDialog(dialog: DialogType): boolean {
-  return dialog === "theme" || dialog === "permissions" || dialog === "auth";
+  return dialog === "theme" || dialog === "permissions" || dialog === "auth" || dialog === "provider";
 }
 
 /**
@@ -1527,20 +1635,10 @@ function buildDialogModel(
     };
   }
 
-  // theme / permissions / auth render as interactive components, not as a
+  // theme / provider / permissions / auth render as interactive components, not as a
   // static CommandDialog — see the AppContainer JSX.
-  if (dialog === "theme" || dialog === "permissions" || dialog === "auth") {
+  if (dialog === "theme" || dialog === "provider" || dialog === "permissions" || dialog === "auth") {
     return null;
-  }
-
-  if (dialog === "provider") {
-    return {
-      title: "Provider",
-      lines: [
-        `Current provider/model: ${options.providerLabel}`,
-        "Use /provider <name> to switch provider.",
-      ],
-    };
   }
 
   if (dialog === "model") {

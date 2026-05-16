@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useRef } from 'react';
+import React, { useRef } from "react";
 import { Box, Text } from 'ink';
 import { t } from '../../i18n/index.js';
 

@@ -5,8 +5,7 @@
  */
 
 import type { ThoughtSummary } from '@deepcode/tui-shim';
-import type React from 'react';
-import { useRef } from 'react';
+import React, { useRef } from "react";
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
 import { useStreamingContext } from '../contexts/StreamingContext.js';

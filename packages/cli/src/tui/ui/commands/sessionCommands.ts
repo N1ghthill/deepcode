@@ -34,17 +34,9 @@ export const providerCommand: SlashCommand = {
 
     const target = parseSingleArg(args);
     if (!target) {
-      const state = session.getState();
-      const providers = session.listProviders().join(", ");
       return {
-        type: "message",
-        messageType: "info",
-        content: [
-          `Current provider: ${state.provider}`,
-          `Current model: ${state.model ?? "(unset)"}`,
-          `Available providers: ${providers}`,
-          "Usage: /provider <name>",
-        ].join("\n"),
+        type: "dialog",
+        dialog: "provider",
       };
     }
 

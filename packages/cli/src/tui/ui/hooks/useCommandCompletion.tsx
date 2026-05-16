@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useCallback, useMemo, useEffect } from 'react';
+import React, { useCallback, useMemo, useEffect } from "react";
 import type { Suggestion } from '../components/SuggestionsDisplay.js';
 import type { CommandContext, SlashCommand } from '../commands/types.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
