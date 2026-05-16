@@ -182,34 +182,8 @@ export function buildHumanReadableRuleLabel(rules: string[]): string {
 
 // ── Git diff ────────────────────────────────────────────────────────────────
 
-export interface GitDiffStats {
-  filesCount: number;
-  linesAdded: number;
-  linesRemoved: number;
-}
-
-export interface PerFileStats {
-  added: number;
-  removed: number;
-  isBinary: boolean;
-  isUntracked?: boolean;
-  isDeleted?: boolean;
-  truncated?: boolean;
-}
-
-export interface GitDiffResult {
-  stats: GitDiffStats;
-  perFileStats: Map<string, PerFileStats>;
-}
-
-/**
- * Stub for Qwen's git-diff fetcher. The `/diff` command is wired to the
- * DeepCode runtime in the command-system milestone; until then this reports
- * "no diff" so the rendering helpers stay exercised without a git dependency.
- */
-export async function fetchGitDiff(_cwd: string): Promise<GitDiffResult | null> {
-  return null;
-}
+export type { GitDiffResult, GitDiffStats, PerFileStats } from "./git-diff.js";
+export { fetchGitDiff } from "./git-diff.js";
 
 // ── Approval mode ───────────────────────────────────────────────────────────
 

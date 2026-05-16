@@ -9,6 +9,7 @@
 
 import type { MutableRefObject, ReactNode } from "react";
 import type { Config } from "@deepcode/tui-shim";
+import type { AgentMode, ProviderId } from "@deepcode/shared";
 import type { HistoryItem, HistoryItemWithoutId } from "../types.js";
 import type { UseHistoryManagerReturn } from "../hooks/useHistoryManager.js";
 
@@ -23,6 +24,20 @@ export type DialogType =
   | "auth";
 
 /** Grouped dependencies handed to a slash command's `action`. */
+export interface SessionCommandState {
+  provider: ProviderId;
+  model?: string;
+  mode: AgentMode;
+}
+
+export interface SessionCommandServices {
+  getState: () => SessionCommandState;
+  setProvider: (provider: ProviderId) => void;
+  setModel: (model: string) => void;
+  setMode: (mode: AgentMode) => void;
+  listProviders: () => readonly ProviderId[];
+}
+
 export interface CommandContext {
   /** Execution mode for the current invocation. */
   executionMode?: ExecutionMode;
@@ -35,6 +50,7 @@ export interface CommandContext {
   /** Core services. Widened as the command system is wired to the runtime. */
   services: {
     config: Config | null;
+    session: SessionCommandServices | null;
   };
   /** UI state and history management. */
   ui: {

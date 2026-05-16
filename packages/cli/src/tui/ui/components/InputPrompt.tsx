@@ -1347,10 +1347,10 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     }
   }, [shouldShowSuggestions, onSuggestionsVisibilityChange]);
 
-  // Trigger prompt suggestion when prop changes
+  // Trigger prompt suggestion when prop changes. Intentionally depends only on
+  // `promptSuggestion` so the effect runs solely when the prop itself changes.
   useEffect(() => {
     followup.setSuggestion(promptSuggestion ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on prop change
   }, [promptSuggestion]);
 
   const showAutoAcceptStyling =

@@ -41,6 +41,10 @@ export default [
       // TypeScript already reports undefined identifiers; core `no-undef`
       // does not understand TS globals/types and produces false positives.
       "no-undef": "off",
+      // `no-redeclare` flags the legitimate TS idiom of a value and a type
+      // sharing a name (`const X` + `type X`, distinct value/type namespaces).
+      // TypeScript itself already reports genuine redeclarations.
+      "no-redeclare": "off",
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",

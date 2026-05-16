@@ -1,0 +1,142 @@
+import { ProviderIdSchema, type AgentMode } from "@deepcode/shared";
+import { CommandKind, type MessageActionReturn, type SlashCommand } from "./types.js";
+import { t } from "../../i18n/index.js";
+
+function sessionNotReady(): MessageActionReturn {
+  return {
+    type: "message",
+    messageType: "error",
+    content: t("Session control is not available yet."),
+  };
+}
+
+function parseSingleArg(input: string): string {
+  return input.trim().split(/\s+/).filter(Boolean)[0] ?? "";
+}
+
+export const providerCommand: SlashCommand = {
+  name: "provider",
+  get description() {
+    return t("Show or set current provider");
+  },
+  kind: CommandKind.BUILT_IN,
+  supportedModes: ["interactive"] as const,
+  completion: async (context, partialArg) => {
+    const session = context.services.session;
+    if (!session) return null;
+    const query = partialArg.trim().toLowerCase();
+    const providers = session.listProviders();
+    return providers.filter((provider) => provider.startsWith(query));
+  },
+  action: (context, args) => {
+    const session = context.services.session;
+    if (!session) return sessionNotReady();
+
+    const target = parseSingleArg(args);
+    if (!target) {
+      const state = session.getState();
+      const providers = session.listProviders().join(", ");
+      return {
+        type: "message",
+        messageType: "info",
+        content: [
+          `Current provider: ${state.provider}`,
+          `Current model: ${state.model ?? "(unset)"}`,
+          `Available providers: ${providers}`,
+          "Usage: /provider <name>",
+        ].join("\n"),
+      };
+    }
+
+    const parsed = ProviderIdSchema.safeParse(target);
+    if (!parsed.success) {
+      return {
+        type: "message",
+        messageType: "error",
+        content: `Unknown provider: ${target}`,
+      };
+    }
+
+    session.setProvider(parsed.data);
+    const state = session.getState();
+    return {
+      type: "message",
+      messageType: "info",
+      content: `Provider set to ${state.provider}${state.model ? `/${state.model}` : ""}.`,
+    };
+  },
+};
+
+export const modelCommand: SlashCommand = {
+  name: "model",
+  get description() {
+    return t("Show or set current model");
+  },
+  kind: CommandKind.BUILT_IN,
+  supportedModes: ["interactive"] as const,
+  action: (context, args) => {
+    const session = context.services.session;
+    if (!session) return sessionNotReady();
+
+    const target = args.trim();
+    if (!target) {
+      const state = session.getState();
+      return {
+        type: "message",
+        messageType: "info",
+        content: `Current model: ${state.model ?? "(unset)"}\nUsage: /model <name>`,
+      };
+    }
+
+    session.setModel(target);
+    const state = session.getState();
+    return {
+      type: "message",
+      messageType: "info",
+      content: `Model set to ${state.model ?? "(unset)"}.`,
+    };
+  },
+};
+
+const AGENT_MODES: readonly AgentMode[] = ["build", "plan"] as const;
+
+export const modeCommand: SlashCommand = {
+  name: "mode",
+  get description() {
+    return t("Show or set execution mode (build|plan)");
+  },
+  kind: CommandKind.BUILT_IN,
+  supportedModes: ["interactive"] as const,
+  completion: async (_context, partialArg) => {
+    const query = partialArg.trim().toLowerCase();
+    return AGENT_MODES.filter((mode) => mode.startsWith(query));
+  },
+  action: (context, args) => {
+    const session = context.services.session;
+    if (!session) return sessionNotReady();
+
+    const target = parseSingleArg(args).toLowerCase();
+    if (!target) {
+      return {
+        type: "message",
+        messageType: "info",
+        content: `Current mode: ${session.getState().mode}\nUsage: /mode <build|plan>`,
+      };
+    }
+
+    if (!AGENT_MODES.includes(target as AgentMode)) {
+      return {
+        type: "message",
+        messageType: "error",
+        content: `Unknown mode: ${target}. Use build or plan.`,
+      };
+    }
+
+    session.setMode(target as AgentMode);
+    return {
+      type: "message",
+      messageType: "info",
+      content: `Mode set to ${target}.`,
+    };
+  },
+};

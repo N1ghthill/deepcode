@@ -1,7 +1,7 @@
 # Migração da TUI — DeepCode → TUI do Qwen Code
 
 > Documento de trabalho para retomar a migração em sessões futuras.
-> Última atualização: 2026-05-15.
+> Última atualização: 2026-05-16.
 
 ## 1. Objetivo
 
@@ -52,70 +52,91 @@ mesma stack (Ink/React). A TUI antiga foi preservada — **não deletar**.
 6. Portar **bottom-up** (na ordem de dependências) — cada passo mantém o
    typecheck verde.
 
-## 4. Estado atual
+## 4. Estado atual (checkpoint 2026-05-16)
 
-`packages/cli/src/tui/` tem ~127 arquivos. `pnpm --filter @deepcode/cli typecheck` está **verde**.
+`packages/cli/src/tui/` tem ~127 arquivos com a base Qwen portada e bridge
+DeepCode funcional.
 
-### Pronto
+### Já pronto
 
-- **Setup:** backup, upgrade Ink 7/React 19, build do monorepo verde.
-- **Foundation:** themes, colors, `text-buffer`, hooks de teclado, contexts
-  (Keypress, Vim, Streaming, Overflow, CompactMode, App, Config, RenderMode,
-  Settings, AgentView*, BackgroundTaskView*), `keyBindings`.
-- **Contratos enxutos** (escritos para o DeepCode, não portados):
-  `UIStateContext`, `UIActionsContext`, `ui/commands/types.ts`,
-  `config/settings.ts`.
-- **Input:** `InputPrompt` + os 7 hooks de autocomplete/histórico,
-  `BaseTextInput`, `SuggestionsDisplay`, shim de busca de arquivos (`@path`).
-- **Composer:** `Composer` + `Footer` + `LoadingIndicator` e subgrafos.
-- **Render de mensagens:** `MarkdownDisplay` + subgrafo (CodeColorizer,
-  InlineMarkdownRenderer, TableRenderer), `ConversationMessages`, `ToolMessage`,
-  `ToolGroupMessage`, `CompactToolGroupDisplay`, `ToolConfirmationMessage`,
-  `AskUserQuestionDialog`, `DiffRenderer`.
+- `App.tsx` ligado ao novo `AppContainer`.
+- `HistoryItemDisplay` + `MainContent` integrados ao fluxo real.
+- Bridge de runtime ativa com `createRuntime()` e execução via
+  `runtime.agent.run(...)` com stream (`onChunk`) e uso (`onUsage`).
+- Aprovação interativa (`approval:request` / `approval:decision`) conectada.
+- Slash commands funcionais:
+  `/help`, `/clear`, `/diff`, `/provider`, `/model`, `/mode`,
+  `/settings`, `/theme`, `/permissions`, `/auth` (alias `/login`).
+- `/help` abre dialog dinâmico (sem lista hardcoded).
+- `/diff` agora implementado no shim com parsing real de git diff
+  (`shortstat/numstat/name-status`, untracked, binary, truncation).
+- Dialogs básicos renderizados em modal textual (`CommandDialog`) e fechamento
+  via `Esc`/`Enter`.
+- `result.type === "tool"` agora executa tool client-side via `ToolRegistry`
+  com output renderizado em `tool_group`.
+- `result.type === "confirm_action"` agora abre confirmação modal com
+  teclado (`y/n/Enter/Esc`) e re-execução do comando com
+  `overwriteConfirmed=true`.
 
-### Falta (sequência recomendada)
+### Pendências prioritárias (próxima sessão)
 
-1. `HistoryItemDisplay` — o dispatch por tipo de item. Stubar os renderers
-   raros (AboutBox, Help, StatsDisplay, `views/*`, ArenaCards, BtwMessage);
-   os essenciais já estão prontos.
-2. `MainContent`, `DefaultAppLayout`, `App` — a estrutura visual.
-3. `AppContainer` — o **conector DeepCode**. Escrito do zero (não portado):
-   monta `UIState`/`UIActions`, o adapter de `Config`, e os providers de
-   contexto.
-4. **Bridge de runtime:** substituir `useGeminiStream` por um hook que chama
-   `createRuntime()` + `runtime.agent.run({ onChunk, onChunkForTask, onUsage,
-   onIteration, onTaskUpdate })`, mapeando para `HistoryItem` + `StreamingState`.
-   Eventos do `EventBus` (`activity`, `approval:request`, `app:error`).
-5. Religar `tui/App.tsx` (entry DeepCode) → `AppContainer`.
-6. **Fase 3 — adaptadores:** mapeamento de tool calls (formato Qwen → DeepCode),
-   `PermissionGateway` ↔ `ToolConfirmation`, display de provider/modelo,
-   comandos GitHub, barra de token budget.
-7. **Fase 4 — validação:** `pnpm build`, `typecheck`, `lint`, teste manual.
+1. Tornar dialogs interativos (não só informativos):
+   `/theme`, `/permissions`, `/auth`.
+2. Completar bridge de runtime para callbacks adicionais:
+   `onChunkForTask`, `onIteration`, `onTaskUpdate`.
+3. Evoluir mapeamento de mensagens/ferramentas para maior paridade visual
+   com Qwen em cenários longos e multi-tool.
 
 ## 5. Stubs e TBDs a revisitar
 
-Itens portados como stub inerte ou simplificados — revisitar quando a feature
-correspondente for necessária:
+Itens portados como stub inerte ou simplificados. Só implementar quando a
+feature realmente entrar no escopo:
 
-- `MermaidDiagram` — mostra o source ao invés de renderizar o diagrama.
-- `useStatusLine` — sem status line customizável.
-- `useConfigInitMessage` — sem progresso de init de MCP no footer.
+- `MermaidDiagram` (mostra source, sem render gráfico).
+- `useStatusLine` (sem status line customizável).
+- `useConfigInitMessage` (sem progresso de init de MCP no footer).
 - `BackgroundTasksPill`, `MCPHealthPill`, `FeedbackDialog`, `ShellInputPrompt`,
-  `AgentViewContext`, `BackgroundTaskViewContext`, `useFollowupSuggestions` —
-  features Qwen-only, stubadas.
-- `fetchGitDiff` (no shim) — stub; o comando `/diff` será religado ao runtime
-  no milestone de comandos.
-- `i18n` — `t()` identidade (as keys do Qwen já são strings em inglês); locale
-  completo pode voltar depois.
-- Campos do `Config`/`UIState`/`UIActions` cresceram sob demanda; o
-  `AppContainer` precisa fornecer valores reais para todos eles.
+  `AgentViewContext`, `BackgroundTaskViewContext`, `useFollowupSuggestions`.
+- `i18n`: `t()` identidade (keys em inglês); locale completo fica para depois.
 
-## 6. Interface do runtime do DeepCode (para o bridge)
+## 6. Validação atual
+
+Comandos executados no checkpoint:
+
+- `pnpm --filter @deepcode/cli typecheck` ✅
+- `pnpm --filter @deepcode/cli build` ✅
+- `pnpm --filter @deepcode/cli test` ✅ (`passWithNoTests`)
+- `pnpm --filter @deepcode/cli lint` ❌ (erros preexistentes no port)
+
+Erros de lint atuais:
+
+- `src/tui/ui/components/InputPrompt.tsx`: regra
+  `react-hooks/exhaustive-deps` não encontrada.
+- `src/tui/ui/components/messages/ToolMessage.tsx`:
+  `ToolInfo` redeclarado.
+- `src/tui/ui/utils/commandUtils.ts`: `CodePage` redeclarado.
+
+## 7. Checklist de retomada rápida
+
+1. Reabrir contexto principal:
+   - `packages/cli/src/tui/AppContainer.tsx`
+   - `packages/cli/src/tui/ui/commands/types.ts`
+   - `packages/cli/src/tui/ui/commands/*`
+2. Escolher 1 pendência prioritária da seção 4 e fechar ponta a ponta
+   (implementação + typecheck/build/test).
+3. Rodar:
+   - `pnpm --filter @deepcode/cli typecheck`
+   - `pnpm --filter @deepcode/cli build`
+   - `pnpm --filter @deepcode/cli test`
+4. Só depois atacar `lint`, porque os 3 erros listados acima não bloqueiam
+   a bridge funcional.
+
+## 8. Interface do runtime do DeepCode (referência da bridge)
 
 - `createRuntime({ cwd, configPath, interactive })` → `DeepCodeRuntime`
   `{ config, events, sessions, cache, providers, agent, subagents, permissions, mcp }`.
 - `runtime.agent.run({ session, input, mode, signal, onChunk, onChunkForTask,
   onUsage, onIteration, onTaskUpdate })`.
-- `runtime.events` (`EventBus`): eventos `activity`, `approval:request`,
+- `runtime.events` (`EventBus`): `activity`, `approval:request`,
   `approval:decision`, `app:error`.
 - `runtime.permissions` (`PermissionGateway`): aprovações read/write/shell/dangerous.
