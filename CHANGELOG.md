@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.1.9] — 2026-05-17
+
+### Fixed
+
+- `deepcode doctor` no longer exits 1 when language servers for unused languages are absent; `lsp.servers` default is now an empty list — configure only the servers you have installed
+
 ## [1.1.8] — 2026-05-17
 
 ### Added
@@ -149,7 +155,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Persistent sessions, local config, telemetry collector
 - GitHub integration: OAuth, issues, pull requests
 
-[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.8...HEAD
+[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.9...HEAD
+[1.1.9]: https://github.com/N1ghthill/deepcode/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/N1ghthill/deepcode/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/N1ghthill/deepcode/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/N1ghthill/deepcode/compare/v1.1.5...v1.1.6
