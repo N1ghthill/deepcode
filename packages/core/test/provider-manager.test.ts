@@ -78,7 +78,10 @@ describe("ProviderManager", () => {
 
   it("still fails over to the next provider after a non-retryable error", async () => {
     const results: string[] = [];
-    const manager = new ProviderManager(createConfig({ providerRetries: 2 }));
+    const manager = new ProviderManager(createConfig({
+      providerRetries: 2,
+      defaultModels: { openai: "gpt-4o" },
+    }));
     manager.register(makeCountingProvider("openrouter", () => {
       results.push("primary-fail");
       throw new ProviderError("unauthorized", "openrouter", undefined, { statusCode: 401 });
@@ -90,6 +93,33 @@ describe("ProviderManager", () => {
     }
 
     expect(results).toEqual(["primary-fail", "ok from fallback"]);
+  });
+
+  it("skips failover providers that have no configured model to avoid cross-provider model name confusion", async () => {
+    const results: string[] = [];
+    const manager = new ProviderManager(createConfig({
+      providerRetries: 0,
+      defaultModels: {},
+    }));
+    manager.register(makeCountingProvider("openrouter", () => {
+      results.push("primary-fail");
+      throw new ProviderError("model not found", "openrouter", undefined, { statusCode: 404 });
+    }));
+    manager.register(makeStreamingProvider("openai", "ok from fallback"));
+
+    let caught: unknown;
+    try {
+      for await (const chunk of manager.chat([], {
+        preferredProvider: "openrouter",
+        failover: ["openai"],
+        model: "some-provider-specific-model",
+      })) {
+        if (chunk.type === "delta") results.push(chunk.content);
+      }
+    } catch (e) { caught = e; }
+
+    expect(results).toEqual(["primary-fail"]);
+    expect(caught).toBeInstanceOf(ProviderError);
   });
 
   it("accepts OpenCode model identifiers with the documented opencode-go/ prefix", async () => {

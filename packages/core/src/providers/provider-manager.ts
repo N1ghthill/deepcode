@@ -145,11 +145,17 @@ export class ProviderManager {
     }
     let lastError: unknown;
     for (const providerId of order) {
+      const isPreferred = providerId === options.preferredProvider;
+      const providerModel = isPreferred
+        ? options.model
+        : resolveConfiguredModelForProvider(this.config, providerId);
+      if (!isPreferred && !providerModel) continue;
+
       for (let attempt = 0; attempt <= this.retries; attempt += 1) {
         let emitted = false;
         try {
           const provider = this.get(providerId);
-          for await (const chunk of provider.chat(messages, options)) {
+          for await (const chunk of provider.chat(messages, { ...options, model: providerModel })) {
             emitted = true;
             yield chunk;
           }
