@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.1.13] — 2026-05-17
+
+### Fixed
+
+- `deepcode github solve` agent prompt translated to English; previously hardcoded in Portuguese, causing the agent to receive PT-BR instructions when working on any repository
+
 ## [1.1.12] — 2026-05-17
 
 ### Added
@@ -173,7 +179,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Persistent sessions, local config, telemetry collector
 - GitHub integration: OAuth, issues, pull requests
 
-[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.12...HEAD
+[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.13...HEAD
+[1.1.13]: https://github.com/N1ghthill/deepcode/compare/v1.1.12...v1.1.13
 [1.1.12]: https://github.com/N1ghthill/deepcode/compare/v1.1.11...v1.1.12
 [1.1.11]: https://github.com/N1ghthill/deepcode/compare/v1.1.10...v1.1.11
 [1.1.10]: https://github.com/N1ghthill/deepcode/compare/v1.1.9...v1.1.10

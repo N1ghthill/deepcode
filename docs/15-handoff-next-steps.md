@@ -6,7 +6,7 @@
 
 Última rodada validada: `main` commitado e publicado no npm, validado em 2026-05-17.
 
-Versão publicada: **`deepcode-ai@1.1.12`** em https://www.npmjs.com/package/deepcode-ai
+Versão publicada: **`deepcode-ai@1.1.13`** em https://www.npmjs.com/package/deepcode-ai
 
 ## Estrutura do Monorepo
 
@@ -102,7 +102,7 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 
 ## Checklist Antes de Dizer "Produção"
 
-- [x] Pacote publicado no npm (`deepcode-ai@1.1.12`).
+- [x] Pacote publicado no npm (`deepcode-ai@1.1.13`).
 - [x] OAuth GitHub implementado.
 - [x] Testes E2E cobrindo projeto fixture TypeScript e Python.
 - [x] Documentação de config completa.
