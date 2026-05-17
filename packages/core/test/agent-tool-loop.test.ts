@@ -35,6 +35,7 @@ let tempDir: string | undefined;
 
 afterEach(async () => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   if (tempDir) {
     await rm(tempDir, { recursive: true, force: true });
     tempDir = undefined;
@@ -521,6 +522,7 @@ describe("Agent tool loop", () => {
     await mkdir(path.join(tempDir, "repos", "beta"), { recursive: true });
     await mkdir(path.join(tempDir, "repos", "beta", ".git"));
     await mkdir(path.join(tempDir, "repos", "plain-folder"), { recursive: true });
+    vi.stubEnv("HOME", tempDir);
     const config = createConfig();
     const events = new EventBus();
     const providers = new ProviderManager(config);
@@ -549,8 +551,9 @@ describe("Agent tool loop", () => {
     expect(utilityProvider.completeCalls).toBe(0);
     expect(utilityProvider.toolCounts).toEqual([]);
     expect(utilityProvider.calls).toEqual([]);
-    expect(output).toContain("repos/alpha [.git]");
-    expect(output).toContain("repos/beta [.git]");
+    expect(output).toContain("1. alpha");
+    expect(output).toContain("2. beta");
+    expect(output).toContain("Digite o número para selecionar:");
     expect(output).not.toContain("plain-folder");
   });
 
@@ -594,6 +597,7 @@ describe("Agent tool loop", () => {
   it("offers versioning help when no git projects are found", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agent-"));
     await mkdir(path.join(tempDir, "documents"), { recursive: true });
+    vi.stubEnv("HOME", tempDir);
     const config = createConfig();
     const events = new EventBus();
     const providers = new ProviderManager(config);
