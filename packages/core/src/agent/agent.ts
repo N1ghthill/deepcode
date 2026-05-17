@@ -83,6 +83,8 @@ export interface AgentRunOptions {
   allowedTools?: string[];
   /** Tool names excluded from this agent's tool set. */
   disallowedTools?: string[];
+  /** Called when a tool execution starts (active=true) or ends (active=false). */
+  onToolActivity?: (toolName: string, active: boolean) => void;
 }
 
 interface ToolExecutionOutcome {
@@ -480,7 +482,7 @@ Execute this task using the available tools. Return a summary of what was done.`
       }
 
       for (const call of toolCalls) {
-        const result = await this.executeTool(call, session, mode, options.signal, allowedToolNames);
+        const result = await this.executeTool(call, session, mode, options.signal, allowedToolNames, options.onToolActivity);
         this.sessions.addMessage(session.id, {
           role: "tool",
           source: "tool",
@@ -600,7 +602,7 @@ Execute this task using the available tools. Return a summary of what was done.`
       if (toolCalls.length === 0) break;
 
       for (const call of toolCalls) {
-        const result = await this.executeTool(call, session, mode, options.signal, allowedToolNames);
+        const result = await this.executeTool(call, session, mode, options.signal, allowedToolNames, options.onToolActivity);
         this.sessions.addMessage(session.id, {
           role: "tool",
           source: "tool",
@@ -641,6 +643,7 @@ Execute this task using the available tools. Return a summary of what was done.`
     mode: AgentMode,
     signal?: AbortSignal,
     allowedToolNames = this.allowedToolNamesForMode(mode),
+    onToolActivity?: (toolName: string, active: boolean) => void,
   ): Promise<ToolExecutionOutcome> {
     if (!this.isToolAllowed(call.name, mode)) {
       const modeHint = mode === "plan" ? "Switch to BUILD mode (press Tab in the TUI) to enable this tool." : "";
@@ -709,7 +712,9 @@ Execute this task using the available tools. Return a summary of what was done.`
         message: `Calling ${call.name}`,
         metadata: { tool: call.name, args: call.arguments },
       });
+      onToolActivity?.(call.name, true);
       const result = await Effect.runPromise(tool.execute(parsed.data, context));
+      onToolActivity?.(call.name, false);
       const output = typeof result === "string" ? result : JSON.stringify(result, null, 2);
       this.logToolActivity(session, {
         type: "tool_result",

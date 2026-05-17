@@ -81,6 +81,9 @@ export class SubagentManager {
         systemPrompt: task.systemPrompt,
         allowedTools: task.allowedTools,
         disallowedTools: task.disallowedTools,
+        onToolActivity: this.events
+          ? (toolName, active) => this.events!.emit("subagent:tool", { taskId: task.id, toolName, active })
+          : undefined,
       });
       this.events?.emit("subagent:complete", { taskId: task.id });
       return { taskId: task.id, sessionId: session.id, output };

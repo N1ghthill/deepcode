@@ -4,12 +4,13 @@ import { useUIState } from "../../contexts/UIStateContext.js";
 import { theme } from "../../semantic-colors.js";
 
 export function BackgroundTasksPill(): React.ReactElement | null {
-  const { activeSubagentCount } = useUIState();
-  if (activeSubagentCount <= 0) return null;
+  const { activeSubagents } = useUIState();
+  const running = activeSubagents.filter((s) => s.status === "running").length;
+  if (running <= 0) return null;
   return (
     <Text color={theme.text.accent}>
       {" "}
-      {activeSubagentCount} task{activeSubagentCount !== 1 ? "s" : ""}
+      {running} task{running !== 1 ? "s" : ""}
     </Text>
   );
 }
