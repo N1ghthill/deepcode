@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.1.11] — 2026-05-17
+
+### Fixed
+
+- `deepcode github solve` no longer throws "Agent completed without file changes" when the agent commits files itself (via the `git`/`bash` tool); now checks both the working tree and commits ahead of the base branch before deciding whether to add/commit
+
 ## [1.1.10] — 2026-05-17
 
 ### Fixed
@@ -161,7 +167,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Persistent sessions, local config, telemetry collector
 - GitHub integration: OAuth, issues, pull requests
 
-[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.10...HEAD
+[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.11...HEAD
+[1.1.11]: https://github.com/N1ghthill/deepcode/compare/v1.1.10...v1.1.11
 [1.1.10]: https://github.com/N1ghthill/deepcode/compare/v1.1.9...v1.1.10
 [1.1.9]: https://github.com/N1ghthill/deepcode/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/N1ghthill/deepcode/compare/v1.1.7...v1.1.8

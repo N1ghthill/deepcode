@@ -6,7 +6,7 @@
 
 Última rodada validada: `main` commitado e publicado no npm, validado em 2026-05-17.
 
-Versão publicada: **`deepcode-ai@1.1.10`** em https://www.npmjs.com/package/deepcode-ai
+Versão publicada: **`deepcode-ai@1.1.11`** em https://www.npmjs.com/package/deepcode-ai
 
 ## Estrutura do Monorepo
 
@@ -102,7 +102,7 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 
 ## Checklist Antes de Dizer "Produção"
 
-- [x] Pacote publicado no npm (`deepcode-ai@1.1.10`).
+- [x] Pacote publicado no npm (`deepcode-ai@1.1.11`).
 - [x] OAuth GitHub implementado.
 - [x] Testes E2E cobrindo projeto fixture TypeScript e Python.
 - [x] Documentação de config completa.
@@ -111,8 +111,8 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 - [x] MCP client.
 - [x] `doctor` passa em ambiente real com provider, modelo, GitHub token e LSP.
 - [x] `run` executa pelo menos uma tarefa real com tool calls.
-- [ ] `chat` consegue aprovar/negar uma operação sensível pela TUI.
-- [ ] `github solve` validado em issue real de teste.
+- [x] `chat` consegue aprovar/negar uma operação sensível pela TUI.
+- [x] `github solve` validado em issue real de teste (issue #7 → PR #8).
 
 ## Comandos Úteis Para Retomar
 
@@ -133,6 +133,7 @@ pnpm --filter deepcode-ai dev -- --help
 
 - Tool calling real varia por provider/modelo; validar com o modelo escolhido antes de usar em projeto importante. Testado e validado com DeepSeek (deepseek-v4-flash).
 - `run --yes` aprova todas as permission requests incluindo paths fora do whitelist; use sem `--yes` para manter o controle interativo.
-- `github solve` com `--yes` faz branch, commit, push, PR e comentário; usar em repo/branch de teste primeiro.
+- `github solve` com `--yes` faz branch, commit, push, PR e comentário; usar em repo/branch de teste primeiro. Validado em issue #7 (adição de `.editorconfig`) → PR #8.
+- `github solve` respeita commits feitos pelo agente via tool `git`/`bash`; não faz double-commit.
 - `search_symbols` depende de language servers instalados no PATH; configure `lsp.servers` no config com os servidores disponíveis na máquina.
 - Cache usa TTL; para máxima atualidade rode `deepcode cache clear`.
