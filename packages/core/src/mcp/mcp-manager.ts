@@ -33,6 +33,10 @@ export class McpManager {
     return tools;
   }
 
+  get connectedCount(): number {
+    return this.clients.length;
+  }
+
   stop(): void {
     for (const { client } of this.clients) {
       try {

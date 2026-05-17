@@ -145,6 +145,8 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
   });
   const [providerConfigVersion, setProviderConfigVersion] = useState(0);
   const [, setThemeVersion] = useState(0);
+  const [mcpConnected, setMcpConnected] = useState(0);
+  const [mcpTotal, setMcpTotal] = useState(0);
   const [, setDrainTick] = useState(0);
   const [pendingCommandConfirmation, setPendingCommandConfirmation] = useState<{
     rawInvocation: string;
@@ -426,6 +428,8 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
         setTargetSource(provider || model ? "cli" : "config");
         setCurrentModel(session.model ?? "(unconfigured)");
         setProviderLabel(formatProviderLabel(session.provider, session.model));
+        setMcpConnected(runtime.mcp.connectedCount);
+        setMcpTotal(runtime.config.mcpServers.length);
 
         const unsubscribers: Array<() => void> = [];
         unsubscribers.push(
@@ -1440,6 +1444,9 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
       isFeedbackDialogOpen,
 
       showAutoAcceptIndicator: ApprovalMode.DEFAULT,
+
+      mcpConnected,
+      mcpTotal,
     }),
     [
       approvalQueue.length,
@@ -1461,6 +1468,8 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
       lastOutputTokenCount,
       lastPromptTokenCount,
       mainAreaWidth,
+      mcpConnected,
+      mcpTotal,
       messageQueue,
       pendingCommandConfirmation,
       pendingGeminiHistoryItems,

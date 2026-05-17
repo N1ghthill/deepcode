@@ -104,6 +104,10 @@ export interface UIState {
   isPermissionsDialogOpen: boolean;
   isFeedbackDialogOpen: boolean;
 
+  // ── MCP ──────────────────────────────────────────────────────────────────
+  mcpConnected: number;
+  mcpTotal: number;
+
   // ── Approval ─────────────────────────────────────────────────────────────
   showAutoAcceptIndicator: ApprovalMode;
 }
