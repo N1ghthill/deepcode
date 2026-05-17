@@ -290,10 +290,6 @@ export function isLegacyUiOperationalMessage(content: string): boolean {
     || content.startsWith("Nenhum modelo está configurado para ");
 }
 
-function isConversationalTurn(input: string, policy: BuildTurnPolicy): boolean {
-  return classifyLocalConversation(input, policy) !== undefined;
-}
-
 function classifyLocalConversation(
   input: string,
   policy: BuildTurnPolicy,
