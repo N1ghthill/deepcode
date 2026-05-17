@@ -248,15 +248,15 @@ export async function solveIssueCommand(
   });
   const secretValues = collectSecretValues(runtime.config);
   const prompt = [
-    `Resolva a issue GitHub #${issue.number}: ${issue.title}`,
+    `Resolve GitHub issue #${issue.number}: ${issue.title}`,
     "",
     issue.body ?? "",
     "",
-    "Requisitos:",
-    "- Inspecione o código relevante antes de editar.",
-    "- Implemente a correção completa.",
-    "- Adicione ou atualize testes quando fizer sentido.",
-    "- Execute validações adequadas.",
+    "Requirements:",
+    "- Inspect the relevant code before making changes.",
+    "- Implement a complete fix.",
+    "- Add or update tests where it makes sense.",
+    "- Run appropriate validations.",
   ].join("\n");
 
   await writeStdoutLine(`Solving issue #${issue.number} on ${branch}`);
