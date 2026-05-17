@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.1.10] — 2026-05-17
+
+### Fixed
+
+- `deepcode run` now prints runtime warnings and errors to stderr; previously `app:warn` / `app:error` events (MCP failures, budget exceeded, provider errors) were silently dropped in non-interactive mode
+
 ## [1.1.9] — 2026-05-17
 
 ### Fixed
@@ -155,7 +161,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Persistent sessions, local config, telemetry collector
 - GitHub integration: OAuth, issues, pull requests
 
-[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.9...HEAD
+[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.10...HEAD
+[1.1.10]: https://github.com/N1ghthill/deepcode/compare/v1.1.9...v1.1.10
 [1.1.9]: https://github.com/N1ghthill/deepcode/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/N1ghthill/deepcode/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/N1ghthill/deepcode/compare/v1.1.6...v1.1.7
