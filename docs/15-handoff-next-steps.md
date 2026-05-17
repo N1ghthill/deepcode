@@ -1,218 +1,137 @@
-# 15 - Handoff e Proximos Passos
+# 15 - Handoff e Próximos Passos
 
-> Documento interno de engenharia. Nao use este arquivo como resumo oficial do produto; a superficie publica do repositorio esta em `README.md`, `docs/README.md`, `CONTRIBUTING.md` e `SECURITY.md`.
+> Documento interno de engenharia. Não use este arquivo como resumo oficial do produto; a superfície pública do repositório está em `README.md`, `docs/README.md`, `CONTRIBUTING.md` e `SECURITY.md`.
 
 ## Estado Atual
 
-Ultima rodada validada: `main` commitado e pushado, validado em 2026-05-07.
+Última rodada validada: `main` commitado e publicado no npm, validado em 2026-05-17.
 
-Repositorio remoto:
+Versão publicada: **`deepcode-ai@1.1.7`** em https://www.npmjs.com/package/deepcode-ai
 
-```bash
-https://github.com/N1ghthill/deepcode
-```
-
-Branch principal:
-
-```bash
-main
-```
-
-O projeto esta em formato monorepo TypeScript com:
+## Estrutura do Monorepo
 
 - `packages/shared`: schemas e tipos compartilhados.
-- `packages/core`: providers, agente, ferramentas, seguranca, GitHub, LSP, cache, workflows e subagents.
-- `packages/cli`: comandos CLI e TUI Ink.
-- `apps/deepcode`: pacote executavel `deepcode`.
+- `packages/core`: providers, agente, ferramentas, segurança, GitHub, LSP, cache, workflows e subagents.
+- `packages/cli`: comandos CLI e TUI (Ink 7 / React 19).
+- `apps/deepcode`: pacote executável `deepcode-ai` publicado no npm.
 
-## Validacao Atual
-
-Os comandos abaixo passaram na ultima rodada:
+## Validação Atual
 
 ```bash
-pnpm typecheck
+pnpm typecheck   # 0 erros em 4 pacotes
 pnpm lint
-pnpm test
+pnpm test        # 216 testes, 215 passando, 1 skip condicional
 pnpm build
 ```
 
-Cobertura de testes atual:
+## Funcionalidades Implementadas
 
-- Core: 31 testes (5 novos: web-tool).
-- App CLI E2E: 7 testes.
+### CLI
 
-## Funcionalidades Ja Implementadas
+- `init`, `chat`, `run`, `doctor`, `cache clear`, `projects`.
+- Config: `config path`, `config show`, `config get`, `config set`, `config unset`.
+- GitHub: `github login`, `github whoami`, `github issues`, `github pr`, `github solve`, `github prs`, `github merge`, `github review`.
+- Subagents: `subagents run --task ...`.
 
-- CLI: `init`, `chat`, `run`, `doctor`, `cache clear`.
-- Config CLI: `config path`, `config show`, `config get`, `config set`, `config unset`.
-- GitHub CLI: `github login`, `github whoami`, `github issues`, `github pr`, `github solve`.
-- Subagents CLI: `subagents run --task ...`.
-- Providers reais: OpenRouter, Anthropic, OpenAI, DeepSeek, OpenCode.
-- Tool calling:
-  - OpenAI-compatible com agregacao de argumentos em streaming.
-  - Anthropic com acumulacao de `input_json_delta`.
-- Ferramentas reais:
-  - `read_file`, `write_file`, `edit_file`, `list_dir`.
-  - `search_text`, `search_files`, `search_symbols` via LSP real.
-  - `bash`, `git`, `analyze_code`, `lint`, `test`.
-  - `fetch_web` para consulta de documentacao e conteudo web.
-- Seguranca:
-  - path whitelist/blacklist.
-  - permission gateway.
-  - audit log.
-  - classificacao de shell em `shell`, `dangerous`, `blocked`.
-  - mascaramento centralizado de secrets (redaction).
+### Providers
+
+- Anthropic, OpenAI, OpenRouter, DeepSeek, OpenCode, Groq, Ollama.
+- Tool calling com agregação de argumentos em streaming (OpenAI-compatible e Anthropic).
+- Failover com modelo por provider, skip de providers sem credenciais.
+- 429/503 retry com backoff configurável.
+
+### Agent
+
+- Modos PLAN e BUILD.
+- Context window management com auto-sumarização.
+- Token budget enforcement com `budget:warning` e `budget:exceeded`.
+- Situational awareness: saudações e small-talk tratados localmente.
+- Subagent orchestration com sessões filhas.
+- Workflows: `ChainWorkflow`, `ParallelWorkflow`, `EvaluatorOptimizerWorkflow`.
+
+### Ferramentas
+
+- `read_file`, `write_file`, `edit_file`, `list_dir`.
+- `search_text`, `search_files`, `search_symbols` via LSP + fallback heurístico.
+- `bash`, `git`, `analyze_code`, `lint`, `test`.
+- `fetch_web`.
+- MCP client via stdio (JSON-RPC 2.0).
+
+### Segurança
+
+- Path whitelist/blacklist, permission gateway, audit log.
+- Classificação de shell em `shell`, `dangerous`, `blocked`.
+- Mascaramento centralizado de secrets em streaming e erros.
+
+### TUI (Ink 7 / React 19)
+
+- Input com autocomplete, modo Vim (normal/insert), paste seguro.
+- Slash commands: `/help`, `/clear`, `/diff`, `/provider`, `/model`, `/mode`, `/settings`, `/theme`, `/permissions`, `/auth`, `/undo`.
+- Model picker interativo (`/model` ou `Ctrl+P` para provider) com busca, seção Recent e grupos por provider, badge de latência.
+- Provider dialog com submenu, teste de conectividade e latência ao vivo.
+- ThemeDialog com preview ao vivo; PermissionsDialog; AuthDialog com device flow OAuth inline.
+- Painel de aprovação detalhado com fila e Enter para aprovar.
+- TaskPlanPanel com status por task (modo PLAN).
+- Tool cards com atividade por tipo (read, write, bash, git, search, test, lint).
+- Redaction de secrets em streaming e erros.
+- `deepcode projects`: browser interativo de repos git descobertos no home.
+
+### Infraestrutura
+
 - Cache persistente para read/search em `.deepcode/cache`.
-- Configuracao editavel por CLI com validacao estrita.
 - OAuth GitHub via device flow real, sem client ID embutido.
-- Validacao real de token GitHub via `GET /user` em `github whoami` e `doctor`.
-- Validacao real de provider/modelo via endpoint `/models` no `doctor`.
-- TUI com:
-  - seletor navegavel de sessoes.
-  - editor interativo de configuracao (navegar, editar, salvar).
-  - tela de ajuda organizada.
-  - painel de aprovacao detalhado com fila.
-  - redaction de streaming/erros.
-  - icones de atividade por tipo (read, write, bash, git, search, test, lint).
-  - tracking de tool calls no painel lateral.
-  - cores de status (amarelo=executando, vermelho=erro, verde=idle).
-- Workflows core:
-  - `ChainWorkflow`.
-  - `ParallelWorkflow`.
-  - `EvaluatorOptimizerWorkflow`.
-- SubagentManager com sessoes filhas reais.
-- Testes E2E locais do CLI.
-- Fixture E2E de projeto TypeScript em repositorio Git temporario.
-- E2E local dos comandos `github whoami`, `github issues`, `github pr` e validacao GitHub do `doctor` via `github.enterpriseUrl`.
-- Teste de contrato do GitHubClient com servidor HTTP local mockado.
+- CI: lint + typecheck + test + build em PRs e push para main.
+- Release: bump de versão + tag + push → GitHub Actions publica no npm com provenance.
+- Secret scan em arquivos rastreados no CI.
 
-## O Que Ainda Falta
+## Stubs — Implementar Quando Entrar no Escopo
 
-### Prioridade 1 - Validacao Real com Credenciais
+Estes componentes existem no código mas não fazem nada; são placeholders herdados do port da TUI do Qwen:
 
-1. Configurar provider real:
+| Stub | Arquivo | O que seria |
+|---|---|---|
+| `BackgroundTasksPill` | `tui/ui/components/background-view/` | Indicador de tasks em segundo plano |
+| `MCPHealthPill` | `tui/ui/components/mcp/` | Status de saúde dos servidores MCP |
+| `useFollowupSuggestions` | `tui/ui/hooks/` | Sugestões de follow-up após resposta |
+| `useStatusLine` | `tui/ui/hooks/` | Status line customizável no footer |
+| `ShellInputPrompt` | `tui/ui/components/` | Input inline dentro de tool cards |
+| `MermaidDiagram` | `tui/ui/utils/` | Render de diagramas Mermaid |
+| `FeedbackDialog` | `tui/ui/` | Dialog de feedback do usuário |
+| `i18n` | `tui/i18n/` | Internacionalização real (hoje é função identidade) |
+| Dialog fallback | `AppContainer.tsx:1771` | "This dialog is not implemented yet." |
 
-```bash
-export DEEPCODE_PROVIDER=openrouter
-export DEEPCODE_MODEL="provider/model-id"
-export OPENROUTER_API_KEY="..."
-```
+## Checklist Antes de Dizer "Produção"
 
-2. Rodar:
+- [x] Pacote publicado no npm (`deepcode-ai@1.1.7`).
+- [x] OAuth GitHub implementado.
+- [x] Testes E2E cobrindo projeto fixture TypeScript e Python.
+- [x] Documentação de config completa.
+- [x] Editor interativo de config na TUI.
+- [x] Tool `fetch_web`.
+- [x] MCP client.
+- [ ] `doctor` passa em ambiente real com provider, modelo, GitHub token e LSP.
+- [ ] `run` executa pelo menos uma tarefa real com tool calls.
+- [ ] `chat` consegue aprovar/negar uma operação sensível pela TUI.
+- [ ] `github solve` validado em issue real de teste.
 
-```bash
-deepcode doctor
-deepcode run "Liste a estrutura do projeto e explique os principais pacotes" --yes
-deepcode chat
-```
-
-3. Validar tool calling real:
-
-```bash
-deepcode run "Leia o README.md e depois busque por SubagentManager no projeto" --yes
-```
-
-### Prioridade 2 - GitHub Real
-
-1. Configurar token:
-
-```bash
-export GITHUB_TOKEN="..."
-```
-
-2. Validar:
-
-```bash
-deepcode github issues
-```
-
-3. Criar uma issue pequena de teste no GitHub e rodar:
-
-```bash
-deepcode github solve <numero-da-issue> --base main --yes
-```
-
-Critico: usar uma issue de baixo risco primeiro, porque o fluxo faz branch, commit, push, PR e comentario.
-
-### Prioridade 3 - TUI Final
-
-A TUI esta funcional com editor de config interativo, mas ainda precisa de acabamento:
-
-- Temas customizaveis.
-- Keybindings Vim completos (modo normal/insert).
-- Refinamento visual adicional de layout e tipografia.
-
-### Prioridade 4 - Configuracao e Seguranca
-
-Ainda falta:
-
-- Revisao adicional de mascaramento em novas superficies que forem adicionadas.
-
-### Prioridade 5 - E2E Mais Forte
-
-Adicionar fixtures para:
-
-- Projeto TypeScript simples com testes. Concluido para cobertura CLI basica; ainda falta executar tarefas reais do agente nessa fixture quando houver provider configurado.
-- Projeto Python simples.
-- Repositorio Git temporario.
-- GitHub mockado por servidor local somente para testes de contrato, sem substituir o fluxo real em producao. Concluido para `GitHubClient`.
-
-## Comandos Uteis Para Retomar
-
-Instalar e validar:
+## Comandos Úteis Para Retomar
 
 ```bash
 pnpm install
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-```
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
 
-Rodar CLI local pelo build:
-
-```bash
+# Rodar via build local
 node apps/deepcode/dist/index.js --help
 node apps/deepcode/dist/index.js doctor
-node apps/deepcode/dist/index.js config show
-node apps/deepcode/dist/index.js github login --client-id "..." --scope repo
 node apps/deepcode/dist/index.js chat
+
+# Rodar via workspace (dev)
+pnpm --filter deepcode-ai dev -- --help
 ```
-
-Rodar via workspace:
-
-```bash
-pnpm --filter deepcode dev -- --help
-```
-
-Publicacao NPM futura:
-
-```bash
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-pnpm --filter deepcode publish --access public
-```
-
-## Checklist Antes de Dizer "Producao"
-
-- [ ] `doctor` passa em ambiente real com provider, modelo, GitHub token e LSP.
-- [ ] `run` executa pelo menos uma tarefa real com tool calls.
-- [ ] `chat` consegue aprovar/negar uma operacao sensivel pela TUI.
-- [ ] `github solve` validado em issue real de teste.
-- [ ] TUI revisada para UX final (temas, Vim bindings).
-- [x] OAuth GitHub implementado.
-- [x] Testes E2E cobrindo projeto fixture TypeScript.
-- [x] Documentacao de config completa.
-- [x] Editor interativo de config na TUI.
-- [x] Tool fetch_web para documentacao.
-- [ ] Pacote publicado em NPM.
 
 ## Riscos Conhecidos
 
 - Tool calling real varia por provider/modelo; validar com o modelo escolhido antes de usar em projeto importante.
-- `github solve` e `--yes` aprovam operacoes sensiveis; usar primeiro em branch/repo de teste.
+- `github solve` com `--yes` faz branch, commit, push, PR e comentário; usar em repo/branch de teste primeiro.
 - `search_symbols` depende de language servers instalados no PATH.
-- Cache de buscas em diretorio usa TTL; se precisar maxima atualidade, rode `deepcode cache clear`.
-- TUI ainda e funcional, nao final.
+- Cache usa TTL; para máxima atualidade rode `deepcode cache clear`.
