@@ -77,6 +77,12 @@ export interface AgentRunOptions {
   onUsage?: (inputTokens: number, outputTokens: number) => void;
   onIteration?: (iteration: number, maxIterations: number) => void;
   onTaskUpdate?: (task: Task, plan: TaskPlan) => void;
+  /** Override system prompt (used by named agent types). */
+  systemPrompt?: string;
+  /** If set, only these tool names are available to the agent. */
+  allowedTools?: string[];
+  /** Tool names excluded from this agent's tool set. */
+  disallowedTools?: string[];
 }
 
 interface ToolExecutionOutcome {
@@ -136,7 +142,10 @@ export class Agent {
   async run(options: AgentRunOptions): Promise<string> {
     const session = options.session;
     const mode = options.mode ?? this.config.agentMode;
-    const turnStrategy = this.resolveTurnStrategy(options.input, mode);
+    const baseTurnStrategy = this.resolveTurnStrategy(options.input, mode);
+    const turnStrategy = options.systemPrompt
+      ? { ...baseTurnStrategy, systemPrompt: options.systemPrompt }
+      : baseTurnStrategy;
     const resolvedTarget = resolveExecutionTarget(
       this.config,
       session,
@@ -499,8 +508,9 @@ Execute this task using the available tools. Return a summary of what was done.`
     let iterations = startingIterations;
     const resolvedModel = session.model ?? resolveConfiguredModelForProvider(this.config, session.provider);
     const toolProfile = resolveModelExecutionProfile(session.provider, resolvedModel);
-    const toolDefinitions = turnStrategy.allowTools ? this.toolDefinitions(mode, toolProfile.toolSchemaMode) : [];
-    const allowedToolNames = turnStrategy.allowTools ? this.allowedToolNamesForMode(mode) : new Set<string>();
+    const baseAllowedToolNames = turnStrategy.allowTools ? this.allowedToolNamesForMode(mode) : new Set<string>();
+    const allowedToolNames = this.applyToolOverrides(baseAllowedToolNames, options);
+    const toolDefinitions = turnStrategy.allowTools ? this.toolDefinitionsForNames(allowedToolNames, toolProfile.toolSchemaMode) : [];
     const textToolFallbackEnabled = toolDefinitions.length > 0 && toolProfile.toolCallStrategy !== "native";
 
     while (iterations < maxIterations) {
@@ -794,6 +804,16 @@ Execute this task using the available tools. Return a summary of what was done.`
     return new Set(
       this.tools.list().filter((tool) => this.isToolAllowed(tool.name, mode)).map((tool) => tool.name),
     );
+  }
+
+  private applyToolOverrides(base: Set<string>, options: AgentRunOptions): Set<string> {
+    if (!options.allowedTools && !options.disallowedTools) return base;
+    let names = options.allowedTools ? new Set(options.allowedTools) : new Set(base);
+    if (options.disallowedTools) {
+      for (const name of options.disallowedTools) names.delete(name);
+    }
+    // Intersect with base so we never grant tools outside the mode's allowed set
+    return new Set([...names].filter((n) => base.has(n)));
   }
 
   private allowedToolNamesForTaskType(mode: AgentMode, taskType?: Task["type"]): Set<string> {

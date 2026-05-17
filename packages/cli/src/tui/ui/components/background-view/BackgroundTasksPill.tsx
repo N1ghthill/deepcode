@@ -1,10 +1,15 @@
-/**
- * BackgroundTasksPill — DeepCode stub.
- *
- * Qwen Code's footer pill for its background subagent/shell roster. DeepCode
- * does not ship that overlay; the pill renders nothing.
- */
+import React from "react";
+import { Text } from "ink";
+import { useUIState } from "../../contexts/UIStateContext.js";
+import { theme } from "../../semantic-colors.js";
 
-export function BackgroundTasksPill(): null {
-  return null;
+export function BackgroundTasksPill(): React.ReactElement | null {
+  const { activeSubagentCount } = useUIState();
+  if (activeSubagentCount <= 0) return null;
+  return (
+    <Text color={theme.text.accent}>
+      {" "}
+      {activeSubagentCount} task{activeSubagentCount !== 1 ? "s" : ""}
+    </Text>
+  );
 }

@@ -147,6 +147,7 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
   const [, setThemeVersion] = useState(0);
   const [mcpConnected, setMcpConnected] = useState(0);
   const [mcpTotal, setMcpTotal] = useState(0);
+  const [activeSubagentCount, setActiveSubagentCount] = useState(0);
   const [, setDrainTick] = useState(0);
   const [pendingCommandConfirmation, setPendingCommandConfirmation] = useState<{
     rawInvocation: string;
@@ -478,6 +479,16 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
         unsubscribers.push(
           runtime.events.on("activity", (activity) => {
             setLiveToolCalls((prev) => reduceToolActivity(prev, activity));
+          }),
+        );
+        unsubscribers.push(
+          runtime.events.on("subagent:start", () => {
+            setActiveSubagentCount((n) => n + 1);
+          }),
+        );
+        unsubscribers.push(
+          runtime.events.on("subagent:complete", () => {
+            setActiveSubagentCount((n) => Math.max(0, n - 1));
           }),
         );
         unsubscribeRef.current = unsubscribers;
@@ -1447,9 +1458,11 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
 
       mcpConnected,
       mcpTotal,
+      activeSubagentCount,
     }),
     [
       approvalQueue.length,
+      activeSubagentCount,
       activeDialog,
       buffer,
       commandContext,

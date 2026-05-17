@@ -108,6 +108,9 @@ export interface UIState {
   mcpConnected: number;
   mcpTotal: number;
 
+  // ── Subagents ────────────────────────────────────────────────────────────
+  activeSubagentCount: number;
+
   // ── Approval ─────────────────────────────────────────────────────────────
   showAutoAcceptIndicator: ApprovalMode;
 }
