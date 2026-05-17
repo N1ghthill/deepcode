@@ -13,7 +13,16 @@ export interface TurnStrategy {
   shouldPlan: boolean;
   systemPrompt: string;
   kind: "chat" | "utility" | "task";
+  intent: UserIntent;
 }
+
+export type UserIntent =
+  | { kind: "direct_utility" }
+  | { kind: "local_conversation"; subtype: "greeting" | "gratitude" | "farewell" }
+  | { kind: "forced_tool_task" }
+  | { kind: "simple_task" }
+  | { kind: "workspace_task" }
+  | { kind: "general_chat" };
 
 export interface ParsedUtilityRequest {
   kind: "pwd" | "date" | "list_dir";
@@ -37,58 +46,66 @@ export function resolveTurnStrategy(
   mode: AgentMode,
   policy: BuildTurnPolicy,
 ): TurnStrategy {
+  const intent = classifyUserIntent(input, mode, policy);
+
   if (mode === "build") {
-    if (isDirectUtilityRequest(input, policy)) {
+    if (intent.kind === "direct_utility") {
       return {
         allowTools: true,
         shouldPlan: false,
         systemPrompt: UTILITY_SYSTEM_PROMPT,
         kind: "utility",
+        intent,
       };
     }
 
-    if (isConversationalTurn(input, policy)) {
-      return {
-        allowTools: true,
-        shouldPlan: false,
-        systemPrompt: BUILD_SYSTEM_PROMPT_CONVERSATIONAL,
-        kind: "chat",
-      };
-    }
-
-    if (policy.mode === "always-tools") {
+    if (intent.kind === "forced_tool_task") {
       return {
         allowTools: true,
         shouldPlan: false,
         systemPrompt: BUILD_SYSTEM_PROMPT_ALWAYS_TOOLS,
         kind: "task",
+        intent,
       };
     }
 
-    if (isSimpleDirectCommand(input)) {
+    if (intent.kind === "local_conversation") {
+      return {
+        allowTools: false,
+        shouldPlan: false,
+        systemPrompt: BUILD_SYSTEM_PROMPT_CONVERSATIONAL,
+        kind: "chat",
+        intent,
+      };
+    }
+
+    if (intent.kind === "simple_task") {
       return {
         allowTools: true,
         shouldPlan: false,
         systemPrompt: BUILD_SYSTEM_PROMPT,
         kind: "task",
+        intent,
       };
     }
 
-    const looksLikeWorkspace = looksLikeWorkspaceRequest(input, policy);
+    const looksLikeWorkspace = intent.kind === "workspace_task";
     return {
-      allowTools: true,
+      allowTools: looksLikeWorkspace,
       shouldPlan: looksLikeWorkspace,
       systemPrompt: looksLikeWorkspace ? BUILD_SYSTEM_PROMPT : BUILD_SYSTEM_PROMPT_CONVERSATIONAL,
       kind: looksLikeWorkspace ? "task" : "chat",
+      intent,
     };
   }
 
-  if (isConversationalTurn(input, policy)) {
+  if (intent.kind === "local_conversation") {
     return {
       allowTools: false,
       shouldPlan: false,
       systemPrompt: CHAT_SYSTEM_PROMPT,
       kind: "chat",
+      intent,
     };
   }
 
@@ -98,25 +115,57 @@ export function resolveTurnStrategy(
       shouldPlan: false,
       systemPrompt: PLAN_SYSTEM_PROMPT,
       kind: "task",
+      intent,
     };
   }
 
-  if (isDirectUtilityRequest(input, policy)) {
+  if (intent.kind === "direct_utility") {
     return {
       allowTools: true,
       shouldPlan: false,
       systemPrompt: UTILITY_SYSTEM_PROMPT,
       kind: "utility",
+      intent,
     };
   }
 
-  const allowTools = looksLikeWorkspaceRequest(input, policy);
+  const allowTools = intent.kind === "workspace_task";
   return {
     allowTools,
     shouldPlan: allowTools,
     systemPrompt: allowTools ? PLAN_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT,
     kind: allowTools ? "task" : "chat",
+    intent,
   };
+}
+
+export function classifyUserIntent(
+  input: string,
+  mode: AgentMode,
+  policy: BuildTurnPolicy,
+): UserIntent {
+  if (isDirectUtilityRequest(input, policy)) {
+    return { kind: "direct_utility" };
+  }
+
+  if (mode === "build" && policy.mode === "always-tools") {
+    return { kind: "forced_tool_task" };
+  }
+
+  const localConversation = classifyLocalConversation(input, policy);
+  if (localConversation) {
+    return localConversation;
+  }
+
+  if (mode === "build" && isSimpleDirectCommand(input)) {
+    return { kind: "simple_task" };
+  }
+
+  if (looksLikeWorkspaceRequest(input, policy)) {
+    return { kind: "workspace_task" };
+  }
+
+  return { kind: "general_chat" };
 }
 
 export function parseUtilityRequest(input: string): ParsedUtilityRequest | undefined {
@@ -146,6 +195,21 @@ export function parseUtilityRequest(input: string): ParsedUtilityRequest | undef
   return undefined;
 }
 
+export function directLocalResponse(intent: UserIntent): string | undefined {
+  if (intent.kind !== "local_conversation") {
+    return undefined;
+  }
+
+  if (intent.subtype === "gratitude") {
+    return "De nada.";
+  }
+  if (intent.subtype === "farewell") {
+    return "Ate.";
+  }
+
+  return "Ola! Sou DeepCode, seu agente de codigo no terminal. Como posso ajudar com este projeto?";
+}
+
 export function runtimeContextPrompt(worktree: string, toolsEnabled: boolean): string {
   const now = new Date();
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
@@ -171,8 +235,8 @@ export function runtimeContextPrompt(worktree: string, toolsEnabled: boolean): s
     `- Working directory: ${worktree}`,
     `- Tools enabled for this turn: ${toolsEnabled ? "yes" : "no"}`,
     toolsEnabled
-      ? "- When useful, you can inspect files and run local commands through tools, subject to permissions and path restrictions."
-      : "- Do not claim tools are globally unavailable; they are only disabled for this turn unless a future user request requires them.",
+      ? "- Inspect files and run local commands through tools as needed, subject to permissions and path restrictions."
+      : "- Tools are off for this turn because this message does not require repository access. Tool capability is not gone — it will be active for any turn that needs file inspection, code edits, or commands. Do not tell the user tools are unavailable.",
   ].join("\n");
 }
 
@@ -227,11 +291,28 @@ export function isLegacyUiOperationalMessage(content: string): boolean {
 }
 
 function isConversationalTurn(input: string, policy: BuildTurnPolicy): boolean {
+  return classifyLocalConversation(input, policy) !== undefined;
+}
+
+function classifyLocalConversation(
+  input: string,
+  policy: BuildTurnPolicy,
+): Extract<UserIntent, { kind: "local_conversation" }> | undefined {
   const normalizedInput = normalizeTurnInput(input);
-  if (!normalizedInput) return false;
-  return policy.conversationalPhrases.some(
+  if (!normalizedInput) return undefined;
+  const isConfiguredConversation = policy.conversationalPhrases.some(
     (phrase) => normalizeTurnInput(phrase) === normalizedInput,
   );
+  if (!isConfiguredConversation) return undefined;
+
+  if (["valeu", "brigado", "brigada", "obrigado", "obrigada", "thanks", "thank you"].includes(normalizedInput)) {
+    return { kind: "local_conversation", subtype: "gratitude" };
+  }
+  if (["falou", "ate logo", "tchau"].includes(normalizedInput)) {
+    return { kind: "local_conversation", subtype: "farewell" };
+  }
+
+  return { kind: "local_conversation", subtype: "greeting" };
 }
 
 function looksLikeWorkspaceRequest(input: string, policy: BuildTurnPolicy): boolean {

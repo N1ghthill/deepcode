@@ -522,6 +522,7 @@ interface LLMTestServer {
   calls: Array<{ model: string; messages: unknown[]; hasTools: boolean }>;
   queueText: (text: string) => void;
   queueToolCall: (name: string, args: Record<string, unknown>) => void;
+  queueEmpty: () => void;
   queueError: (status: number, message: string) => void;
   close: () => Promise<void>;
 }
@@ -597,6 +598,14 @@ async function startLLMTestServer(): Promise<LLMTestServer> {
       });
     },
 
+    queueEmpty() {
+      responseQueue.push((response) => {
+        sendSse(response, [
+          { ...baseChunk, choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 0 } },
+        ]);
+      });
+    },
+
     queueError(status: number, message: string) {
       responseQueue.push((response) => {
         response.writeHead(status, { "content-type": "application/json" });
@@ -628,6 +637,24 @@ async function configureLLMWithoutDefaultModel(tempDir: string, serverUrl: strin
 // ── deepcode run E2E tests ────────────────────────────────────────────────────
 
 describeWithLocalBinding("deepcode run with mock LLM", () => {
+  it("answers a greeting locally without calling the LLM", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLM(tempDir, llm.url);
+
+      const result = await runCli(["--cwd", tempDir, "run", "oi", "--yes"]);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Como posso ajudar");
+      expect(llm.calls).toHaveLength(0);
+    } finally {
+      await llm.close();
+    }
+  }, 20_000);
+
   it("streams a direct text response and exits 0", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
     await createTypeScriptFixture(tempDir);
@@ -674,6 +701,30 @@ describeWithLocalBinding("deepcode run with mock LLM", () => {
       // Third call must include the tool result in messages
       const thirdMessages = llm.calls[2]?.messages as Array<{ role: string }>;
       expect(thirdMessages.some((m) => m.role === "tool")).toBe(true);
+    } finally {
+      await llm.close();
+    }
+  }, 20_000);
+
+  it("prints the returned plan summary when the model streams no visible text", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-run-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLM(tempDir, llm.url);
+      llm.queueText(JSON.stringify([
+        { id: "task-1", description: "List workspace", type: "research", dependencies: [] },
+      ]));
+      llm.queueToolCall("list_dir", { path: "." });
+      llm.queueEmpty();
+
+      const result = await runCli(["--cwd", tempDir, "run", "analyze repo files", "--yes"]);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Executing plan: analyze repo files");
+      expect(result.stdout).toContain("All tasks completed successfully");
+      expect(llm.calls).toHaveLength(3);
     } finally {
       await llm.close();
     }

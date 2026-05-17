@@ -119,7 +119,7 @@ describe("Agent tool loop", () => {
     ).toBe(true);
   });
 
-  it("responds to a greeting in build mode with tools available", async () => {
+  it("responds to a greeting in build mode without invoking the provider or tools", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agent-"));
     const config = createConfig();
     const events = new EventBus();
@@ -157,17 +157,14 @@ describe("Agent tool loop", () => {
 
     const output = await agent.run({ session, input: "oi" });
 
-    // In build mode, tools are always available. The simulated provider
-    // calls a tool when tools are provided, producing output based on tool results.
-    // Planning should not be invoked for conversational turns.
-    expect(output).toBeTruthy();
+    expect(output).toContain("Como posso ajudar");
     expect(greetingProvider.completeCalls).toBe(0);
-    // Tools are provided in build mode even for conversational input
-    expect(greetingProvider.toolCounts[0]).toBeGreaterThan(0);
-    expect(session.messages.some((message) => message.role === "tool")).toBe(true);
+    expect(greetingProvider.calls).toHaveLength(0);
+    expect(greetingProvider.toolCounts).toEqual([]);
+    expect(session.messages.some((message) => message.role === "tool")).toBe(false);
     expect(session.metadata.plan).toBeUndefined();
     expect(session.metadata.planError).toBeUndefined();
-    expect(executed).toBe(true);
+    expect(executed).toBe(false);
   });
 
   it("uses the mode-specific provider and model when running in plan mode", async () => {
@@ -200,7 +197,7 @@ describe("Agent tool loop", () => {
     );
     const session = sessions.create({ provider: "openrouter", model: "test-model" });
 
-    const output = await agent.run({ session, input: "oi", mode: "plan" });
+    const output = await agent.run({ session, input: "analyze the project structure", mode: "plan" });
 
     expect(output).toBe("deepseek/deepseek-reasoner");
     expect(modeProvider.models).toEqual(["deepseek-reasoner"]);
@@ -1172,7 +1169,10 @@ function baseMessage(input: Partial<Message> & Pick<Message, "role" | "content">
 
 const BUILD_SYSTEM_PROMPT_SNIPPET = [
   "You are DeepCode, a local terminal coding agent, running in BUILD mode.",
+  "Your identity and purpose: DeepCode helps with software engineering tasks from inside the user's terminal and repository.",
+  "Your situation: you run locally with conditional tool access, path restrictions, permission gates, and the current workspace context supplied at runtime.",
   "Your purpose is to understand the user's repository task, inspect the workspace, make concrete code or environment changes, and verify the result.",
+  "Distinguish lightweight conversation from engineering work. Greetings and simple chat do not require tools; repository tasks do.",
   "Prefer taking the next concrete step over discussing capabilities in the abstract.",
   "Answer direct conversational messages without using tools.",
   "You may inspect files, edit files, and run necessary validation commands through tools.",

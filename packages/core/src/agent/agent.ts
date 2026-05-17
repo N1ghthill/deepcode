@@ -52,6 +52,7 @@ import {
 } from "./agent-tooling.js";
 import {
   formatUtilityResult,
+  directLocalResponse,
   isLegacyInternalTaskPrompt,
   isLegacyUiOperationalMessage,
   parseUtilityRequest,
@@ -121,6 +122,26 @@ export class Agent {
     session.provider = resolvedTarget.provider;
     session.model = resolvedModel;
 
+    this.sessions.addMessage(session.id, { role: "user", source: "user", content: options.input });
+    session.metadata.plan = undefined;
+    session.metadata.planError = undefined;
+
+    const directResponse = turnStrategy.kind === "chat" && !turnStrategy.allowTools
+      ? directLocalResponse(turnStrategy.intent)
+      : undefined;
+    if (directResponse) {
+      session.status = "executing";
+      this.sessions.addMessage(session.id, {
+        role: "assistant",
+        source: "assistant",
+        content: directResponse,
+      });
+      session.status = "idle";
+      this.sessions.save(session);
+      await this.sessions.persist(session.id);
+      return directResponse;
+    }
+
     // Validate model is configured
     const effectiveModel = resolvedModel;
     if (!effectiveModel) {
@@ -128,10 +149,7 @@ export class Agent {
         "No model configured. Set 'defaultModel'/'defaultModels' in .deepcode/config.json or DEEPCODE_MODEL environment variable."
       );
     }
-    this.sessions.addMessage(session.id, { role: "user", source: "user", content: options.input });
     session.status = "planning";
-    session.metadata.plan = undefined;
-    session.metadata.planError = undefined;
     this.activeBudgets.set(session.id, new SessionBudget(this.config.tokenBudget));
 
     try {
@@ -889,6 +907,7 @@ Execute this task using the available tools. Return a summary of what was done.`
           shouldPlan: false,
           systemPrompt: UTILITY_SYSTEM_PROMPT,
           kind: "utility",
+          intent: { kind: "direct_utility" },
         },
       );
     }

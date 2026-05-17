@@ -40,12 +40,19 @@ export async function runCommand(
     model: target.model,
   });
   const secretValues = collectSecretValues(runtime.config);
+  let streamed = false;
   const output = await runtime.agent.run({
     session,
     input,
     mode: options.mode ?? runtime.config.agentMode,
     provider: target.provider,
-    onChunk: (text) => process.stdout.write(redactText(text, secretValues)),
+    onChunk: (text) => {
+      streamed = true;
+      process.stdout.write(redactText(text, secretValues));
+    },
   });
-  if (!output) process.stdout.write("\n");
+  if (!streamed && output) {
+    process.stdout.write(redactText(output, secretValues));
+  }
+  if (!streamed || !output) process.stdout.write("\n");
 }

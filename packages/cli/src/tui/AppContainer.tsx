@@ -542,7 +542,7 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
       abortRef.current = controller;
 
       try {
-        await runtime.agent.run({
+        const output = await runtime.agent.run({
           session,
           input: prompt,
           mode: agentMode,
@@ -579,6 +579,12 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
 
         const newMessages = session.messages.slice(startIndex);
         const turnItems = mapMessagesToHistoryItems(newMessages);
+        if (
+          !turnItems.some((item) => item.type === "gemini")
+          && output.trim().length > 0
+        ) {
+          turnItems.push({ type: "gemini", text: output.trim() });
+        }
         appendTurnItems(turnItems);
       } catch (error) {
         const aborted = controller.signal.aborted;
