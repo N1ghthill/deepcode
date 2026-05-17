@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.1.8] — 2026-05-17
+
+### Added
+
+- **MCPHealthPill** — footer now shows `MCP n/m` when MCP servers are configured; green when all connected, amber when some failed to connect
+- **useStatusLine** — footer shows current working directory and git branch (`~/path [branch]`) when inside a git repository; falls back to the standard hint when not in git
+
 ## [1.1.7] — 2026-05-17
 
 ### Fixed
@@ -142,7 +149,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Persistent sessions, local config, telemetry collector
 - GitHub integration: OAuth, issues, pull requests
 
-[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.7...HEAD
+[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.1.8...HEAD
+[1.1.8]: https://github.com/N1ghthill/deepcode/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/N1ghthill/deepcode/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/N1ghthill/deepcode/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/N1ghthill/deepcode/compare/v1.1.4...v1.1.5
