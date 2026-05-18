@@ -5,6 +5,37 @@ import { writeStderrLine, writeStdoutLine } from "../stream-flush.js";
 
 const DIFF_MAX_CHARS = 20_000;
 
+export interface TruncationResult {
+  diff: string;
+  omittedFiles: number;
+  totalFiles: number;
+}
+
+/**
+ * Truncates a unified diff at file boundaries so the model never sees a
+ * partial file section. Falls back to a hard char-cut only when a single
+ * file diff exceeds the limit by itself.
+ */
+export function truncateDiff(raw: string, maxChars: number = DIFF_MAX_CHARS): TruncationResult {
+  const fileChunks = raw.split(/(?=^diff --git )/m).filter(Boolean);
+  const totalFiles = fileChunks.length;
+
+  let result = "";
+  let included = 0;
+  for (const chunk of fileChunks) {
+    if (result.length + chunk.length > maxChars) break;
+    result += chunk;
+    included++;
+  }
+
+  if (!result && fileChunks.length > 0) {
+    result = fileChunks[0]!.slice(0, maxChars);
+    included = 1;
+  }
+
+  return { diff: result.trimEnd(), omittedFiles: totalFiles - included, totalFiles };
+}
+
 export interface ReviewOptions {
   cwd: string;
   config?: string;
@@ -50,12 +81,12 @@ function buildDiffArgs(options: ReviewOptions): { args: string[]; label: string 
   return { args, label: options.file ? `local changes in ${options.file}` : "local changes vs HEAD" };
 }
 
-function buildPrompt(diff: string, label: string, focus: string[], truncated: boolean): string {
+function buildPrompt(diff: string, label: string, focus: string[], truncation: TruncationResult): string {
   const focusLine =
     focus.length > 0 ? `\nFocus areas: ${focus.join(", ")}.` : "";
 
-  const truncationNote = truncated
-    ? `\n(Diff truncated at ${DIFF_MAX_CHARS} characters; some changes are not shown.)\n`
+  const truncationNote = truncation.omittedFiles > 0
+    ? `\n(Showing ${truncation.totalFiles - truncation.omittedFiles} of ${truncation.totalFiles} changed files; ${truncation.omittedFiles} file(s) omitted due to size.)\n`
     : "";
 
   return [
@@ -100,12 +131,7 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
     return;
   }
 
-  let diff = trimmed;
-  let truncated = false;
-  if (diff.length > DIFF_MAX_CHARS) {
-    diff = diff.slice(0, DIFF_MAX_CHARS);
-    truncated = true;
-  }
+  const truncation = truncateDiff(trimmed);
 
   const runtime = await createRuntime({
     cwd: options.cwd,
@@ -132,7 +158,7 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
     model: target.model,
   });
 
-  const prompt = buildPrompt(diff, label, options.focus ?? [], truncated);
+  const prompt = buildPrompt(truncation.diff, label, options.focus ?? [], truncation);
   const secretValues = collectSecretValues(runtime.config);
 
   await writeStdoutLine(`Reviewing ${label}…\n`);

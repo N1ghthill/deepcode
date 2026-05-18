@@ -9,6 +9,7 @@ import {
 } from "@deepcode/core";
 import { resolveUsableProviderTarget } from "@deepcode/shared";
 import { createRuntime } from "../runtime.js";
+import { truncateDiff } from "./review.js";
 import { resolveSessionTarget } from "../target-resolution.js";
 import { writeStdout, writeStdoutLine } from "../stream-flush.js";
 
@@ -312,7 +313,7 @@ export async function solveIssueCommand(
 
 export async function reviewPrCommand(
   prNumber: number,
-  options: { cwd: string; config?: string; focus?: string[] },
+  options: { cwd: string; config?: string; focus?: string[]; provider?: string; model?: string },
 ): Promise<void> {
   const runtime = await createRuntime({
     cwd: options.cwd,
@@ -336,6 +337,11 @@ export async function reviewPrCommand(
       ? `\nFocus areas: ${options.focus.join(", ")}.`
       : "";
 
+  const truncation = truncateDiff(diff.trim());
+  const truncationNote = truncation.omittedFiles > 0
+    ? `\n(Showing ${truncation.totalFiles - truncation.omittedFiles} of ${truncation.totalFiles} changed files; ${truncation.omittedFiles} file(s) omitted due to size.)\n`
+    : "";
+
   const prompt = [
     `Review PR #${pr.number}: ${pr.title}`,
     `Branch: ${pr.head ?? "?"} → ${pr.base ?? "?"}`,
@@ -343,7 +349,8 @@ export async function reviewPrCommand(
     "",
     pr.body ? `Description:\n${pr.body}` : "No description provided.",
     "",
-    `Diff:\n\`\`\`diff\n${diff}\n\`\`\``,
+    `Diff:\n\`\`\`diff\n${truncation.diff}\n\`\`\``,
+    truncationNote,
     "",
     `Produce a structured code review with:${focusLine}`,
     "1. **Summary** — what the PR does",
@@ -352,7 +359,10 @@ export async function reviewPrCommand(
     "4. **Verdict** — Approve / Request Changes / Neutral with a one-line rationale",
   ].join("\n");
 
-  const target = resolveSessionTarget(runtime.config, {});
+  const target = resolveSessionTarget(runtime.config, {
+    provider: options.provider,
+    model: options.model,
+  });
   const session = runtime.sessions.create({
     provider: target.provider,
     model: target.model,
