@@ -26,6 +26,7 @@ import {
 import { runCommand } from "./commands/run.js";
 import { subagentsRunCommand } from "./commands/subagents.js";
 import { projectsCommand } from "./commands/projects.js";
+import { reviewCommand } from "./commands/review.js";
 import { sessionsClearCommand, sessionsCommand } from "./commands/sessions.js";
 import {
   flushStandardStreams,
@@ -71,6 +72,35 @@ export function createProgram(): Command {
         mode: options.mode,
         provider: options.provider,
         model: options.model,
+      });
+    });
+
+  program
+    .command("review")
+    .description("AI code review of local git changes")
+    .argument("[ref]", "git ref to diff against (e.g. HEAD~3, main); defaults to HEAD")
+    .option("--staged", "review only staged changes (git diff --cached)")
+    .option("--file <path>", "limit review to a specific file")
+    .option(
+      "--focus <area>",
+      "focus area: security, performance, correctness, style; repeat for multiple",
+      (val: string, acc: string[]) => { acc.push(val); return acc; },
+      [] as string[],
+    )
+    .option("--provider <provider>", "provider override")
+    .option("--model <model>", "model override")
+    .option("-y, --yes", "approve permission requests")
+    .action(async (ref: string | undefined, options: { staged?: boolean; file?: string; focus: string[]; provider?: string; model?: string; yes?: boolean }) => {
+      await reviewCommand({
+        cwd: program.opts().cwd,
+        config: program.opts().config,
+        ref,
+        staged: options.staged,
+        file: options.file,
+        focus: options.focus,
+        provider: options.provider,
+        model: options.model,
+        yes: options.yes,
       });
     });
 
