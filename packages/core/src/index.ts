@@ -35,3 +35,4 @@ export * from "./tools/tool.js";
 export * from "./workflows/workflow-engine.js";
 export * from "./utils/error-chain.js";
 export * from "./utils/discover-projects.js";
+export { buildSummaryPrompt, buildSummaryMessage } from "./agent/context-manager.js";

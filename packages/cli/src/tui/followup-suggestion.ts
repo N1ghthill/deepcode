@@ -1,6 +1,5 @@
 import type { DeepCodeRuntime } from "../runtime.js";
 import type { Session } from "@deepcode/shared";
-import { resolveConfiguredModelForProvider } from "@deepcode/shared";
 
 /**
  * Generates a follow-up suggestion after a model turn completes.
@@ -16,16 +15,13 @@ export async function generateFollowupSuggestion(
   if (!lastOutput.trim()) return null;
 
   try {
-    const provider = runtime.providers.get(session.provider);
-    const model = session.model ?? resolveConfiguredModelForProvider(runtime.config, session.provider);
-    if (!model) return null;
-
     const snippet = lastOutput.trim().slice(-300);
     const prompt =
       `[Task: suggest ONE concise follow-up question or action the user might ask next, in under 10 words. Return ONLY the suggestion text, no explanation, no quotes, no punctuation at the end.]\n\nAssistant just said:\n${snippet}\n\nFollow-up suggestion:`;
 
-    const suggestion = await provider.complete(prompt, {
-      model,
+    const suggestion = await runtime.agent.completeUtility({
+      session,
+      prompt,
       maxTokens: 20,
       temperature: 0.7,
       signal,

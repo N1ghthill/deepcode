@@ -87,6 +87,16 @@ export interface AgentRunOptions {
   onToolActivity?: (toolName: string, active: boolean) => void;
 }
 
+export interface AgentUtilityCompletionOptions {
+  session: Session;
+  prompt: string;
+  provider?: ProviderId;
+  model?: string;
+  maxTokens: number;
+  temperature?: number;
+  signal?: AbortSignal;
+}
+
 interface ToolExecutionOutcome {
   ok: boolean;
   output: string;
@@ -155,9 +165,16 @@ export class Agent {
       options.provider,
     );
     const resolvedModel = resolvedTarget.model;
+    const parsedLocalUtility = turnStrategy.kind === "utility"
+      ? parseUtilityRequest(options.input)
+      : undefined;
 
     session.provider = resolvedTarget.provider;
     session.model = resolvedModel;
+    session.metadata.lastTurnUsedLlm = !(
+      parsedLocalUtility
+      || (turnStrategy.kind === "chat" && !turnStrategy.allowTools && directLocalResponse(turnStrategy.intent))
+    );
 
     this.sessions.addMessage(session.id, { role: "user", source: "user", content: options.input });
 
@@ -170,6 +187,7 @@ export class Agent {
       session.metadata.pendingProjectList = undefined;
       if (selectedPath) {
         session.worktree = selectedPath;
+        session.metadata.lastTurnUsedLlm = false;
         this.sessions.save(session);
         await this.sessions.persist(session.id);
         const name = path.basename(selectedPath);
@@ -189,6 +207,7 @@ export class Agent {
       ? directLocalResponse(turnStrategy.intent)
       : undefined;
     if (directResponse) {
+      session.metadata.lastTurnUsedLlm = false;
       session.status = "executing";
       this.sessions.addMessage(session.id, {
         role: "assistant",
@@ -199,6 +218,22 @@ export class Agent {
       this.sessions.save(session);
       await this.sessions.persist(session.id);
       return directResponse;
+    }
+
+    if (parsedLocalUtility) {
+      session.metadata.lastTurnUsedLlm = false;
+      session.status = "executing";
+      try {
+        const finalText = await this.executeUtilityTurn(session, options.input, mode, options);
+        session.status = "idle";
+        this.sessions.save(session);
+        await this.sessions.persist(session.id);
+        return finalText.trim();
+      } catch (error) {
+        session.status = "error";
+        this.sessions.save(session);
+        throw error;
+      }
     }
 
     // Validate model is configured
@@ -268,6 +303,44 @@ export class Agent {
       throw error;
     } finally {
       this.activeBudgets.delete(session.id);
+    }
+  }
+
+  async completeUtility(options: AgentUtilityCompletionOptions): Promise<string> {
+    const session = options.session;
+    const providerId = options.provider ?? session.provider;
+    const model = options.model
+      ?? session.model
+      ?? resolveConfiguredModelForProvider(this.config, providerId);
+    if (!model) {
+      throw new Error(
+        "No model configured. Set 'defaultModel'/'defaultModels' in .deepcode/config.json or DEEPCODE_MODEL environment variable."
+      );
+    }
+
+    const alreadyTrackingBudget = this.activeBudgets.has(session.id);
+    if (!alreadyTrackingBudget) {
+      this.activeBudgets.set(session.id, new SessionBudget(this.config.tokenBudget));
+    }
+
+    try {
+      this.enforceBudget(session.id);
+      const provider = this.providerManager.get(providerId);
+      const output = await provider.complete(options.prompt, {
+        model,
+        maxTokens: options.maxTokens,
+        temperature: options.temperature,
+        signal: options.signal,
+        onUsage: (inputTokens, outputTokens) => {
+          this.recordUsage(session.id, inputTokens, outputTokens);
+        },
+      });
+      this.enforceBudget(session.id);
+      return output;
+    } finally {
+      if (!alreadyTrackingBudget) {
+        this.activeBudgets.delete(session.id);
+      }
     }
   }
 

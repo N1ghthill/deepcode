@@ -166,6 +166,7 @@ describe("Agent tool loop", () => {
     expect(session.messages.some((message) => message.role === "tool")).toBe(false);
     expect(session.metadata.plan).toBeUndefined();
     expect(session.metadata.planError).toBeUndefined();
+    expect(session.metadata.lastTurnUsedLlm).toBe(false);
     expect(executed).toBe(false);
   });
 
@@ -730,6 +731,41 @@ describe("Agent tool loop", () => {
 
     await expect(agent.run({ session, input: "hello there" })).rejects.toThrow("Token budget exceeded");
     expect(session.status).toBe("error");
+  });
+
+  it("applies token budget accounting to utility completions", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agent-"));
+    const config = createConfig({
+      tokenBudget: {
+        maxInputTokens: 10,
+        warnAtFraction: 0.8,
+      },
+    });
+    const events = new EventBus();
+    const providers = new ProviderManager(config);
+    providers.register(new PlanningBudgetProvider());
+    const tools = new ToolRegistry();
+    const sessions = new SessionManager(tempDir);
+    const pathSecurity = new PathSecurity(tempDir, config.paths);
+    const agent = new Agent(
+      providers,
+      tools,
+      sessions,
+      config,
+      new ToolCache(tempDir, config),
+      new PermissionGateway(config, pathSecurity, new AuditLogger(tempDir), events, false),
+      pathSecurity,
+      events,
+    );
+    const session = sessions.create({ provider: "openrouter", model: "test-model" });
+
+    await expect(
+      agent.completeUtility({
+        session,
+        prompt: "suggest a follow-up",
+        maxTokens: 20,
+      }),
+    ).rejects.toThrow("Token budget exceeded");
   });
 
   it("filters operational and legacy internal messages out of model context", async () => {

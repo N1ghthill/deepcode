@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import type { Activity, Message, ToolCall } from "@deepcode/shared";
+import type { Activity, Message, Session, ToolCall } from "@deepcode/shared";
 import {
   mapMessagesToHistoryItems,
   reduceToolActivity,
   resolveSlashInvocation,
+  restoreHistoryFromSession,
 } from "../../src/tui/bridge.js";
 import { ToolCallStatus, type IndividualToolCallDisplay } from "../../src/tui/ui/types.js";
 import { CommandKind, type SlashCommand } from "../../src/tui/ui/commands/types.js";
@@ -129,6 +130,88 @@ describe("reduceToolActivity", () => {
     expect(reduceToolActivity(prev, activity("tool_result", { tool: "shell", result: "x" }))).toBe(
       prev,
     );
+  });
+});
+
+describe("restoreHistoryFromSession", () => {
+  function session(messages: Message[]): Session {
+    return {
+      id: "session-test-id",
+      worktree: "/tmp/test",
+      provider: "anthropic",
+      model: "claude-3-5-sonnet",
+      status: "idle",
+      messages,
+      activities: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      metadata: {},
+    };
+  }
+
+  it("produces user + gemini items for a simple single-turn session", () => {
+    const collected: ReturnType<typeof mapMessagesToHistoryItems> = [];
+    restoreHistoryFromSession(
+      session([
+        msg({ role: "user", content: "hello" }),
+        msg({ role: "assistant", content: "hi there" }),
+      ]),
+      (item) => collected.push(item),
+    );
+    expect(collected).toHaveLength(2);
+    expect(collected[0]).toEqual({ type: "user", text: "hello" });
+    expect(collected[1]).toEqual({ type: "gemini", text: "hi there" });
+  });
+
+  it("handles multiple turns preserving order", () => {
+    const collected: ReturnType<typeof mapMessagesToHistoryItems> = [];
+    restoreHistoryFromSession(
+      session([
+        msg({ role: "user", content: "turn 1" }),
+        msg({ role: "assistant", content: "reply 1" }),
+        msg({ role: "user", content: "turn 2" }),
+        msg({ role: "assistant", content: "reply 2" }),
+      ]),
+      (item) => collected.push(item),
+    );
+    expect(collected.map((i) => [i.type, "text" in i ? i.text : ""])).toEqual([
+      ["user", "turn 1"],
+      ["gemini", "reply 1"],
+      ["user", "turn 2"],
+      ["gemini", "reply 2"],
+    ]);
+  });
+
+  it("skips blank user messages", () => {
+    const collected: ReturnType<typeof mapMessagesToHistoryItems> = [];
+    restoreHistoryFromSession(
+      session([
+        msg({ role: "user", content: "   " }),
+        msg({ role: "assistant", content: "hello" }),
+      ]),
+      (item) => collected.push(item),
+    );
+    expect(collected).toHaveLength(1);
+    expect(collected[0]?.type).toBe("gemini");
+  });
+
+  it("returns nothing for a session with no messages", () => {
+    const collected: ReturnType<typeof mapMessagesToHistoryItems> = [];
+    restoreHistoryFromSession(session([]), (item) => collected.push(item));
+    expect(collected).toHaveLength(0);
+  });
+
+  it("includes tool_group items from a tool-call turn", () => {
+    const collected: ReturnType<typeof mapMessagesToHistoryItems> = [];
+    restoreHistoryFromSession(
+      session([
+        msg({ role: "user", content: "run it" }),
+        msg({ role: "assistant", content: "", toolCalls: [toolCall("c1", "bash")] }),
+        msg({ role: "tool", toolCallId: "c1", content: "ok" }),
+      ]),
+      (item) => collected.push(item),
+    );
+    expect(collected.map((i) => i.type)).toEqual(["user", "tool_group"]);
   });
 });
 

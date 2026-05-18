@@ -123,6 +123,13 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 - [x] Subagent validado: core via `subagents run` (paralelo, sessões independentes) + `SubagentsPanel` (ciclo running→done→failed→some em smoke-test).
 - [x] E2E de subagent: `SubagentManager` (eventos EventBus start/chunk/tool/complete, error path, parallel, overrides) + `loadAgentConfigs` + CLI `subagents run` com mock LLM.
 - [x] `FeedbackDialog` implementado: `/feedback` abre dialog de rating 1-5, salva JSONL em `.deepcode/feedback.log`.
+- [x] Histórico de sessões persistente: sessão é salva em `.deepcode/sessions/{id}.json` após cada turno; `deepcode sessions` abre picker TUI para escolher sessão; `deepcode chat --resume <id>` restaura histórico completo.
+- [x] `/sessions` slash command na TUI: abre `SessionsDialog` inline (mesmo padrão do ModelDialog); ao selecionar, restaura histórico e continua o chat sem sair da TUI.
+- [x] `deepcode sessions clear [--all] [--older-than <days>]`: limpa arquivos de sessão por idade ou todos de uma vez.
+- [x] `deepcode run` persiste sessão após execução (além da TUI que já persistia).
+- [x] E2E de session persistence: `run` → arquivo criado → `sessions clear` → arquivo removido; `--older-than` respeita sessões recentes.
+- [x] `/compact` slash command: sumariza a conversa via LLM, substitui histórico pelo resumo, persiste sessão compactada.
+- [x] Nomes de sessão: nome curto (~5 palavras) gerado via LLM após o primeiro turno e armazenado em `session.metadata.name`; pickers mostram o nome em vez do primeiro prompt.
 
 ## Comandos Úteis Para Retomar
 
@@ -134,6 +141,9 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm build
 node apps/deepcode/dist/index.js --help
 node apps/deepcode/dist/index.js doctor
 node apps/deepcode/dist/index.js chat
+node apps/deepcode/dist/index.js sessions                  # picker de sessões salvas
+node apps/deepcode/dist/index.js chat --resume <session-id> # retomar sessão
+# Shell function para retomar diretamente: deepcode chat --resume "$(deepcode sessions)"
 
 # Rodar via workspace (dev)
 pnpm --filter deepcode-ai dev -- --help

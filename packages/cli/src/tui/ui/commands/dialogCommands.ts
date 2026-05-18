@@ -59,3 +59,13 @@ export const feedbackDialogCommand: SlashCommand = {
   supportedModes: ["interactive"] as const,
   action: () => openDialog("feedback"),
 };
+
+export const sessionsDialogCommand: SlashCommand = {
+  name: "sessions",
+  get description() {
+    return t("Browse and resume a previous session");
+  },
+  kind: CommandKind.BUILT_IN,
+  supportedModes: ["interactive"] as const,
+  action: () => openDialog("sessions"),
+};

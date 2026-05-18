@@ -5,7 +5,7 @@
  * Ink: these functions take plain data and return plain data. DeepCode-authored
  * (not ported from Qwen).
  */
-import { createId, type Activity, type Message, type ToolCall } from "@deepcode/shared";
+import { createId, type Activity, type Message, type Session, type ToolCall } from "@deepcode/shared";
 import {
   ToolCallStatus,
   type HistoryItemWithoutId,
@@ -146,6 +146,43 @@ export function reduceToolActivity(
   }
 
   return prev;
+}
+
+/**
+ * Restore a persisted session's conversation into the TUI history.
+ * Groups messages into turns (user → replies) so that user bubbles appear
+ * before the assistant responses they prompted.
+ */
+export function restoreHistoryFromSession(
+  session: Session,
+  addItem: (item: HistoryItemWithoutId) => void,
+): void {
+  const turns: Array<{ user: Message; replies: Message[] }> = [];
+  for (const msg of session.messages) {
+    if (msg.role === "user") {
+      turns.push({ user: msg, replies: [] });
+    } else if (turns.length > 0) {
+      turns[turns.length - 1]!.replies.push(msg);
+    }
+  }
+  for (const turn of turns) {
+    if (turn.user.content.trim()) {
+      addItem({ type: "user", text: turn.user.content });
+    }
+    const replyItems = mapMessagesToHistoryItems(turn.replies);
+    // If no gemini item was produced (e.g. tool-only turn), surface the last
+    // assistant text directly so the turn is not visually empty.
+    if (!replyItems.some((item) => item.type === "gemini")) {
+      const lastAssistant = [...turn.replies].reverse().find((m) => m.role === "assistant");
+      const finalText = lastAssistant?.content?.trim();
+      if (finalText) {
+        replyItems.push({ type: "gemini", text: finalText });
+      }
+    }
+    for (const item of replyItems) {
+      addItem(item);
+    }
+  }
 }
 
 export interface ResolvedSlashInvocation {

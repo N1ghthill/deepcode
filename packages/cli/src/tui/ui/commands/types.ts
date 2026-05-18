@@ -22,7 +22,8 @@ export type DialogType =
   | "provider"
   | "permissions"
   | "auth"
-  | "feedback";
+  | "feedback"
+  | "sessions";
 
 /** Grouped dependencies handed to a slash command's `action`. */
 export interface SessionCommandState {
@@ -36,6 +37,7 @@ export interface SessionCommandServices {
   setProvider: (provider: ProviderId) => void;
   setModel: (model: string) => void;
   setMode: (mode: AgentMode) => void;
+  setName: (name: string) => void;
   listProviders: () => readonly ProviderId[];
 }
 
@@ -64,6 +66,7 @@ export interface CommandContext {
     toggleVimEnabled: () => Promise<boolean>;
     reloadCommands: () => void | Promise<void>;
     undo: () => Promise<{ path: string; restored: boolean } | null>;
+    compact: () => Promise<void>;
   };
   /** Session-scoped data. */
   session: {
