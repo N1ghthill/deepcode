@@ -1418,6 +1418,8 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
     ],
   );
 
+  const activeSubagents = useMemo(() => Array.from(subagentMap.values()), [subagentMap]);
+
   const uiState = useMemo<UIState>(
     () => ({
       history: historyManager.history,
@@ -1493,7 +1495,7 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
 
       mcpConnected,
       mcpTotal,
-      activeSubagents: useMemo(() => Array.from(subagentMap.values()), [subagentMap]),
+      activeSubagents,
     }),
     [
       approvalQueue.length,
