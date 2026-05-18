@@ -6,7 +6,7 @@
 
 Última rodada validada: `main` commitado e publicado no npm, validado em 2026-05-17.
 
-Versão publicada: **`deepcode-ai@1.1.17`** em https://www.npmjs.com/package/deepcode-ai
+Versão publicada: **`deepcode-ai@1.1.18`** em https://www.npmjs.com/package/deepcode-ai
 
 ## Estrutura do Monorepo
 
@@ -103,13 +103,12 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 |---|---|---|
 | `ShellInputPrompt` | `tui/ui/components/` | Input inline dentro de tool cards |
 | `MermaidDiagram` | `tui/ui/utils/` | Render de diagramas Mermaid |
-| `FeedbackDialog` | `tui/ui/` | Dialog de feedback do usuário |
 | `i18n` | `tui/i18n/` | Internacionalização real (hoje é função identidade) |
-| Dialog fallback | `AppContainer.tsx` | "This dialog is not implemented yet." |
+| Dialog fallback | `AppContainer.tsx` | "This dialog is not implemented yet." (só aparece se um `DialogType` novo for adicionado sem renderização correspondente) |
 
 ## Checklist Antes de Dizer "Produção"
 
-- [x] Pacote publicado no npm (`deepcode-ai@1.1.17`).
+- [x] Pacote publicado no npm (`deepcode-ai@1.1.18`).
 - [x] OAuth GitHub implementado.
 - [x] Testes E2E cobrindo projeto fixture TypeScript e Python.
 - [x] Documentação de config completa.
@@ -123,6 +122,7 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 - [x] Subagent system completo: ferramenta `task`, named agents, painel TUI em tempo real.
 - [x] Subagent validado: core via `subagents run` (paralelo, sessões independentes) + `SubagentsPanel` (ciclo running→done→failed→some em smoke-test).
 - [x] E2E de subagent: `SubagentManager` (eventos EventBus start/chunk/tool/complete, error path, parallel, overrides) + `loadAgentConfigs` + CLI `subagents run` com mock LLM.
+- [x] `FeedbackDialog` implementado: `/feedback` abre dialog de rating 1-5, salva JSONL em `.deepcode/feedback.log`.
 
 ## Comandos Úteis Para Retomar
 
