@@ -29,6 +29,8 @@ export interface SubagentEntry {
   prompt: string;
   status: "running" | "done" | "failed";
   currentTool?: string;
+  /** Last ~80 chars of streamed output — shown when no tool is active. */
+  currentOutput?: string;
   startedAt: number;
   error?: string;
 }

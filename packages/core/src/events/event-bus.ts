@@ -39,6 +39,7 @@ export interface AppEvents {
   "budget:warning": { kind: "inputTokens" | "outputTokens" | "cost"; used: number; limit: number; fraction: number };
   "budget:exceeded": { kind: "inputTokens" | "outputTokens" | "cost"; used: number; limit: number };
   "subagent:start": { taskId: string; prompt: string };
+  "subagent:chunk": { taskId: string; text: string };
   "subagent:tool": { taskId: string; toolName: string; active: boolean };
   "subagent:complete": { taskId: string; error?: string };
 }

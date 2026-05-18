@@ -499,6 +499,18 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
           }),
         );
         unsubscribers.push(
+          runtime.events.on("subagent:chunk", ({ taskId, text }) => {
+            setSubagentMap((prev) => {
+              const entry = prev.get(taskId);
+              if (!entry) return prev;
+              const next = new Map(prev);
+              const combined = ((entry.currentOutput ?? "") + text).slice(-80);
+              next.set(taskId, { ...entry, currentOutput: combined });
+              return next;
+            });
+          }),
+        );
+        unsubscribers.push(
           runtime.events.on("subagent:tool", ({ taskId, toolName, active }) => {
             setSubagentMap((prev) => {
               const entry = prev.get(taskId);

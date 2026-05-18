@@ -81,6 +81,9 @@ export class SubagentManager {
         systemPrompt: task.systemPrompt,
         allowedTools: task.allowedTools,
         disallowedTools: task.disallowedTools,
+        onChunk: this.events
+          ? (text) => this.events!.emit("subagent:chunk", { taskId: task.id, text })
+          : undefined,
         onToolActivity: this.events
           ? (toolName, active) => this.events!.emit("subagent:tool", { taskId: task.id, toolName, active })
           : undefined,
