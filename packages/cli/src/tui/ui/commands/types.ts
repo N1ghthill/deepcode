@@ -62,6 +62,7 @@ export interface CommandContext {
     loadHistory: UseHistoryManagerReturn["loadHistory"];
     toggleVimEnabled: () => Promise<boolean>;
     reloadCommands: () => void | Promise<void>;
+    undo: () => Promise<{ path: string; restored: boolean } | null>;
   };
   /** Session-scoped data. */
   session: {

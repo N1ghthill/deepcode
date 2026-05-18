@@ -59,7 +59,7 @@ import type {
   RecentSlashCommands,
 } from "./ui/hooks/useSlashCompletion.js";
 import { diffCommand } from "./ui/commands/diffCommand.js";
-import { clearCommand, helpCommand } from "./ui/commands/basicCommands.js";
+import { clearCommand, helpCommand, undoCommand } from "./ui/commands/basicCommands.js";
 import {
   modeCommand,
   modelCommand,
@@ -230,6 +230,7 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
     () => [
       helpCommand,
       clearCommand,
+      undoCommand,
       diffCommand,
       providerCommand,
       modelCommand,
@@ -335,6 +336,13 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
     ],
   );
 
+  const handleUndo = useCallback(async () => {
+    const runtime = runtimeRef.current;
+    const session = sessionRef.current;
+    if (!runtime || !session) return null;
+    return runtime.agent.undo(session.id);
+  }, []);
+
   const commandContext = useMemo<CommandContext>(
     () => ({
       executionMode: "interactive",
@@ -353,12 +361,13 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
         loadHistory: historyManager.loadHistory,
         toggleVimEnabled: async () => false,
         reloadCommands: () => {},
+        undo: handleUndo,
       },
       session: {
         sessionShellAllowlist: sessionShellAllowlistRef.current,
       },
     }),
-    [configAdapter, historyManager, pendingItem, sessionCommandServices],
+    [configAdapter, handleUndo, historyManager, pendingItem, sessionCommandServices],
   );
 
   useEffect(() => {

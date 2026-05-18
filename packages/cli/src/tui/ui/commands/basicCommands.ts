@@ -1,5 +1,6 @@
 import {
   CommandKind,
+  type MessageActionReturn,
   type OpenDialogActionReturn,
   type SlashCommand,
 } from "./types.js";
@@ -32,4 +33,24 @@ export const helpCommand: SlashCommand = {
   kind: CommandKind.BUILT_IN,
   supportedModes: ["interactive"] as const,
   action: () => helpAction(),
+};
+
+export const undoCommand: SlashCommand = {
+  name: "undo",
+  get description() {
+    return t("Undo the last file write or edit made by the agent");
+  },
+  kind: CommandKind.BUILT_IN,
+  supportedModes: ["interactive"] as const,
+  action: async (context): Promise<MessageActionReturn> => {
+    const result = await context.ui.undo();
+    if (!result) {
+      return { type: "message", messageType: "info", content: t("Nothing to undo.") };
+    }
+    return {
+      type: "message",
+      messageType: "info",
+      content: `↩ ${t("Restored")}: ${result.path}`,
+    };
+  },
 };
