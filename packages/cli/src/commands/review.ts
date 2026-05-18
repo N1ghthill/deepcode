@@ -142,7 +142,7 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
     const output = await runtime.agent.run({
       session,
       input: prompt,
-      mode: "build",
+      mode: "plan",
       provider: target.provider,
       onChunk: (text) => {
         streamed = true;
