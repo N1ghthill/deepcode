@@ -972,6 +972,57 @@ describe("Agent tool loop", () => {
     expect(result?.path).toBe(targetPath);
     expect(await readFile(targetPath, "utf8")).toBe("hello world");
   });
+
+  it("compresses context when messages exceed the threshold and continues execution", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-compress-"));
+    // Minimum allowed threshold is 0.5 → compression fires at 128_000 * 0.5 = 64_000 tokens
+    // (≈ 256_000 chars). Pre-load 10 large messages to reliably exceed this.
+    const config = createConfig({ contextWindowThreshold: 0.5 });
+    const events = new EventBus();
+    const providers = new ProviderManager(config);
+    const provider = new ContextCompressProvider();
+    providers.register(provider);
+
+    const sessions = new SessionManager(tempDir);
+    const agent = new Agent(
+      providers,
+      new ToolRegistry(),
+      sessions,
+      config,
+      new ToolCache(tempDir, config),
+      new PermissionGateway(
+        config,
+        new PathSecurity(tempDir, config.paths),
+        new AuditLogger(tempDir),
+        events,
+        false,
+      ),
+      new PathSecurity(tempDir, config.paths),
+      events,
+    );
+    const session = sessions.create({ provider: "openrouter", model: "test-model" });
+
+    // Each message is ~30_000 chars ≈ 7_500 tokens. 10 messages ≈ 75_000 tokens > threshold.
+    const chunk = "X".repeat(30_000);
+    for (let i = 0; i < 5; i++) {
+      sessions.addMessage(session.id, { role: "user", source: "user", content: chunk });
+      sessions.addMessage(session.id, { role: "assistant", source: "assistant", content: chunk });
+    }
+
+    const warnings: string[] = [];
+    events.on("app:warn", (payload) => { warnings.push(payload.message); });
+
+    const output = await agent.run({ session, input: "create a file" });
+
+    // Compression warning must have fired.
+    expect(warnings.some((w) => w.includes("Context window compressed"))).toBe(true);
+
+    // Session history must now contain a context_summary message replacing old turns.
+    expect(session.messages.some((m) => m.source === "context_summary")).toBe(true);
+
+    // Agent must have returned a valid response.
+    expect(output).toBeTruthy();
+  });
 });
 
 describe("provider message conversion", () => {
@@ -1348,6 +1399,34 @@ class SingleModelProvider extends ToolAwareProvider {
 
   override async complete(): Promise<string> {
     return "OK";
+  }
+}
+
+class ContextCompressProvider extends ToolAwareProvider {
+  override async *chat(messages: Message[], options: ProviderChatOptions = {}): AsyncIterable<Chunk> {
+    this.calls.push(messages.map((m) => ({ ...m })));
+    this.optionCalls.push({ toolChoice: options.toolChoice, tools: options.tools });
+
+    // Detect the context-compression summary call by its distinctive user prompt.
+    const userMsg = messages.find((m) => m.role === "user");
+    if (userMsg?.content?.includes("Summarize the following conversation history")) {
+      yield { type: "delta", content: "Summary: earlier turns about file work." };
+      yield { type: "done" };
+      return;
+    }
+
+    // Normal turn response.
+    yield { type: "delta", content: "Context compressed and task complete." };
+    yield { type: "done" };
+  }
+
+  override async complete(prompt: string): Promise<string> {
+    if (prompt.includes("Create an execution plan")) {
+      return JSON.stringify([
+        { id: "t1", description: "create a file", type: "code", dependencies: [] },
+      ]);
+    }
+    return "done";
   }
 }
 

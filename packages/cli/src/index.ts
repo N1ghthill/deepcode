@@ -309,7 +309,9 @@ export function createProgram(): Command {
       collectOption,
       [],
     )
-    .action(async (number: string, options: { focus: string[] }) => {
+    .option("--provider <provider>", "provider override")
+    .option("--model <model>", "model override")
+    .action(async (number: string, options: { focus: string[]; provider?: string; model?: string }) => {
       const prNumber = Number.parseInt(number, 10);
       if (!Number.isInteger(prNumber) || prNumber <= 0) {
         throw new Error(`Invalid PR number: ${number}`);
@@ -318,6 +320,8 @@ export function createProgram(): Command {
         cwd: program.opts().cwd,
         config: program.opts().config,
         focus: options.focus,
+        provider: options.provider,
+        model: options.model,
       });
     });
   github
