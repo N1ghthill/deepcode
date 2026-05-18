@@ -82,6 +82,8 @@ pnpm build
 - `deepcode projects`: browser interativo de repos git descobertos no home.
 - Footer: `MCPHealthPill` mostra `MCP n/m` quando há servidores MCP configurados.
 - Footer: `useStatusLine` mostra cwd + branch git (`~/path [branch]`) quando dentro de um repositório.
+- Footer: `BackgroundTasksPill` mostra contagem de subagents rodando enquanto o `SubagentsPanel` está ativo.
+- `SubagentsPanel`: painel acima do input com status por subagent (…/✓/✗), ferramenta atual e erro; some 3 s após todos concluírem.
 
 ### Infraestrutura
 
@@ -97,7 +99,6 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 
 | Stub | Arquivo | O que seria |
 |---|---|---|
-| `BackgroundTasksPill` | `tui/ui/components/background-view/` | Indicador de tasks em segundo plano |
 | `useFollowupSuggestions` | `tui/ui/hooks/` | Sugestões de follow-up após resposta |
 | `ShellInputPrompt` | `tui/ui/components/` | Input inline dentro de tool cards |
 | `MermaidDiagram` | `tui/ui/utils/` | Render de diagramas Mermaid |
@@ -107,7 +108,7 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 
 ## Checklist Antes de Dizer "Produção"
 
-- [x] Pacote publicado no npm (`deepcode-ai@1.1.13`).
+- [x] Pacote publicado no npm (`deepcode-ai@1.1.14`).
 - [x] OAuth GitHub implementado.
 - [x] Testes E2E cobrindo projeto fixture TypeScript e Python.
 - [x] Documentação de config completa.
@@ -119,6 +120,7 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 - [x] `chat` consegue aprovar/negar uma operação sensível pela TUI.
 - [x] `github solve` validado em issue real de teste (issue #7 → PR #8).
 - [x] Subagent system completo: ferramenta `task`, named agents, painel TUI em tempo real.
+- [x] Subagent validado: core via `subagents run` (paralelo, sessões independentes) + `SubagentsPanel` (ciclo running→done→failed→some em smoke-test).
 
 ## Comandos Úteis Para Retomar
 
