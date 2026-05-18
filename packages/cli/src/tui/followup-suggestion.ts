@@ -1,5 +1,6 @@
 import type { DeepCodeRuntime } from "../runtime.js";
 import type { Session } from "@deepcode/shared";
+import { resolveConfiguredModelForProvider } from "@deepcode/shared";
 
 /**
  * Generates a follow-up suggestion after a model turn completes.
@@ -16,7 +17,7 @@ export async function generateFollowupSuggestion(
 
   try {
     const provider = runtime.providers.get(session.provider);
-    const model = session.model;
+    const model = session.model ?? resolveConfiguredModelForProvider(runtime.config, session.provider);
     if (!model) return null;
 
     const snippet = lastOutput.trim().slice(-300);
