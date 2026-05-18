@@ -953,6 +953,65 @@ describeWithLocalBinding("deepcode session persistence", () => {
   }, 10_000);
 });
 
+// ── deepcode review E2E ──────────────────────────────────────────────────────
+
+describeWithLocalBinding("deepcode review with mock LLM", () => {
+  it("reviews local git diff and streams the response", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-review-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLM(tempDir, llm.url);
+
+      // Commit the initial fixture so HEAD exists.
+      await runCommand("git", ["add", "."], tempDir);
+      await runCommand("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com",
+        "commit", "-m", "init"], tempDir);
+
+      // Modify a file to produce a reviewable diff.
+      await writeFile(
+        path.join(tempDir, "src", "index.ts"),
+        "export function add(left: number, right: number): number {\n  return left + right + 1; // off-by-one\n}\n",
+        "utf8",
+      );
+
+      // The review prompt has newlines + backticks → classified as workspace_task → shouldPlan: true.
+      // Queue a non-JSON planning response so planning fails gracefully, then the real review.
+      llm.queueText("Analyzing the diff.");
+      llm.queueText("**Summary**: Increments by 1.\n\n**Issues**: Off-by-one error.\n\n**Verdict**: Has issues.");
+
+      const result = await runCli(["--cwd", tempDir, "review", "--yes"]);
+
+      expect(result.exitCode).toBe(0);
+      // The LLM response must be streamed to stdout.
+      expect(result.stdout).toContain("Has issues");
+      expect(llm.calls).toHaveLength(2);
+
+      // The diff must be present in the execution-phase prompt (calls[1]).
+      const messages = llm.calls[1]!.messages as Array<{ role: string; content: string }>;
+      const userMsg = messages.find((m) => m.role === "user");
+      // The diff contains the modified line with the comment we wrote.
+      expect(userMsg?.content).toContain("off-by-one");
+    } finally {
+      await llm.close();
+    }
+  }, 30_000);
+
+  it("exits 0 with no changes message when there is nothing to diff", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-review-clean-"));
+    await createTypeScriptFixture(tempDir);
+
+    await runCommand("git", ["add", "."], tempDir);
+    await runCommand("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com",
+      "commit", "-m", "init"], tempDir);
+
+    const result = await runCli(["--cwd", tempDir, "review"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("No changes to review");
+  }, 15_000);
+});
+
 // ── github solve E2E ─────────────────────────────────────────────────────────
 
 describeWithGitHttpBackend("deepcode github solve", () => {
