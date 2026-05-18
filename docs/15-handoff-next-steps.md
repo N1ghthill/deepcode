@@ -6,7 +6,7 @@
 
 Última rodada validada: `main` commitado e publicado no npm, validado em 2026-05-17.
 
-Versão publicada: **`deepcode-ai@1.1.15`** em https://www.npmjs.com/package/deepcode-ai
+Versão publicada: **`deepcode-ai@1.1.16`** em https://www.npmjs.com/package/deepcode-ai
 
 ## Estrutura do Monorepo
 
@@ -83,7 +83,7 @@ pnpm build
 - Footer: `MCPHealthPill` mostra `MCP n/m` quando há servidores MCP configurados.
 - Footer: `useStatusLine` mostra cwd + branch git (`~/path [branch]`) quando dentro de um repositório.
 - Footer: `BackgroundTasksPill` mostra contagem de subagents rodando enquanto o `SubagentsPanel` está ativo.
-- `SubagentsPanel`: painel acima do input com status por subagent (…/✓/✗), ferramenta atual e erro; some 3 s após todos concluírem.
+- `SubagentsPanel`: painel acima do input com status por subagent (…/✓/✗); mostra ferramenta ativa (`using <tool>`), output em streaming quando o subagent está gerando texto, ou erro ao falhar; some 3 s após todos concluírem.
 - `useFollowupSuggestions`: após cada turno, gera uma sugestão de follow-up via LLM (max 20 tokens); aparece como placeholder cinza no input; Tab/→ aceita, qualquer tecla descarta.
 
 ### Infraestrutura
@@ -108,7 +108,7 @@ Estes componentes existem no código mas não fazem nada; são placeholders herd
 
 ## Checklist Antes de Dizer "Produção"
 
-- [x] Pacote publicado no npm (`deepcode-ai@1.1.15`).
+- [x] Pacote publicado no npm (`deepcode-ai@1.1.16`).
 - [x] OAuth GitHub implementado.
 - [x] Testes E2E cobrindo projeto fixture TypeScript e Python.
 - [x] Documentação de config completa.
