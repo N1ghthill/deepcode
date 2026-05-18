@@ -59,16 +59,18 @@ import type {
   RecentSlashCommands,
 } from "./ui/hooks/useSlashCompletion.js";
 import { diffCommand } from "./ui/commands/diffCommand.js";
-import { clearCommand, helpCommand, undoCommand } from "./ui/commands/basicCommands.js";
+import { clearCommand, compactCommand, helpCommand, undoCommand } from "./ui/commands/basicCommands.js";
 import {
   modeCommand,
   modelCommand,
   providerCommand,
+  renameCommand,
 } from "./ui/commands/sessionCommands.js";
 import {
   authDialogCommand,
   feedbackDialogCommand,
   permissionsDialogCommand,
+  sessionsDialogCommand,
   settingsDialogCommand,
   themeDialogCommand,
 } from "./ui/commands/dialogCommands.js";
@@ -85,14 +87,18 @@ import {
 import { AuthDialog } from "./ui/components/AuthDialog.js";
 import { ModelDialog } from "./ui/components/ModelDialog.js";
 import { FeedbackDialog } from "./ui/FeedbackDialog.js";
+import { SessionsDialog } from "./ui/components/SessionsDialog.js";
 import { SubagentsPanel } from "./ui/components/SubagentsPanel.js";
 import { themeManager } from "./ui/themes/theme-manager.js";
 import {
   mapMessagesToHistoryItems,
   reduceToolActivity,
   resolveSlashInvocation,
+  restoreHistoryFromSession,
   toToolCallDisplay,
 } from "./bridge.js";
+import { buildSummaryMessage, generateCompactSummary } from "./compact-summary.js";
+import { generateSessionName } from "./session-name.js";
 import { resolveSessionTarget } from "../target-resolution.js";
 import { generateFollowupSuggestion } from "./followup-suggestion.js";
 
@@ -101,11 +107,12 @@ export interface AppContainerProps {
   config?: string;
   provider?: string;
   model?: string;
+  resumeSessionId?: string;
 }
 
 type TargetSource = "config" | "cli" | "session";
 
-export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps) => {
+export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: AppContainerProps) => {
   const historyManager = useHistory();
   const addHistoryItem = historyManager.addItem;
   const [initError, setInitError] = useState<string | null>(null);
@@ -232,15 +239,18 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
       helpCommand,
       clearCommand,
       undoCommand,
+      compactCommand,
       diffCommand,
       providerCommand,
       modelCommand,
       modeCommand,
+      renameCommand,
       settingsDialogCommand,
       themeDialogCommand,
       permissionsDialogCommand,
       authDialogCommand,
       feedbackDialogCommand,
+      sessionsDialogCommand,
     ],
     [],
   );
@@ -321,12 +331,22 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
     setAgentMode(mode);
   }, []);
 
+  const setSessionName = useCallback((name: string) => {
+    const runtime = runtimeRef.current;
+    const session = sessionRef.current;
+    if (!runtime || !session) return;
+    session.metadata = { ...session.metadata, name: name.trim() };
+    runtime.sessions.save(session);
+    runtime.sessions.persist(session.id).catch(() => {});
+  }, []);
+
   const sessionCommandServices = useMemo(
     () => ({
       getState: getSessionCommandState,
       setProvider: setSessionProvider,
       setModel: setSessionModel,
       setMode: setSessionMode,
+      setName: setSessionName,
       listProviders: listAvailableProviders,
     }),
     [
@@ -334,6 +354,7 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
       listAvailableProviders,
       setSessionModel,
       setSessionMode,
+      setSessionName,
       setSessionProvider,
     ],
   );
@@ -344,6 +365,40 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
     if (!runtime || !session) return null;
     return runtime.agent.undo(session.id);
   }, []);
+
+  const handleCompact = useCallback(async () => {
+    const runtime = runtimeRef.current;
+    const session = sessionRef.current;
+    if (!runtime || !session) return;
+
+    if (session.messages.length === 0) {
+      addHistoryItem({ type: "info", text: "Nothing to compact — conversation is empty." }, Date.now());
+      return;
+    }
+
+    setIsRunning(true);
+    try {
+      const summary = await generateCompactSummary(runtime, session, undefined);
+      if (!summary) {
+        addHistoryItem({ type: "warning", text: "Compaction failed: could not generate summary." }, Date.now());
+        return;
+      }
+      // Replace session messages with a single summary message.
+      const summaryMsg = buildSummaryMessage(summary);
+      runtime.sessions.replaceMessages(session.id, [summaryMsg]);
+      await runtime.sessions.persist(session.id).catch(() => {});
+
+      // Replace TUI history with just the summary.
+      historyManager.clearItems();
+      setHistoryRemountKey((k) => k + 1);
+      addHistoryItem({ type: "info", text: "Conversation compacted." }, Date.now());
+      addHistoryItem({ type: "gemini", text: summary }, Date.now());
+    } catch {
+      addHistoryItem({ type: "error", text: "Compaction failed." }, Date.now());
+    } finally {
+      setIsRunning(false);
+    }
+  }, [addHistoryItem, historyManager]);
 
   const commandContext = useMemo<CommandContext>(
     () => ({
@@ -364,12 +419,13 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
         toggleVimEnabled: async () => false,
         reloadCommands: () => {},
         undo: handleUndo,
+        compact: handleCompact,
       },
       session: {
         sessionShellAllowlist: sessionShellAllowlistRef.current,
       },
     }),
-    [configAdapter, handleUndo, historyManager, pendingItem, sessionCommandServices],
+    [configAdapter, handleCompact, handleUndo, historyManager, pendingItem, sessionCommandServices],
   );
 
   useEffect(() => {
@@ -420,7 +476,31 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
         if (!mounted) return;
 
         const target = resolveSessionTarget(runtime.config, { provider, model });
-        const session = runtime.sessions.create(target);
+        let session: Session;
+        let resumed = false;
+
+        if (resumeSessionId) {
+          const allSessions = await runtime.sessions.loadAll();
+          const existing = allSessions.find(
+            (s) => s.id === resumeSessionId && s.worktree === cwd,
+          );
+          if (existing) {
+            session = existing;
+            // CLI flags override the persisted provider/model when supplied.
+            if (provider) session.provider = target.provider;
+            if (model) session.model = target.model;
+            runtime.sessions.save(session);
+            resumed = true;
+          } else {
+            session = runtime.sessions.create(target);
+            addHistoryItem(
+              { type: "warning", text: `Session ${resumeSessionId} not found; starting new session.` },
+              Date.now(),
+            );
+          }
+        } else {
+          session = runtime.sessions.create(target);
+        }
 
         runtimeRef.current = runtime;
         sessionRef.current = session;
@@ -553,14 +633,25 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
         );
         unsubscribeRef.current = unsubscribers;
 
+        if (resumed) {
+          restoreHistoryFromSession(session, (item) => addHistoryItem(item, Date.now()));
+          addHistoryItem(
+            {
+              type: "info",
+              text: `Session ${session.id.slice(-8)} resumed (${session.messages.length} messages).`,
+            },
+            Date.now(),
+          );
+        } else {
+          addHistoryItem(
+            {
+              type: "info",
+              text: `DeepCode runtime initialized on ${cwd}.`,
+            },
+            Date.now(),
+          );
+        }
         setIsInitializing(false);
-        addHistoryItem(
-          {
-            type: "info",
-            text: `DeepCode runtime initialized on ${cwd}.`,
-          },
-          Date.now(),
-        );
       } catch (error) {
         if (!mounted) return;
         const message = error instanceof Error ? error.message : String(error);
@@ -580,7 +671,7 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
       }
       unsubscribeRef.current = [];
     };
-  }, [addHistoryItem, config, cwd, model, provider]);
+  }, [addHistoryItem, config, cwd, model, provider, resumeSessionId]);
 
   const resolveApproval = useCallback(
     (decision: { allowed: boolean; scope?: "once" | "session" | "always"; reason?: string }) => {
@@ -629,6 +720,7 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
       setIterationInfo(null);
 
       const startIndex = session.messages.length;
+      const isFirstTurn = startIndex === 0;
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -678,12 +770,25 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
         }
         appendTurnItems(turnItems);
 
-        // Gera sugestão de follow-up de forma assíncrona (não bloqueia)
+        // Generate follow-up suggestions only for turns that actually used the model.
         const rt = runtimeRef.current;
         const sess = sessionRef.current;
-        if (rt && sess && output.trim()) {
+        const usedLlm = sess?.metadata["lastTurnUsedLlm"] === true;
+        if (rt && sess && usedLlm && output.trim()) {
           generateFollowupSuggestion(rt, sess, output, controller.signal)
             .then((s) => { if (s) setPromptSuggestion(s); })
+            .catch(() => {});
+        }
+        // Name generation also uses the model, so keep local-only turns at zero tokens.
+        if (rt && sess && usedLlm && isFirstTurn && !sess.metadata["name"]) {
+          generateSessionName(rt, sess, controller.signal)
+            .then((name) => {
+              if (name) {
+                sess.metadata["name"] = name;
+                rt.sessions.save(sess);
+                rt.sessions.persist(sess.id).catch(() => {});
+              }
+            })
             .catch(() => {});
         }
       } catch (error) {
@@ -707,6 +812,12 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
         setTaskPlan(null);
         setTaskStreams({});
         setIterationInfo(null);
+        // Persist session after every turn (success, abort, and error paths).
+        const rt = runtimeRef.current;
+        const sess = sessionRef.current;
+        if (rt && sess) {
+          rt.sessions.persist(sess.id).catch(() => {});
+        }
       }
     },
     [agentMode, appendTurnItems, historyManager],
@@ -1307,6 +1418,36 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
     [setSessionModel],
   );
 
+  const handleSelectSession = useCallback(
+    async (sessionId: string) => {
+      const runtime = runtimeRef.current;
+      if (!runtime) return;
+      const allSessions = await runtime.sessions.loadAll();
+      const existing = allSessions.find((s) => s.id === sessionId);
+      if (!existing) {
+        historyManager.addItem(
+          { type: "warning", text: `Session ${sessionId.slice(-8)} not found.` },
+          Date.now(),
+        );
+        setActiveDialog(null);
+        return;
+      }
+      sessionRef.current = existing;
+      setCurrentModel(existing.model ?? "(unconfigured)");
+      setProviderLabel(formatProviderLabel(existing.provider, existing.model));
+      setTargetSource("session");
+      historyManager.clearItems();
+      setHistoryRemountKey((k) => k + 1);
+      restoreHistoryFromSession(existing, (item) => historyManager.addItem(item, Date.now()));
+      historyManager.addItem(
+        { type: "info", text: `Session ${sessionId.slice(-8)} resumed (${existing.messages.length} messages).` },
+        Date.now(),
+      );
+      setActiveDialog(null);
+    },
+    [historyManager],
+  );
+
   const closeDialog = useCallback(() => setActiveDialog(null), []);
   const previewTheme = useCallback(() => setThemeVersion((version) => version + 1), []);
 
@@ -1703,6 +1844,14 @@ export const AppContainer = ({ cwd, config, provider, model }: AppContainerProps
                               <FeedbackDialog cwd={cwd} onClose={closeDialog} />
                             )}
 
+                            {activeDialog === "sessions" && (
+                              <SessionsDialog
+                                cwd={cwd}
+                                onSelect={handleSelectSession}
+                                onClose={closeDialog}
+                              />
+                            )}
+
                             {pendingCommandConfirmation && (
                               <CommandDialog
                                 title="Confirm action"
@@ -1790,7 +1939,7 @@ function formatPermissionSummary(config: {
 }
 
 function isInteractiveDialog(dialog: DialogType): boolean {
-  return dialog === "theme" || dialog === "permissions" || dialog === "auth" || dialog === "provider" || dialog === "model" || dialog === "feedback";
+  return dialog === "theme" || dialog === "permissions" || dialog === "auth" || dialog === "provider" || dialog === "model" || dialog === "feedback" || dialog === "sessions";
 }
 
 /**
@@ -1864,7 +2013,7 @@ function buildDialogModel(
   }
 
   // Interactive dialogs render as React components, not as a static CommandDialog.
-  if (dialog === "theme" || dialog === "provider" || dialog === "permissions" || dialog === "auth" || dialog === "model" || dialog === "feedback") {
+  if (dialog === "theme" || dialog === "provider" || dialog === "permissions" || dialog === "auth" || dialog === "model" || dialog === "feedback" || dialog === "sessions") {
     return null;
   }
 

@@ -26,6 +26,7 @@ import {
 import { runCommand } from "./commands/run.js";
 import { subagentsRunCommand } from "./commands/subagents.js";
 import { projectsCommand } from "./commands/projects.js";
+import { sessionsClearCommand, sessionsCommand } from "./commands/sessions.js";
 import {
   flushStandardStreams,
   writeStderrLine,
@@ -80,6 +81,30 @@ export function createProgram(): Command {
     .action(async (options: { path?: string }) => {
       await projectsCommand({
         cwd: options.path ?? process.env["HOME"] ?? program.opts().cwd,
+      });
+    });
+
+  const sessions = program
+    .command("sessions")
+    .description("manage persisted sessions");
+
+  sessions
+    .command("list", { isDefault: true })
+    .description("interactive session picker — Enter prints session ID (use with: deepcode chat --resume \"$(deepcode sessions)\")")
+    .action(async () => {
+      await sessionsCommand({ cwd: program.opts().cwd });
+    });
+
+  sessions
+    .command("clear")
+    .description("delete persisted sessions")
+    .option("--all", "delete all sessions regardless of age")
+    .option("--older-than <days>", "delete sessions older than N days (default: 30)", parsePositiveInt)
+    .action(async (options: { all?: boolean; olderThan?: number }) => {
+      await sessionsClearCommand({
+        cwd: program.opts().cwd,
+        all: options.all,
+        olderThanDays: options.olderThan,
       });
     });
 
@@ -289,13 +314,15 @@ export function createProgram(): Command {
     .description("open the terminal UI")
     .option("--provider <provider>", "provider override for this chat session")
     .option("--model <model>", "model override for this chat session (or <provider>/<model>)")
-    .action((options: { provider?: string; model?: string }) => {
+    .option("--resume <id>", "resume a previous session by ID")
+    .action((options: { provider?: string; model?: string; resume?: string }) => {
       render(
         React.createElement(App, {
           cwd: program.opts().cwd,
           config: program.opts().config,
           provider: options.provider,
           model: options.model,
+          resumeSessionId: options.resume,
         }),
       );
     });

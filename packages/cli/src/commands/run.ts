@@ -47,18 +47,23 @@ export async function runCommand(
   });
   const secretValues = collectSecretValues(runtime.config);
   let streamed = false;
-  const output = await runtime.agent.run({
-    session,
-    input,
-    mode: options.mode ?? runtime.config.agentMode,
-    provider: target.provider,
-    onChunk: (text) => {
-      streamed = true;
-      process.stdout.write(redactText(text, secretValues));
-    },
-  });
-  if (!streamed && output) {
-    process.stdout.write(redactText(output, secretValues));
+  let output = "";
+  try {
+    output = await runtime.agent.run({
+      session,
+      input,
+      mode: options.mode ?? runtime.config.agentMode,
+      provider: target.provider,
+      onChunk: (text) => {
+        streamed = true;
+        process.stdout.write(redactText(text, secretValues));
+      },
+    });
+    if (!streamed && output) {
+      process.stdout.write(redactText(output, secretValues));
+    }
+    if (!streamed || !output) process.stdout.write("\n");
+  } finally {
+    await runtime.sessions.persist(session.id).catch(() => {});
   }
-  if (!streamed || !output) process.stdout.write("\n");
 }

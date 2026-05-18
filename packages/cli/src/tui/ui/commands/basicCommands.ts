@@ -54,3 +54,15 @@ export const undoCommand: SlashCommand = {
     };
   },
 };
+
+export const compactCommand: SlashCommand = {
+  name: "compact",
+  get description() {
+    return t("Summarize and compact the conversation history to free context window");
+  },
+  kind: CommandKind.BUILT_IN,
+  supportedModes: ["interactive"] as const,
+  action: async (context) => {
+    await context.ui.compact();
+  },
+};

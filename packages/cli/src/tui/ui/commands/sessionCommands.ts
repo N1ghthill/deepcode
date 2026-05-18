@@ -86,6 +86,34 @@ export const modelCommand: SlashCommand = {
   },
 };
 
+export const renameCommand: SlashCommand = {
+  name: "rename",
+  argumentHint: "<name>",
+  get description() {
+    return t("Rename the current session");
+  },
+  kind: CommandKind.BUILT_IN,
+  supportedModes: ["interactive"] as const,
+  action: (context, args) => {
+    const session = context.services.session;
+    if (!session) return sessionNotReady();
+    const name = args.trim().replace(/^["']|["']$/g, "").trim();
+    if (!name) {
+      return {
+        type: "message",
+        messageType: "error",
+        content: t("Usage: /rename <session name>"),
+      };
+    }
+    session.setName(name);
+    return {
+      type: "message",
+      messageType: "info",
+      content: `Session renamed to "${name}".`,
+    };
+  },
+};
+
 const AGENT_MODES: readonly AgentMode[] = ["build", "plan"] as const;
 
 export const modeCommand: SlashCommand = {

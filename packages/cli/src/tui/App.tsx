@@ -6,6 +6,7 @@ export interface AppProps {
   config?: string;
   provider?: string;
   model?: string;
+  resumeSessionId?: string;
 }
 
 export function App(props: AppProps) {
@@ -15,6 +16,7 @@ export function App(props: AppProps) {
       config={props.config}
       provider={props.provider}
       model={props.model}
+      resumeSessionId={props.resumeSessionId}
     />
   );
 }

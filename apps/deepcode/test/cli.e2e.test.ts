@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -62,6 +62,12 @@ describe("deepcode CLI e2e", () => {
     expect(chat.exitCode).toBe(0);
     expect(chat.stdout).toContain("--provider <provider>");
     expect(chat.stdout).toContain("--model <model>");
+    expect(chat.stdout).toContain("--resume <id>");
+
+    const sessions = await runCli(["sessions", "--help"]);
+    expect(sessions.exitCode).toBe(0);
+    expect(sessions.stdout).toContain("manage persisted sessions");
+    expect(sessions.stdout).toContain("clear");
 
     const github = await runCli(["github", "login", "--help"]);
     expect(github.exitCode).toBe(0);
@@ -824,6 +830,17 @@ describeWithLocalBinding("deepcode run with mock LLM", () => {
       const result = await runCli(["--cwd", tempDir, "run", "anything", "--yes"]);
 
       expect(result.exitCode).not.toBe(0);
+      const sessionsDir = path.join(tempDir, ".deepcode", "sessions");
+      const files = (await readdir(sessionsDir)).filter((f) => f.endsWith(".json"));
+      expect(files).toHaveLength(1);
+      const raw = JSON.parse(await readFile(path.join(sessionsDir, files[0]!), "utf8")) as {
+        status: string;
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(raw.status).toBe("error");
+      expect(raw.messages).toEqual([
+        expect.objectContaining({ role: "user", content: "anything" }),
+      ]);
     } finally {
       await llm.close();
     }
@@ -856,6 +873,84 @@ describeWithLocalBinding("deepcode run with mock LLM", () => {
       await llm.close();
     }
   }, 20_000);
+});
+
+// ── session persistence E2E tests ────────────────────────────────────────────
+
+describeWithLocalBinding("deepcode session persistence", () => {
+  it("persists a session file after deepcode run and clears it with sessions clear --all", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-session-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLM(tempDir, llm.url);
+      // "create a file" matches isSimpleDirectCommand → exactly 1 LLM call needed.
+      llm.queueText("File created successfully.");
+
+      const run = await runCli(["--cwd", tempDir, "run", "create a file", "--yes"]);
+      expect(run.exitCode).toBe(0);
+
+      // Session file must exist in .deepcode/sessions/ and contain the user message.
+      const sessionsDir = path.join(tempDir, ".deepcode", "sessions");
+      await access(sessionsDir);
+      const files = (await readdir(sessionsDir)).filter((f) => f.endsWith(".json"));
+      expect(files.length).toBeGreaterThan(0);
+
+      const raw = JSON.parse(await readFile(path.join(sessionsDir, files[0]!), "utf8")) as {
+        worktree: string;
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(raw.worktree).toBe(tempDir);
+      expect(raw.messages.some((m) => m.role === "user")).toBe(true);
+
+      // sessions clear --all removes the file.
+      const clear = await runCli(["--cwd", tempDir, "sessions", "clear", "--all"]);
+      expect(clear.exitCode).toBe(0);
+      expect(clear.stdout).toContain("Deleted 1 session");
+
+      const filesAfter = (await readdir(sessionsDir)).filter((f) => f.endsWith(".json"));
+      expect(filesAfter).toHaveLength(0);
+    } finally {
+      await llm.close();
+    }
+  }, 20_000);
+
+  it("sessions clear --older-than keeps sessions that are not old enough", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-session-keep-"));
+    await createTypeScriptFixture(tempDir);
+    const llm = await startLLMTestServer();
+
+    try {
+      await configureLLM(tempDir, llm.url);
+      llm.queueText("Done.");
+
+      const run = await runCli(["--cwd", tempDir, "run", "create a file", "--yes"]);
+      expect(run.exitCode).toBe(0);
+
+      const sessionsDir = path.join(tempDir, ".deepcode", "sessions");
+      const filesBefore = (await readdir(sessionsDir)).filter((f) => f.endsWith(".json"));
+      expect(filesBefore.length).toBeGreaterThan(0);
+
+      // 999-day threshold — the fresh session must survive.
+      const clear = await runCli(["--cwd", tempDir, "sessions", "clear", "--older-than", "999"]);
+      expect(clear.exitCode).toBe(0);
+      expect(clear.stdout).toContain("Deleted 0 sessions");
+
+      const filesAfter = (await readdir(sessionsDir)).filter((f) => f.endsWith(".json"));
+      expect(filesAfter).toHaveLength(filesBefore.length);
+    } finally {
+      await llm.close();
+    }
+  }, 20_000);
+
+  it("sessions clear reports nothing when the sessions directory does not exist", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-session-empty-"));
+
+    const clear = await runCli(["--cwd", tempDir, "sessions", "clear", "--all"]);
+    expect(clear.exitCode).toBe(0);
+    expect(clear.stdout).toContain("No sessions directory found");
+  }, 10_000);
 });
 
 // ── github solve E2E ─────────────────────────────────────────────────────────
