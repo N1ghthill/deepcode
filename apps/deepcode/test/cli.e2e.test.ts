@@ -976,9 +976,7 @@ describeWithLocalBinding("deepcode review with mock LLM", () => {
         "utf8",
       );
 
-      // The review prompt has newlines + backticks → classified as workspace_task → shouldPlan: true.
-      // Queue a non-JSON planning response so planning fails gracefully, then the real review.
-      llm.queueText("Analyzing the diff.");
+      // mode: "plan" skips the planning phase → exactly 1 LLM call.
       llm.queueText("**Summary**: Increments by 1.\n\n**Issues**: Off-by-one error.\n\n**Verdict**: Has issues.");
 
       const result = await runCli(["--cwd", tempDir, "review", "--yes"]);
@@ -986,10 +984,10 @@ describeWithLocalBinding("deepcode review with mock LLM", () => {
       expect(result.exitCode).toBe(0);
       // The LLM response must be streamed to stdout.
       expect(result.stdout).toContain("Has issues");
-      expect(llm.calls).toHaveLength(2);
+      expect(llm.calls).toHaveLength(1);
 
-      // The diff must be present in the execution-phase prompt (calls[1]).
-      const messages = llm.calls[1]!.messages as Array<{ role: string; content: string }>;
+      // The diff must be present in the prompt sent to the LLM.
+      const messages = llm.calls[0]!.messages as Array<{ role: string; content: string }>;
       const userMsg = messages.find((m) => m.role === "user");
       // The diff contains the modified line with the comment we wrote.
       expect(userMsg?.content).toContain("off-by-one");

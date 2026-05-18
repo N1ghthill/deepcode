@@ -9,6 +9,7 @@ import {
 } from "@deepcode/core";
 import { resolveUsableProviderTarget } from "@deepcode/shared";
 import { createRuntime } from "../runtime.js";
+import { resolveSessionTarget } from "../target-resolution.js";
 import { writeStdout, writeStdoutLine } from "../stream-flush.js";
 
 export async function githubLoginCommand(options: {
@@ -338,6 +339,7 @@ export async function reviewPrCommand(
   const prompt = [
     `Review PR #${pr.number}: ${pr.title}`,
     `Branch: ${pr.head ?? "?"} → ${pr.base ?? "?"}`,
+    "Do not modify any files. Output the review only.",
     "",
     pr.body ? `Description:\n${pr.body}` : "No description provided.",
     "",
@@ -350,7 +352,7 @@ export async function reviewPrCommand(
     "4. **Verdict** — Approve / Request Changes / Neutral with a one-line rationale",
   ].join("\n");
 
-  const target = resolveUsableProviderTarget(runtime.config, [runtime.config.defaultProvider]);
+  const target = resolveSessionTarget(runtime.config, {});
   const session = runtime.sessions.create({
     provider: target.provider,
     model: target.model,
@@ -358,11 +360,16 @@ export async function reviewPrCommand(
   const secretValues = collectSecretValues(runtime.config);
 
   await writeStdoutLine(`Reviewing PR #${pr.number}: ${pr.title}`);
-  await runtime.agent.run({
-    session,
-    input: prompt,
-    onChunk: (text) => void writeStdout(redactText(text, secretValues)),
-  });
+  try {
+    await runtime.agent.run({
+      session,
+      input: prompt,
+      mode: "plan",
+      onChunk: (text) => void writeStdout(redactText(text, secretValues)),
+    });
+  } finally {
+    await runtime.sessions.persist(session.id).catch(() => {});
+  }
   await writeStdout("\n");
 }
 
