@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadAgentConfigs } from "../src/agent/agent-config-loader.js";
+import { loadAgentConfigs, loadProjectAgentConfigs } from "../src/agent/agent-config-loader.js";
+import { BUILTIN_AGENTS } from "../src/agent/builtin-agents.js";
 
 let tempDir: string | undefined;
 
@@ -13,16 +14,16 @@ afterEach(async () => {
   }
 });
 
-describe("loadAgentConfigs", () => {
+describe("loadProjectAgentConfigs", () => {
   it("returns empty array when .deepcode/agents directory does not exist", () => {
-    const result = loadAgentConfigs("/tmp/nonexistent-deepcode-dir-xyz");
+    const result = loadProjectAgentConfigs("/tmp/nonexistent-deepcode-dir-xyz");
     expect(result).toEqual([]);
   });
 
   it("returns empty array when agents directory is empty", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agents-"));
     await mkdir(path.join(tempDir, ".deepcode", "agents"), { recursive: true });
-    const result = loadAgentConfigs(tempDir);
+    const result = loadProjectAgentConfigs(tempDir);
     expect(result).toEqual([]);
   });
 
@@ -43,7 +44,7 @@ You are a strict code reviewer. Focus on correctness, security, and maintainabil
       "utf8",
     );
 
-    const result = loadAgentConfigs(tempDir);
+    const result = loadProjectAgentConfigs(tempDir);
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({
       name: "code-reviewer",
@@ -68,7 +69,7 @@ You are a specialist.
       "utf8",
     );
 
-    const result = loadAgentConfigs(tempDir);
+    const result = loadProjectAgentConfigs(tempDir);
     expect(result).toHaveLength(1);
     expect(result[0]?.name).toBe("my-specialist");
   });
@@ -82,7 +83,7 @@ You are a specialist.
       "utf8",
     );
 
-    const result = loadAgentConfigs(tempDir);
+    const result = loadProjectAgentConfigs(tempDir);
     expect(result).toHaveLength(1);
     expect(result[0]?.name).toBe("simple");
     expect(result[0]?.systemPrompt).toBe("You are a simple agent that just answers questions.");
@@ -102,7 +103,7 @@ You are a specialist.
       "utf8",
     );
 
-    const result = loadAgentConfigs(tempDir);
+    const result = loadProjectAgentConfigs(tempDir);
     expect(result).toHaveLength(1);
     expect(result[0]?.name).toBe("real-agent");
   });
@@ -121,9 +122,49 @@ You are a specialist.
       "utf8",
     );
 
-    const result = loadAgentConfigs(tempDir);
+    const result = loadProjectAgentConfigs(tempDir);
     expect(result).toHaveLength(2);
     const names = result.map((r) => r.name).sort();
     expect(names).toEqual(["agent-a", "agent-b"]);
+  });
+});
+
+describe("loadAgentConfigs", () => {
+  it("includes built-in agents when no project agents exist", () => {
+    const result = loadAgentConfigs("/tmp/nonexistent-deepcode-dir-xyz");
+    expect(result).toHaveLength(BUILTIN_AGENTS.length);
+    expect(result.map((r) => r.name)).toEqual(expect.arrayContaining(["code-reviewer", "test-runner", "refactor"]));
+  });
+
+  it("project agent overrides built-in with same name", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agents-"));
+    await mkdir(path.join(tempDir, ".deepcode", "agents"), { recursive: true });
+    await writeFile(
+      path.join(tempDir, ".deepcode", "agents", "code-reviewer.md"),
+      "---\nname: code-reviewer\n---\nCustom reviewer prompt.",
+      "utf8",
+    );
+
+    const result = loadAgentConfigs(tempDir);
+    const reviewer = result.find((r) => r.name === "code-reviewer");
+    expect(reviewer?.systemPrompt).toBe("Custom reviewer prompt.");
+    // Other built-ins are still present
+    expect(result.some((r) => r.name === "test-runner")).toBe(true);
+    expect(result.some((r) => r.name === "refactor")).toBe(true);
+  });
+
+  it("project-only agents are included alongside built-ins", async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-agents-"));
+    await mkdir(path.join(tempDir, ".deepcode", "agents"), { recursive: true });
+    await writeFile(
+      path.join(tempDir, ".deepcode", "agents", "my-agent.md"),
+      "---\nname: my-agent\n---\nI am custom.",
+      "utf8",
+    );
+
+    const result = loadAgentConfigs(tempDir);
+    expect(result.some((r) => r.name === "my-agent")).toBe(true);
+    expect(result.some((r) => r.name === "code-reviewer")).toBe(true);
+    expect(result.length).toBe(BUILTIN_AGENTS.length + 1);
   });
 });

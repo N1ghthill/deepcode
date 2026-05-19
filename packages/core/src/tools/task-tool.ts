@@ -22,10 +22,10 @@ export function createTaskTool(subagents: SubagentManager, worktree: string): To
     name: "task",
     description:
       "Launch a subagent to handle a self-contained task in a child session. " +
-      "The subagent has full access to all tools (read, write, bash, git, search, etc.). " +
       "Use for parallelizable work, delegating a well-scoped subtask, or specialized analysis. " +
+      "Built-in subagent_type values: code-reviewer (read-only code analysis), test-runner (run tests and interpret output), refactor (surgical code changes without behavior change). " +
       "Set fork=true to give the subagent the current conversation history as starting context. " +
-      "Set subagent_type to the name of a named agent defined in .deepcode/agents/*.md.",
+      "Custom agents can be defined in .deepcode/agents/<name>.md.",
     parameters: TaskSchema,
     execute: (args, context) =>
       Effect.tryPromise(async () => {

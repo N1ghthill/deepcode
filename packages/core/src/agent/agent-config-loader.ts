@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { BUILTIN_AGENTS } from "./builtin-agents.js";
 
 export interface AgentConfig {
   name: string;
@@ -45,8 +46,15 @@ function parseFrontmatter(content: string): { meta: Record<string, unknown>; bod
 
 /**
  * Load all named agent configs from `.deepcode/agents/*.md` in the given worktree.
+ * Project-level configs override built-in agents with the same name.
  */
 export function loadAgentConfigs(worktree: string): AgentConfig[] {
+  const projectConfigs = loadProjectAgentConfigs(worktree);
+  const projectNames = new Set(projectConfigs.map((c) => c.name));
+  return [...BUILTIN_AGENTS.filter((a) => !projectNames.has(a.name)), ...projectConfigs];
+}
+
+export function loadProjectAgentConfigs(worktree: string): AgentConfig[] {
   const dir = path.join(worktree, ".deepcode", "agents");
   if (!fs.existsSync(dir)) return [];
 
