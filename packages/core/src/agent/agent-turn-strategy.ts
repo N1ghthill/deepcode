@@ -111,22 +111,23 @@ export function resolveTurnStrategy(
     };
   }
 
-  if (mode === "plan") {
-    return {
-      allowTools: true,
-      shouldPlan: false,
-      systemPrompt: PLAN_SYSTEM_PROMPT,
-      kind: "task",
-      intent,
-    };
-  }
-
+  // Direct utility requests (e.g. list projects, cd) work regardless of mode
   if (intent.kind === "direct_utility") {
     return {
       allowTools: true,
       shouldPlan: false,
       systemPrompt: UTILITY_SYSTEM_PROMPT,
       kind: "utility",
+      intent,
+    };
+  }
+
+  if (mode === "plan") {
+    return {
+      allowTools: true,
+      shouldPlan: false,
+      systemPrompt: PLAN_SYSTEM_PROMPT,
+      kind: "task",
       intent,
     };
   }
