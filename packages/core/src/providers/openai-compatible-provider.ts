@@ -97,8 +97,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
     const pendingTools = new Map<number, { id: string; name: string; argumentsJson: string }>();
     let lastUsage: { inputTokens: number; outputTokens: number } | null = null;
-    // Buffer for content-embedded tool calls (e.g. DeepSeek DSML).
-    let contentToolBuffer: string | null = null;
+    // When contentToolCallParser is set, buffer ALL content and process after the
+    // stream ends. This handles DSML tool calls that arrive split across multiple
+    // SSE chunks (a single special token can span several delta.content events).
+    const bufferAllContent = Boolean(this.contentToolCallParser);
+    let bufferedContent = "";
     for await (const event of parseSse(response)) {
       const streamError = getOpenAICompatibleStreamError(event);
       if (streamError) {
@@ -110,16 +113,8 @@ export class OpenAICompatibleProvider implements LLMProvider {
       const choice = event.choices?.[0];
       const delta = choice?.delta;
       if (delta?.content) {
-        if (this.contentToolCallParser && this.contentToolCallMarker) {
-          if (contentToolBuffer !== null) {
-            contentToolBuffer += delta.content;
-          } else if (delta.content.includes(this.contentToolCallMarker)) {
-            const markerPos = delta.content.indexOf(this.contentToolCallMarker);
-            if (markerPos > 0) yield { type: "delta", content: delta.content.slice(0, markerPos) };
-            contentToolBuffer = delta.content.slice(markerPos);
-          } else {
-            yield { type: "delta", content: delta.content };
-          }
+        if (bufferAllContent) {
+          bufferedContent += delta.content;
         } else {
           yield { type: "delta", content: delta.content };
         }
@@ -161,9 +156,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
         };
       }
     }
-    // Flush content-embedded tool call buffer (e.g. DeepSeek DSML).
-    if (contentToolBuffer && this.contentToolCallParser) {
-      const parsed = this.contentToolCallParser(contentToolBuffer);
+    // Flush buffered content: try DSML parse, fall back to plain delta.
+    if (bufferAllContent && this.contentToolCallParser) {
+      const marker = this.contentToolCallMarker;
+      const likelyHasDsml = !marker || bufferedContent.includes(marker);
+      const parsed = likelyHasDsml ? this.contentToolCallParser(bufferedContent) : null;
       if (parsed) {
         if (parsed.remainder) yield { type: "delta", content: parsed.remainder };
         for (let i = 0; i < parsed.toolCalls.length; i++) {
@@ -173,8 +170,8 @@ export class OpenAICompatibleProvider implements LLMProvider {
             call: { id: `dsml_${i}`, name: call.name, arguments: call.arguments },
           };
         }
-      } else {
-        yield { type: "delta", content: contentToolBuffer };
+      } else if (bufferedContent) {
+        yield { type: "delta", content: bufferedContent };
       }
     }
     for (const [index, call] of pendingTools) {
