@@ -471,18 +471,20 @@ Execute this task using the available tools. Return a summary of what was done.`
     taskType?: Task["type"],
   ): Promise<string> {
     const taskPrompt = this.createInternalPromptMessage(prompt);
-    const allowedToolNames = this.allowedToolNamesForTaskType(mode, taskType);
+    const allowedToolNames = this.allowedToolNamesForTaskType(mode, taskType, this.getRevealedTools(session));
     const resolvedModel = session.model ?? resolveConfiguredModelForProvider(this.config, session.provider);
     const toolProfile = resolveModelExecutionProfile(session.provider, resolvedModel);
-    const toolDefinitions = this.toolDefinitionsForNames(allowedToolNames, toolProfile.toolSchemaMode);
-    const textToolFallbackEnabled = toolDefinitions.length > 0 && toolProfile.toolCallStrategy !== "native";
-    const maxTaskIterations = 10; // Prevent infinite loops
+    const maxTaskIterations = 10;
     let taskIterations = 0;
     let finalAssistantText = "";
 
     while (taskIterations < maxTaskIterations) {
       taskIterations++;
       this.enforceBudget(session.id);
+
+      // Recompute each iteration — tool_search may have expanded allowedToolNames
+      const toolDefinitions = this.toolDefinitionsForNames(allowedToolNames, toolProfile.toolSchemaMode);
+      const textToolFallbackEnabled = toolDefinitions.length > 0 && toolProfile.toolCallStrategy !== "native";
 
       const chunks = this.providerManager.chat(
         this.messagesForSystemPrompt(
@@ -493,6 +495,7 @@ Execute this task using the available tools. Return a summary of what was done.`
           textToolFallbackEnabled
             ? buildFallbackToolCallPrompt(allowedToolNames)
             : undefined,
+          mode === "build" ? this.buildDeferredToolsHint(session) : undefined,
         ),
         {
           preferredProvider: options.provider ?? session.provider,
@@ -556,13 +559,19 @@ Execute this task using the available tools. Return a summary of what was done.`
         finalAssistantText = finalAssistantText ? `${finalAssistantText}\n${assistantText}` : assistantText;
       }
 
-      // No tool calls - task is complete
       if (toolCalls.length === 0) {
         break;
       }
 
       for (const call of toolCalls) {
-        const result = await this.executeTool(call, session, mode, options.signal, allowedToolNames, options.onToolActivity);
+        const result = await this.executeTool(
+          call, session, mode, options.signal, allowedToolNames, options.onToolActivity,
+          (names) => {
+            for (const name of names) {
+              if (this.tools.get(name)) allowedToolNames.add(name);
+            }
+          },
+        );
         this.sessions.addMessage(session.id, {
           role: "tool",
           source: "tool",
@@ -592,13 +601,19 @@ Execute this task using the available tools. Return a summary of what was done.`
     const toolProfile = resolveModelExecutionProfile(session.provider, resolvedModel);
     const baseAllowedToolNames = turnStrategy.allowTools ? this.allowedToolNamesForMode(mode) : new Set<string>();
     const allowedToolNames = this.applyToolOverrides(baseAllowedToolNames, options);
-    const toolDefinitions = turnStrategy.allowTools ? this.toolDefinitionsForNames(allowedToolNames, toolProfile.toolSchemaMode) : [];
-    const textToolFallbackEnabled = toolDefinitions.length > 0 && toolProfile.toolCallStrategy !== "native";
+    // Restore tools revealed in previous turns of this session
+    for (const name of this.getRevealedTools(session)) {
+      if (this.tools.get(name)) allowedToolNames.add(name);
+    }
 
     while (iterations < maxIterations) {
       iterations += 1;
       options.onIteration?.(iterations, maxIterations);
       this.enforceBudget(session.id);
+
+      // Recompute each iteration — tool_search may have expanded allowedToolNames
+      const toolDefinitions = turnStrategy.allowTools ? this.toolDefinitionsForNames(allowedToolNames, toolProfile.toolSchemaMode) : [];
+      const textToolFallbackEnabled = toolDefinitions.length > 0 && toolProfile.toolCallStrategy !== "native";
 
       await this.compressContextIfNeeded(session, turnStrategy.systemPrompt, options);
       const chunks = this.providerManager.chat(
@@ -610,6 +625,7 @@ Execute this task using the available tools. Return a summary of what was done.`
           textToolFallbackEnabled
             ? buildFallbackToolCallPrompt(allowedToolNames)
             : undefined,
+          mode === "build" ? this.buildDeferredToolsHint(session) : undefined,
         ),
         {
           preferredProvider: options.provider ?? session.provider,
@@ -682,7 +698,14 @@ Execute this task using the available tools. Return a summary of what was done.`
       if (toolCalls.length === 0) break;
 
       for (const call of toolCalls) {
-        const result = await this.executeTool(call, session, mode, options.signal, allowedToolNames, options.onToolActivity);
+        const result = await this.executeTool(
+          call, session, mode, options.signal, allowedToolNames, options.onToolActivity,
+          (names) => {
+            for (const name of names) {
+              if (this.tools.get(name)) allowedToolNames.add(name);
+            }
+          },
+        );
         this.sessions.addMessage(session.id, {
           role: "tool",
           source: "tool",
@@ -724,6 +747,7 @@ Execute this task using the available tools. Return a summary of what was done.`
     signal?: AbortSignal,
     allowedToolNames = this.allowedToolNamesForMode(mode),
     onToolActivity?: (toolName: string, active: boolean) => void,
+    onRevealTools?: (names: string[]) => void,
   ): Promise<ToolExecutionOutcome> {
     if (!this.isToolAllowed(call.name, mode)) {
       const modeHint = mode === "plan" ? "Switch to BUILD mode (press Tab in the TUI) to enable this tool." : "";
@@ -784,6 +808,12 @@ Execute this task using the available tools. Return a summary of what was done.`
         const stack = this.undoStacks.get(session.id) ?? [];
         stack.push({ path: filePath, previousContent });
         this.undoStacks.set(session.id, stack);
+      },
+      revealTools: (names) => {
+        const current = this.getRevealedTools(session);
+        session.metadata.revealedTools = [...new Set([...current, ...names])];
+        this.sessions.save(session);
+        onRevealTools?.(names);
       },
     };
 
@@ -899,8 +929,28 @@ Execute this task using the available tools. Return a summary of what was done.`
 
   private allowedToolNamesForMode(mode: AgentMode): Set<string> {
     return new Set(
-      this.tools.list().filter((tool) => this.isToolAllowed(tool.name, mode)).map((tool) => tool.name),
+      this.tools.list()
+        .filter((tool) => this.isToolAllowed(tool.name, mode) && !tool.deferred)
+        .map((tool) => tool.name),
     );
+  }
+
+  private getRevealedTools(session: Session): string[] {
+    return Array.isArray(session.metadata.revealedTools)
+      ? (session.metadata.revealedTools as string[])
+      : [];
+  }
+
+  private buildDeferredToolsHint(session: Session): string | undefined {
+    const deferred = this.tools.listDeferred();
+    if (deferred.length === 0) return undefined;
+    const revealed = new Set(this.getRevealedTools(session));
+    const unrevealed = deferred.filter((t) => !revealed.has(t.name));
+    if (unrevealed.length === 0) return undefined;
+    return [
+      "Deferred tools (not in schema — call tool_search with a keyword to activate):",
+      ...unrevealed.map((t) => `- ${t.name}: ${t.description.slice(0, 100)}`),
+    ].join("\n");
   }
 
   private applyToolOverrides(base: Set<string>, options: AgentRunOptions): Set<string> {
@@ -913,10 +963,14 @@ Execute this task using the available tools. Return a summary of what was done.`
     return new Set([...names].filter((n) => base.has(n)));
   }
 
-  private allowedToolNamesForTaskType(mode: AgentMode, taskType?: Task["type"]): Set<string> {
+  private allowedToolNamesForTaskType(mode: AgentMode, taskType?: Task["type"], revealedTools?: string[]): Set<string> {
     if (taskType === "research") return new Set([...PLAN_ALLOWED_TOOLS]);
     if (taskType === "verify") return new Set(["read_file", "list_dir", "analyze_code", "search_text", "bash"]);
-    return this.allowedToolNamesForMode(mode);
+    const base = this.allowedToolNamesForMode(mode);
+    for (const name of revealedTools ?? []) {
+      if (this.tools.get(name)) base.add(name);
+    }
+    return base;
   }
 
   private toolDefinitionsForNames(names: Set<string>, schemaMode: ToolSchemaMode = "full"): Array<Record<string, unknown>> {
@@ -951,6 +1005,7 @@ Execute this task using the available tools. Return a summary of what was done.`
     toolsEnabled: boolean,
     extraMessages: Message[] = [],
     fallbackToolPrompt?: string,
+    deferredToolsHint?: string,
   ) {
     return [
       {
@@ -965,6 +1020,14 @@ Execute this task using the available tools. Return a summary of what was done.`
         content: this.runtimeContextPrompt(session, toolsEnabled),
         createdAt: session.createdAt,
       },
+      ...(deferredToolsHint
+        ? [{
+            id: "deferred_tools_system",
+            role: "system" as const,
+            content: deferredToolsHint,
+            createdAt: session.createdAt,
+          }]
+        : []),
       ...(fallbackToolPrompt
         ? [{
             id: "tool_fallback_system",

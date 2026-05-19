@@ -19,6 +19,8 @@ export interface ToolContext {
   logActivity(activity: Omit<Activity, "id" | "createdAt">): void;
   /** Called by file-mutating tools before overwriting so the agent can undo. */
   snapshotForUndo?(path: string): Promise<void>;
+  /** Called by tool_search to activate deferred tools for this session. */
+  revealTools(names: string[]): void;
 }
 
 export interface ToolDefinition<TSchema extends z.ZodTypeAny = z.ZodTypeAny, TResult = unknown> {
@@ -26,6 +28,8 @@ export interface ToolDefinition<TSchema extends z.ZodTypeAny = z.ZodTypeAny, TRe
   description: string;
   parameters: TSchema;
   execute(args: z.infer<TSchema>, context: ToolContext): Effect.Effect<TResult, Error>;
+  /** When true, the tool is not sent in the initial schema — activated via tool_search. */
+  deferred?: boolean;
 }
 
 export function defineTool<TSchema extends z.ZodTypeAny, TResult>(
@@ -54,6 +58,10 @@ export class ToolRegistry {
 
   list(): ToolDefinition[] {
     return [...this.tools.values()];
+  }
+
+  listDeferred(): ToolDefinition[] {
+    return [...this.tools.values()].filter((t) => t.deferred);
   }
 
   descriptions(): string {

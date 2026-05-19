@@ -13,6 +13,7 @@ export function adaptMcpTool(
     name: qualifiedName,
     description: tool.description ?? tool.name,
     parameters: z.record(z.unknown()).default({}),
+    deferred: true,
     execute: (args) =>
       Effect.tryPromise({
         try: () => client.callTool(tool.name, args as Record<string, unknown>),

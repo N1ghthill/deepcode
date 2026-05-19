@@ -1,6 +1,6 @@
 {
   "name": "@deepcode/shared",
-  "version": "1.0.0",
+  "version": "1.1.31",
   "private": true,
   "description": "Shared types and schemas for DeepCode",
   "license": "MIT",

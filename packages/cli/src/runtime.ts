@@ -13,6 +13,7 @@ import {
   ToolCache,
   createDefaultToolRegistry,
   createTaskTool,
+  createToolSearchTool,
   type ToolRegistry,
 } from "@deepcode/core";
 import { resolveUsableProviderTarget, type DeepCodeConfig } from "@deepcode/shared";
@@ -62,6 +63,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
       tools.register(tool);
     }
   }
+  tools.register(createToolSearchTool(tools));
   const agent = new Agent(
     providers,
     tools,
