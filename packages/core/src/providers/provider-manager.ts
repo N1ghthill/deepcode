@@ -4,11 +4,13 @@ import {
   type Chunk,
   type DeepCodeConfig,
   type Message,
+  type Model,
   type ProviderId,
 } from "@deepcode/shared";
 import { ProviderError } from "../errors.js";
 
 const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
+const MODEL_CATALOG_GRACE_MS = 250;
 
 function isRetryableError(error: unknown): boolean {
   if (error instanceof ProviderError && error.statusCode !== undefined) {
@@ -29,6 +31,7 @@ export interface ProviderValidationResult {
   model: string;
   modelFound: boolean;
   modelCount: number;
+  modelCatalogStatus: "checked" | "skipped" | "unavailable";
   responseText: string;
   latencyMs: number;
 }
@@ -199,19 +202,39 @@ if (emitted) {
 
     const started = Date.now();
     const controller = new AbortController();
+    const modelCatalogController = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000);
     try {
-      const [models, responseText] = await Promise.all([
-        provider.listModels({ signal: controller.signal }).catch(() => [] as import("@deepcode/shared").Model[]),
-        provider.complete("Reply exactly with: OK", {
-          model,
-          maxTokens: 16,
-          temperature: 0,
-          signal: controller.signal,
-        }),
-      ]);
+      let modelCatalogStatus: ProviderValidationResult["modelCatalogStatus"] = "skipped";
+      const modelCatalogSignal = AbortSignal.any([controller.signal, modelCatalogController.signal]);
+      const modelCatalogPromise = provider
+        .listModels({ signal: modelCatalogSignal })
+        .then((models) => {
+          modelCatalogStatus = "checked";
+          return models;
+        })
+        .catch(() => {
+          modelCatalogStatus = modelCatalogController.signal.aborted ? "skipped" : "unavailable";
+          return [] as Model[];
+        });
+      const responseText = await provider.complete("Reply exactly with: OK", {
+        model,
+        maxTokens: 16,
+        temperature: 0,
+        signal: controller.signal,
+      });
+      const latencyMs = Date.now() - started;
       if (!responseText.trim()) {
         throw new ProviderError(`${provider.name} returned an empty validation response`, providerId);
+      }
+      const catalogResult = await Promise.race([
+        modelCatalogPromise.then((models) => ({ completed: true as const, models })),
+        delay(MODEL_CATALOG_GRACE_MS, controller.signal).then(() => ({ completed: false as const })),
+      ]);
+      const models = catalogResult.completed ? catalogResult.models : [];
+      if (!catalogResult.completed) {
+        modelCatalogStatus = "skipped";
+        modelCatalogController.abort();
       }
       const modelFound = models.length === 0 || models.some((item) => item.id === model || item.id === configuredModel);
       return {
@@ -219,10 +242,12 @@ if (emitted) {
         model,
         modelFound,
         modelCount: models.length,
+        modelCatalogStatus,
         responseText,
-        latencyMs: Date.now() - started,
+        latencyMs,
       };
     } finally {
+      modelCatalogController.abort();
       clearTimeout(timeout);
     }
   }

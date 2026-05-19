@@ -6,6 +6,7 @@ import {
   ConfigLoader,
   runToolEffect,
   type ApprovalRequest,
+  type ProviderValidationResult,
   type TaskPlan,
 } from "@deepcode/core";
 import { createRuntime, type DeepCodeRuntime } from "../runtime.js";
@@ -104,6 +105,18 @@ import { resolveSessionTarget } from "../target-resolution.js";
 import { generateFollowupSuggestion } from "./followup-suggestion.js";
 import { checkForUpdate, isNewer } from "../update-checker.js";
 import { VERSION } from "../version.js";
+
+function formatModelCatalogSummary(
+  result: Pick<ProviderValidationResult, "modelCatalogStatus" | "modelCount">,
+): string {
+  if (result.modelCatalogStatus === "checked") {
+    return `${result.modelCount} models visible`;
+  }
+  if (result.modelCatalogStatus === "skipped") {
+    return "model catalog skipped";
+  }
+  return "model catalog unavailable";
+}
 
 export interface AppContainerProps {
   cwd: string;
@@ -1446,7 +1459,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
           return {
             ok: true,
             latencyMs: result.latencyMs,
-            detail: `${result.modelCount} models visible; model call ok (${result.model})`,
+            detail: `${formatModelCatalogSummary(result)}; model call ok (${result.model})`,
           };
         } catch (error) {
           return {

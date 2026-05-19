@@ -13,6 +13,7 @@ import {
   readFileTool,
   redactText,
   runToolEffect,
+  type ProviderValidationResult,
   writeFileTool,
 } from "@deepcode/core";
 import { resolveUsableProviderTarget } from "@deepcode/shared";
@@ -23,6 +24,28 @@ interface DoctorCheck {
   name: string;
   ok: boolean;
   detail: string;
+}
+
+function formatModelCatalogSummary(
+  result: Pick<ProviderValidationResult, "modelCatalogStatus" | "modelCount">,
+): string {
+  if (result.modelCatalogStatus === "checked") {
+    return `${result.modelCount} models visible`;
+  }
+  if (result.modelCatalogStatus === "skipped") {
+    return "model catalog skipped";
+  }
+  return "model catalog unavailable";
+}
+
+function formatModelCheckDetail(result: ProviderValidationResult): string {
+  if (result.modelCatalogStatus === "checked") {
+    return result.modelFound
+      ? result.model
+      : `${result.model} (not present in provider model catalog)`;
+  }
+
+  return `${result.model} (model catalog ${result.modelCatalogStatus})`;
 }
 
 export async function doctorCommand(options: { cwd: string; config?: string }): Promise<void> {
@@ -119,14 +142,12 @@ async function providerChecks(
       {
         name: "provider",
         ok: true,
-        detail: `${target.provider} authenticated; ${result.modelCount} models visible; model call ok (${result.latencyMs}ms)`,
+        detail: `${target.provider} authenticated; ${formatModelCatalogSummary(result)}; model call ok (${result.latencyMs}ms)`,
       },
       {
         name: "model",
         ok: result.modelFound,
-        detail: result.modelFound
-          ? result.model
-          : `${result.model} (not present in provider model catalog)`,
+        detail: formatModelCheckDetail(result),
       },
     ];
   } catch (error) {

@@ -138,7 +138,28 @@ describe("ProviderManager", () => {
 
     expect(result.model).toBe("kimi-k2.6");
     expect(result.modelFound).toBe(true);
+    expect(result.modelCatalogStatus).toBe("checked");
     expect(result.responseText).toBe("OK");
+  });
+
+  it("does not let a slow model catalog inflate validation latency", async () => {
+    const manager = new ProviderManager(createConfig({
+      defaultModels: {
+        openrouter: "fast-model",
+      },
+    }));
+    const provider = new SlowModelCatalogValidationProvider();
+    manager.register(provider);
+
+    const result = await manager.validateProviderModel("openrouter", {
+      timeoutMs: 1_000,
+    });
+
+    expect(result.responseText).toBe("OK");
+    expect(result.modelCount).toBe(0);
+    expect(result.modelCatalogStatus).toBe("skipped");
+    expect(result.latencyMs).toBeLessThan(250);
+    expect(provider.catalogAborted).toBe(true);
   });
 
   it("sends Groq qwen3 requests with reasoning disabled and Groq token field names", async () => {
@@ -234,6 +255,67 @@ class FallbackProvider implements LLMProvider {
 
   async listModels(): Promise<Model[]> {
     return [];
+  }
+
+  async validateConfig(): Promise<boolean> {
+    return true;
+  }
+}
+
+class SlowModelCatalogValidationProvider implements LLMProvider {
+  readonly id = "openrouter" as const;
+  readonly name = "SlowModelCatalogValidationProvider";
+  readonly capabilities: ProviderCapabilities = {
+    streaming: true,
+    functionCalling: true,
+    jsonMode: true,
+    vision: false,
+    maxContextLength: 128_000,
+  };
+  catalogAborted = false;
+
+  async *chat(_messages: Message[], _options: ProviderChatOptions): AsyncIterable<Chunk> {
+    yield { type: "done" };
+  }
+
+  async complete(): Promise<string> {
+    return "OK";
+  }
+
+  async listModels(options: { signal?: AbortSignal } = {}): Promise<Model[]> {
+    return new Promise((resolve) => {
+      if (options.signal?.aborted) {
+        this.catalogAborted = true;
+        resolve([]);
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        resolve([
+          {
+            id: "fast-model",
+            name: "Fast Model",
+            provider: "openrouter",
+            contextLength: 128_000,
+            capabilities: {
+              streaming: true,
+              functionCalling: true,
+              jsonMode: true,
+              vision: false,
+            },
+          },
+        ]);
+      }, 5_000);
+      options.signal?.addEventListener(
+        "abort",
+        () => {
+          this.catalogAborted = true;
+          clearTimeout(timeout);
+          resolve([]);
+        },
+        { once: true },
+      );
+    });
   }
 
   async validateConfig(): Promise<boolean> {
