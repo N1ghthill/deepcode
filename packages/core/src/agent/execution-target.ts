@@ -14,9 +14,14 @@ export function resolveExecutionTarget(
   mode: AgentMode,
   explicitProvider?: ProviderId,
 ): { provider: ProviderId; model?: string } {
+  // User explicitly pinned this provider via TUI — honour it unconditionally.
+  // modeDefaults and credential scanning must not override an explicit user choice.
+  if (session.metadata.providerPinned === true && !explicitProvider) {
+    return { provider: session.provider, model: session.model };
+  }
+
   const modeOverride = config.modeDefaults?.[mode];
-  const hasPinnedProvider =
-    Boolean(explicitProvider ?? modeOverride?.provider) || session.metadata.providerPinned === true;
+  const hasPinnedProvider = Boolean(explicitProvider ?? modeOverride?.provider);
   const provider = explicitProvider ?? modeOverride?.provider ?? session.provider
     ?? config.defaultProvider
     ?? resolveUsableProviderTarget(config, []).provider;
