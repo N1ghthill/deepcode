@@ -882,9 +882,14 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
         setTaskPlan(null);
         setTaskStreams({});
         setIterationInfo(null);
+        // Reflect the actual provider/model used (agent may have fallen back).
+        const sess = sessionRef.current;
+        if (sess) {
+          setProviderLabel(formatProviderLabel(sess.provider, sess.model));
+          setCurrentModel(sess.model ?? "(unconfigured)");
+        }
         // Persist session after every turn (success, abort, and error paths).
         const rt = runtimeRef.current;
-        const sess = sessionRef.current;
         if (rt && sess) {
           rt.sessions.persist(sess.id).catch(() => {});
         }
@@ -1961,7 +1966,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
 };
 
 function formatProviderLabel(provider: string, model?: string): string {
-  return model ? `${provider}/${model}` : `${provider}/(model unset)`;
+  return model ? `${provider} › ${model}` : `${provider} › (model unset)`;
 }
 
 function formatNumber(value: number): string {
