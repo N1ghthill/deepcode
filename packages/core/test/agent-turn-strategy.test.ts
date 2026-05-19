@@ -62,5 +62,7 @@ describe("agent turn strategy", () => {
 
     expect(strategy.kind).toBe("task");
     expect(strategy.allowTools).toBe(true);
+    // Build mode never pre-plans — the model uses the `task` tool to self-organize.
+    expect(strategy.shouldPlan).toBe(false);
   });
 });

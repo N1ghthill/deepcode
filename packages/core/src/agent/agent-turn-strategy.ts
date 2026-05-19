@@ -85,11 +85,11 @@ export function resolveTurnStrategy(
       };
     }
 
-    // Always give tools in build mode — let the model decide whether to use them.
-    // The system prompt instructs the model not to use tools for simple chat.
+    // Always give tools in build mode. shouldPlan is always false — complex
+    // multi-step work is delegated via the `task` tool by the model itself.
     return {
       allowTools: true,
-      shouldPlan: intent.kind === "workspace_task",
+      shouldPlan: false,
       systemPrompt: BUILD_SYSTEM_PROMPT,
       kind: "task",
       intent,

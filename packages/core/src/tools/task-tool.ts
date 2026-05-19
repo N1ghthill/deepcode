@@ -4,6 +4,7 @@ import { createId } from "@deepcode/shared";
 import type { ProviderId } from "@deepcode/shared";
 import { defineTool, type ToolDefinition } from "./tool.js";
 import type { SubagentManager } from "../agent/subagent-manager.js";
+import type { SessionManager } from "../sessions/session-manager.js";
 import { loadAgentConfigs } from "../agent/agent-config-loader.js";
 
 const TaskSchema = z.object({
@@ -17,7 +18,11 @@ const TaskSchema = z.object({
   fork: z.boolean().optional().describe("If true, the subagent starts with the current conversation history as context."),
 });
 
-export function createTaskTool(subagents: SubagentManager, worktree: string): ToolDefinition {
+export function createTaskTool(
+  subagents: SubagentManager,
+  worktree: string,
+  sessions: SessionManager,
+): ToolDefinition {
   return defineTool({
     name: "task",
     description:
@@ -52,14 +57,23 @@ export function createTaskTool(subagents: SubagentManager, worktree: string): To
           if (!resolvedModel && agentConfig.model) resolvedModel = agentConfig.model;
         }
 
+        // Propagate parent session's resolved provider/model and validation cache.
+        // Without this the subagent would inherit SubagentManager.defaultProvider
+        // (the config's defaultProvider) which may have no model configured.
+        const parentSession = sessions.get(context.sessionId);
+        const parentValidatedModels = parentSession?.metadata?.validatedModels as
+          | Record<string, boolean>
+          | undefined;
+
         const task = {
           id: taskId,
           prompt: args.prompt,
-          provider: args.provider as ProviderId | undefined,
-          model: resolvedModel,
+          provider: (args.provider ?? parentSession?.provider) as ProviderId | undefined,
+          model: resolvedModel ?? parentSession?.model,
           systemPrompt,
           allowedTools,
           disallowedTools,
+          parentValidatedModels,
         };
 
         const result = args.fork

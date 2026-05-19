@@ -843,7 +843,7 @@ Execute this task using the available tools. Return a summary of what was done.`
         message: `Failed ${call.name}: ${message}`,
         metadata: { tool: call.name, error: message },
       });
-      this.eventBus.emit("app:error", { error: error instanceof Error ? error : new Error(message), context: { tool: call.name } });
+      this.eventBus.emit("app:error", { error: new Error(message), context: { tool: call.name } });
       return {
         ok: false,
         output: `Error running ${call.name}: ${message}${hint}`,
@@ -869,19 +869,7 @@ Execute this task using the available tools. Return a summary of what was done.`
     this.eventBus.emit("activity", full);
   }
 
-  private toolDefinitions(mode: AgentMode, schemaMode: ToolSchemaMode = "full"): Array<Record<string, unknown>> {
-    return this.tools.list().filter((tool) => this.isToolAllowed(tool.name, mode)).map((tool) => ({
-      type: "function",
-      function: {
-        name: tool.name,
-        description: compactToolDescription(tool.description, schemaMode),
-        parameters: simplifyToolSchema(
-          zodToJsonSchema(tool.parameters, { target: "jsonSchema7" }),
-          schemaMode,
-        ),
-      },
-    }));
-  }
+
 
   private resolveTaskToolChoice(
     taskIteration: number,

@@ -17,6 +17,8 @@ export interface SubagentTask {
   allowedTools?: string[];
   /** Tool names to exclude from the subagent's tool set. */
   disallowedTools?: string[];
+  /** Model validation cache inherited from the parent session (avoids redundant catalog checks). */
+  parentValidatedModels?: Record<string, boolean>;
 }
 
 export interface SubagentResult {
@@ -117,6 +119,9 @@ export class SubagentManager {
       for (const msg of task.parentMessages) {
         this.sessions.addMessage(session.id, { role: msg.role, source: msg.source, content: msg.content });
       }
+    }
+    if (task.parentValidatedModels) {
+      session.metadata.validatedModels = { ...task.parentValidatedModels };
     }
     this.sessions.save(session);
     return session;

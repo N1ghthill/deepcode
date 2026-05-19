@@ -83,7 +83,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<DeepCodeRu
     config.subagentConcurrency,
     events,
   );
-  tools.register(createTaskTool(subagents, worktree));
+  tools.register(createTaskTool(subagents, worktree, sessions));
   return {
     config,
     events,
