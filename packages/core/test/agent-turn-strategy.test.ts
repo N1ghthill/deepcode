@@ -32,6 +32,12 @@ describe("agent turn strategy", () => {
     });
   });
 
+  it("gives tools to ambiguous build-mode prompts and lets the model decide", () => {
+    const strategy = resolveTurnStrategy("o que voce acha disso", "build", policy);
+    expect(strategy.allowTools).toBe(true);
+    expect(strategy.kind).toBe("task");
+  });
+
   it("treats improvement proposals as workspace work even with an older saved policy", () => {
     const legacyPolicy = DeepCodeConfigSchema.parse({
       permissions: {

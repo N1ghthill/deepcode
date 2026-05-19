@@ -85,22 +85,13 @@ export function resolveTurnStrategy(
       };
     }
 
-    if (intent.kind === "simple_task") {
-      return {
-        allowTools: true,
-        shouldPlan: false,
-        systemPrompt: BUILD_SYSTEM_PROMPT,
-        kind: "task",
-        intent,
-      };
-    }
-
-    const looksLikeWorkspace = intent.kind === "workspace_task";
+    // Always give tools in build mode — let the model decide whether to use them.
+    // The system prompt instructs the model not to use tools for simple chat.
     return {
-      allowTools: looksLikeWorkspace,
-      shouldPlan: looksLikeWorkspace,
-      systemPrompt: looksLikeWorkspace ? BUILD_SYSTEM_PROMPT : BUILD_SYSTEM_PROMPT_CONVERSATIONAL,
-      kind: looksLikeWorkspace ? "task" : "chat",
+      allowTools: true,
+      shouldPlan: intent.kind === "workspace_task",
+      systemPrompt: BUILD_SYSTEM_PROMPT,
+      kind: "task",
       intent,
     };
   }
