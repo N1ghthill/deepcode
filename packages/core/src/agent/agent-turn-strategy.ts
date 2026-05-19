@@ -333,7 +333,7 @@ function looksLikeWorkspaceRequest(input: string, policy: BuildTurnPolicy): bool
   if (input.includes("\n") || input.includes("`")) {
     return true;
   }
-  return containsConfiguredTerm(normalizedInput, policy.taskVerbs) && normalizedInput.split(/\s+/).length >= 3;
+  return containsConfiguredTerm(normalizedInput, policy.taskVerbs) && normalizedInput.split(/\s+/).length >= 2;
 }
 
 function isDirectUtilityRequest(input: string, policy: BuildTurnPolicy): boolean {
