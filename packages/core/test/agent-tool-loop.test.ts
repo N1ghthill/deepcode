@@ -268,10 +268,9 @@ describe("Agent tool loop", () => {
     );
     const session = sessions.create({ provider: "openrouter", model: "test-model" });
 
-    const output = await agent.run({ session, input: "oi" });
+    const output = await agent.run({ session, input: "what is 2+2" });
 
-    // always-tools skips planning; conversational phrases like "oi" use toolChoice:"auto"
-    // but the provider still yields a tool call (provider is tool-aware), so echo_tool runs
+    // always-tools routes all non-conversational inputs through the tool loop
     expect(output).toContain("echo:hello");
     expect(session.messages.some((message) => message.role === "tool")).toBe(true);
     expect(session.activities.some((activity) => activity.metadata?.tool === "echo_tool")).toBe(true);

@@ -146,13 +146,13 @@ export function classifyUserIntent(
     return { kind: "direct_utility" };
   }
 
-  if (mode === "build" && policy.mode === "always-tools") {
-    return { kind: "forced_tool_task" };
-  }
-
   const localConversation = classifyLocalConversation(input, policy);
   if (localConversation) {
     return localConversation;
+  }
+
+  if (mode === "build" && policy.mode === "always-tools") {
+    return { kind: "forced_tool_task" };
   }
 
   if (mode === "build" && isSimpleDirectCommand(input)) {
