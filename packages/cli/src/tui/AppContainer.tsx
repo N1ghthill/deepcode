@@ -15,6 +15,7 @@ import {
   ProviderIdSchema,
   createId,
   resolveConfiguredModelForProvider,
+  type Activity,
   type AgentMode,
   type DeepCodeConfig,
   type ProviderId,
@@ -193,6 +194,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
   const streamingResponseLengthRef = useRef(0);
   const pendingTextBufferRef = useRef('');
   const taskStreamsBufferRef = useRef<Record<string, string>>({});
+  const liveToolCallsBufferRef = useRef<Activity[]>([]);
+  const subagentChunkBufferRef = useRef<Map<string, string>>(new Map());
   const drainingQueueRef = useRef(false);
   const messageQueueRef = useRef<string[]>([]);
   const sessionShellAllowlistRef = useRef<Set<string>>(new Set());
@@ -499,8 +502,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
     return () => clearInterval(interval);
   }, [isRunning]);
 
-  // Throttle streaming re-renders: batch token chunks and flush at ~20fps
-  // instead of calling setState on every individual token.
+  // Throttle streaming re-renders: batch all high-frequency updates and flush
+  // at ~20fps instead of calling setState on every individual event/chunk.
   useEffect(() => {
     const id = setInterval(() => {
       const text = pendingTextBufferRef.current;
@@ -516,6 +519,23 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
           const next = { ...prev };
           for (const taskId of taskKeys) {
             next[taskId] = (next[taskId] ?? '') + taskBuf[taskId];
+          }
+          return next;
+        });
+      }
+      const activities = liveToolCallsBufferRef.current;
+      if (activities.length > 0) {
+        liveToolCallsBufferRef.current = [];
+        setLiveToolCalls((prev) => activities.reduce(reduceToolActivity, prev));
+      }
+      const subagentChunks = subagentChunkBufferRef.current;
+      if (subagentChunks.size > 0) {
+        subagentChunkBufferRef.current = new Map();
+        setSubagentMap((prev) => {
+          const next = new Map(prev);
+          for (const [taskId, output] of subagentChunks) {
+            const entry = next.get(taskId);
+            if (entry) next.set(taskId, { ...entry, currentOutput: output });
           }
           return next;
         });
@@ -652,7 +672,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
         );
         unsubscribers.push(
           runtime.events.on("activity", (activity) => {
-            setLiveToolCalls((prev) => reduceToolActivity(prev, activity));
+            liveToolCallsBufferRef.current.push(activity);
           }),
         );
         unsubscribers.push(
@@ -671,14 +691,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
         );
         unsubscribers.push(
           runtime.events.on("subagent:chunk", ({ taskId, text }) => {
-            setSubagentMap((prev) => {
-              const entry = prev.get(taskId);
-              if (!entry) return prev;
-              const next = new Map(prev);
-              const combined = ((entry.currentOutput ?? "") + text).slice(-80);
-              next.set(taskId, { ...entry, currentOutput: combined });
-              return next;
-            });
+            const prev = subagentChunkBufferRef.current.get(taskId) ?? "";
+            subagentChunkBufferRef.current.set(taskId, (prev + text).slice(-80));
           }),
         );
         unsubscribers.push(
@@ -814,6 +828,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
       setPromptSuggestion(null);
       pendingTextBufferRef.current = '';
       taskStreamsBufferRef.current = {};
+      liveToolCallsBufferRef.current = [];
+      subagentChunkBufferRef.current = new Map();
       setPendingAssistantText("");
       setIsRunning(true);
       setIsReceivingContent(false);
@@ -850,6 +866,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
           },
           onIteration: (round: number, max: number) => {
             setIterationInfo({ round, max });
+            liveToolCallsBufferRef.current = [];
+            setLiveToolCalls([]);
           },
           onTaskUpdate: (_task, plan) => {
             setTaskPlan({
@@ -909,6 +927,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
         abortRef.current = null;
         pendingTextBufferRef.current = '';
         taskStreamsBufferRef.current = {};
+        liveToolCallsBufferRef.current = [];
+        subagentChunkBufferRef.current = new Map();
         setPendingAssistantText("");
         setIsRunning(false);
         setLiveToolCalls([]);

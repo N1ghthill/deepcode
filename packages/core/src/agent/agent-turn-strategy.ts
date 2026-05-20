@@ -182,19 +182,19 @@ export function parseUtilityRequest(input: string): ParsedUtilityRequest | undef
     PROJECT_DISCOVERY_VERB_PATTERN.test(normalizedInput) || /\bgit\b/i.test(normalizedInput)
   )) {
     const explicitPathMatch = trimmed.match(/((?:~\/|\.{1,2}\/|\/)[^\s]+)/);
-    const rawPath = explicitPathMatch?.[1]?.trim() || ".";
+    const rawPath = explicitPathMatch?.[1]?.trim().replace(/[.,;:!?]+$/, "") || ".";
     return { kind: "list_projects", path: rawPath, rawPath };
   }
 
   const shellListMatch = trimmed.match(/^(?:ls|dir)\s*(.+)?$/i);
   if (shellListMatch) {
-    const rawPath = shellListMatch[1]?.trim() || ".";
+    const rawPath = (shellListMatch[1]?.trim() || ".").replace(/[.,;:!?]+$/, "");
     return { kind: "list_dir", path: rawPath, rawPath };
   }
 
   if (DIRECT_UTILITY_VERB_PATTERN.test(normalizedInput)) {
     const explicitPathMatch = trimmed.match(/((?:~\/|\.{1,2}\/|\/)[^\s]+)/);
-    const rawPath = explicitPathMatch?.[1]?.trim() || ".";
+    const rawPath = explicitPathMatch?.[1]?.trim().replace(/[.,;:!?]+$/, "") || ".";
     return { kind: "list_dir", path: rawPath, rawPath };
   }
 
@@ -337,6 +337,8 @@ function looksLikeWorkspaceRequest(input: string, policy: BuildTurnPolicy): bool
 function isDirectUtilityRequest(input: string, policy: BuildTurnPolicy): boolean {
   const normalizedInput = normalizeTurnInput(input);
   if (!normalizedInput) return false;
+  // Long or multi-line inputs are task prompts, not utility commands.
+  if (input.includes("\n") || normalizedInput.split(/\s+/).length > 25) return false;
   if (normalizedInput === "pwd" || normalizedInput === "date") {
     return true;
   }
