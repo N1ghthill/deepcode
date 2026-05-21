@@ -72,8 +72,8 @@ Esses arquivos existem em ambos mas o Qwen tem mudanças significativas que pode
 - [x] **`ui/components/views/ContextUsage.tsx`** ✓ _portado (versão nativa DeepCode)_
   Mostra uso estimado do context window com progress bar e breakdown por categoria. Exposto via `/context` (e `/context detail` para detalhamento). Estimativa baseada em `estimateTokens()` local — janela padrão de 128k tokens.
 
-- [ ] **`ui/components/views/DoctorReport.tsx`**
-  Relatório visual do `/doctor` com status formatado por categoria (pass/warn/fail).
+- [x] **`ui/components/views/DoctorReport.tsx`** ✓ _portado em 1b93c53_
+  Relatório visual do `/doctor` com status formatado por categoria (pass/warn/fail). Inclui `/doctor` command com checks de ambiente + runtime.
 
 - [ ] **`ui/components/subagents/`** (wizard de criação/gerenciamento)
   O DeepCode já tem subagents funcionais mas sem UI de gerenciamento interativa. O Qwen tem um wizard completo de criação (com seleção de ferramentas, cor, descrição) e um gerenciador de agentes. Candidato a port quando subagents entrar em foco de UX.
@@ -104,13 +104,13 @@ Esses arquivos existem em ambos mas o Qwen tem mudanças significativas que pode
 - [ ] **`ui/utils/computeStats.ts`**
   Cálculo de estatísticas de sessão.
 
-- [ ] **`ui/components/StickyTodoList.tsx`**
+- [x] **`ui/components/StickyTodoList.tsx`** ✓ _portado em 1b93c53_
   Lista de TODOs persistente acima do input durante o run.
 
-- [ ] **`ui/hooks/useTimer.ts`**
+- [x] **`ui/hooks/useTimer.ts`** ✓ _portado em 1b93c53_
   Timer de sessão (tempo decorrido).
 
-- [ ] **`ui/hooks/useLoadingIndicator.ts`**
+- [x] **`ui/hooks/useLoadingIndicator.ts`** ✓ _portado em 1b93c53_
   Loading indicator melhorado com frases cíclicas personalizáveis.
 
 ---
