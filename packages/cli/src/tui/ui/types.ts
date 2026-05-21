@@ -454,6 +454,31 @@ export type HistoryItemAwayRecap = HistoryItemBase & {
   text: string;
 };
 
+// --- Goal status types ---
+
+export type GoalStatusKind =
+  | 'set'
+  | 'achieved'
+  | 'cleared'
+  | 'failed'
+  | 'aborted'
+  | 'checking';
+
+export function isTerminalGoalStatusKind(
+  kind: GoalStatusKind,
+): kind is 'achieved' | 'cleared' | 'failed' | 'aborted' {
+  return kind === 'achieved' || kind === 'cleared' || kind === 'failed' || kind === 'aborted';
+}
+
+export type HistoryItemGoalStatus = HistoryItemBase & {
+  type: 'goal_status';
+  kind: GoalStatusKind;
+  condition: string;
+  iterations?: number;
+  durationMs?: number;
+  lastReason?: string;
+};
+
 /**
  * UserPromptSubmit hook blocked event.
  * Displayed when a UserPromptSubmit hook blocks the user's prompt.
@@ -545,6 +570,7 @@ export type HistoryItemWithoutId =
   | HistoryItemStopHookLoop
   | HistoryItemStopHookSystemMessage
   | HistoryItemDoctor
+  | HistoryItemGoalStatus
   | HistoryItemDiffStats;
 
 export type HistoryItem = HistoryItemWithoutId & { id: number };

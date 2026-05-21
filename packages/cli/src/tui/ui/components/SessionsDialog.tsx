@@ -14,6 +14,24 @@ type LoadState = "loading" | "ready" | "error";
 
 const MAX_VISIBLE = 12;
 
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  if (diffSecs < 60) return "agora";
+  const diffMins = Math.floor(diffSecs / 60);
+  if (diffMins < 60) return `há ${diffMins} min`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `há ${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "ontem";
+  if (diffDays < 7) return `há ${diffDays} dias`;
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffWeeks === 1) return "há 1 semana";
+  if (diffWeeks < 5) return `há ${diffWeeks} semanas`;
+  const diffMonths = Math.floor(diffDays / 30);
+  return `há ${diffMonths} mês${diffMonths !== 1 ? "es" : ""}`;
+}
+
 function sessionLabel(session: Session): string {
   const name = typeof session.metadata["name"] === "string" ? session.metadata["name"] : undefined;
   const firstUser = session.messages.find((m) => m.role === "user");
@@ -149,7 +167,7 @@ export const SessionsDialog: React.FC<SessionsDialogProps> = ({ cwd, onSelect, o
             const globalIdx = scrollTop + visIdx;
             const isActive = globalIdx === clampedIndex;
             const shortId = session.id.slice(-8);
-            const date = new Date(session.updatedAt).toLocaleString();
+            const date = relativeTime(session.updatedAt);
             const target = session.model
               ? `${session.provider}/${session.model}`
               : session.provider;

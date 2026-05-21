@@ -16,6 +16,7 @@ import { ContextUsage } from "./views/ContextUsage.js";
 import { DoctorReport } from "./views/DoctorReport.js";
 import { BtwMessage } from "./messages/BtwMessage.js";
 import { StatsDisplay } from "./views/StatsDisplay.js";
+import { GoalStatusMessage } from "./messages/GoalStatusMessage.js";
 import { theme } from "../semantic-colors.js";
 import { escapeAnsiCtrlCodes } from "../utils/textUtils.js";
 import { useCompactMode } from "../contexts/CompactModeContext.js";
@@ -137,6 +138,15 @@ export const HistoryItemDisplay: React.FC<HistoryItemDisplayProps> = ({
       )}
       {safeItem.type === "btw" && (
         <BtwMessage btw={safeItem.btw} containerWidth={boxWidth} />
+      )}
+      {safeItem.type === "goal_status" && (
+        <GoalStatusMessage
+          kind={safeItem.kind}
+          condition={safeItem.condition}
+          iterations={safeItem.iterations}
+          durationMs={safeItem.durationMs}
+          lastReason={safeItem.lastReason}
+        />
       )}
       {safeItem.type === "compression" && (
         <CompressionMessage compression={safeItem.compression} />

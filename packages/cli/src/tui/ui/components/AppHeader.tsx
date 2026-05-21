@@ -51,6 +51,7 @@ export const AppHeader = ({
   const {
     streamingState,
     sessionStats: { lastPromptTokenCount, lastOutputTokenCount },
+    elapsedTime,
     terminalWidth,
   } = useUIState();
 
@@ -89,7 +90,12 @@ export const AppHeader = ({
           {mode.toUpperCase()}
         </Text>
         <Text color={theme.text.secondary}>  </Text>
-        <Text color={status.color}>{status.text}</Text>
+        <Text color={status.color}>
+          {status.text}
+          {streamingState === StreamingState.Responding && elapsedTime > 0
+            ? ` ${elapsedTime}s`
+            : ""}
+        </Text>
         {iterationInfo && (
           <Text color={theme.text.secondary}>
             {"  "}iter {iterationInfo.round}/{iterationInfo.max}
