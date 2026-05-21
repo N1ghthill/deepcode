@@ -1905,8 +1905,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId }: 
                               </Box>
                             ) : (
                               <MainContent
-                                key={historyRemountKey}
                                 history={historyManager.history}
+                                historyRemountKey={historyRemountKey}
                                 pendingAssistantText={pendingAssistantText}
                                 liveToolCalls={liveToolCalls}
                                 taskPlan={taskPlan}

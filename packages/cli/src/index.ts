@@ -28,6 +28,7 @@ import { subagentsRunCommand } from "./commands/subagents.js";
 import { projectsCommand } from "./commands/projects.js";
 import { reviewCommand } from "./commands/review.js";
 import { sessionsClearCommand, sessionsCommand } from "./commands/sessions.js";
+import { updateCommand } from "./commands/update.js";
 import {
   flushStandardStreams,
   writeStderrLine,
@@ -144,6 +145,13 @@ export function createProgram(): Command {
     .description("validate local tools, provider config, GitHub token, and LSP servers")
     .action(async () => {
       await doctorCommand({ cwd: program.opts().cwd, config: program.opts().config });
+    });
+
+  program
+    .command("update")
+    .description("check for published updates")
+    .action(async () => {
+      await updateCommand();
     });
 
   const cache = program.command("cache").description("manage persistent tool cache");
