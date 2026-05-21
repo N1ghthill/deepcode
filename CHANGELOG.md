@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.2.12] — 2026-05-21
+
+### Fixed
+
+- Prevented session corruption when the repeated-error abort fires mid-iteration: tool calls that were registered in the assistant message but not yet executed now receive a synthetic cancelled result, avoiding orphaned `tool_use` entries that would cause API rejection on session resume.
+
 ## [1.1.28] — 2026-05-19
 
 ### Fixed
