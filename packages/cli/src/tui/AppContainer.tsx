@@ -71,6 +71,7 @@ import { exportCommand } from "./ui/commands/exportCommand.js";
 import { contextCommand } from "./ui/commands/contextCommand.js";
 import { clearCommand, compactCommand, helpCommand, undoCommand } from "./ui/commands/basicCommands.js";
 import { doctorCommand } from "./ui/commands/doctorCommand.js";
+import { historyCommand } from "./ui/commands/historyCommand.js";
 import { statsCommand } from "./ui/commands/statsCommand.js";
 import { updateCommand } from "./ui/commands/updateCommand.js";
 import {
@@ -181,6 +182,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
     shell: "ask",
     dangerous: "ask",
   });
+  const [sessionDisplayName, setSessionDisplayName] = useState<string>("");
   const [providerConfigVersion, setProviderConfigVersion] = useState(0);
   const [, setThemeVersion] = useState(0);
   const [mcpConnected, setMcpConnected] = useState(0);
@@ -283,6 +285,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       exportCommand,
       contextCommand,
       doctorCommand,
+      historyCommand,
       statsCommand,
       providerCommand,
       modelCommand,
@@ -754,6 +757,10 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         );
         unsubscribeRef.current = unsubscribers;
 
+        if (typeof session.metadata["name"] === "string" && session.metadata["name"]) {
+          setSessionDisplayName(session.metadata["name"]);
+        }
+
         if (resumed) {
           restoreHistoryFromSession(session, (item) => addHistoryItem(item, Date.now()));
           addHistoryItem(
@@ -917,6 +924,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
                 sess.metadata["name"] = name;
                 rt.sessions.save(sess);
                 rt.sessions.persist(sess.id).catch(() => {});
+                setSessionDisplayName(name);
               }
             })
             .catch(() => {});
@@ -1576,6 +1584,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       setCurrentModel(existing.model ?? "(unconfigured)");
       setProviderLabel(formatProviderLabel(existing.provider, existing.model));
       setTargetSource("session");
+      setSessionDisplayName(typeof existing.metadata["name"] === "string" ? existing.metadata["name"] : "");
       historyManager.clearItems();
       setHistoryRemountKey((k) => k + 1);
       restoreHistoryFromSession(existing, (item) => historyManager.addItem(item, Date.now()));
@@ -1736,6 +1745,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       permissionSummary,
       authSummary,
       commandNames: slashCommands.map((command) => `/${command.name}`),
+      commands: slashCommands.map((command) => ({ name: command.name, description: command.description })),
     }),
     [
       activeDialog,
@@ -1809,7 +1819,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
 
       currentModel,
 
-      sessionName: path.basename(cwd),
+      sessionName: sessionDisplayName || path.basename(cwd),
       isConfigInitialized: !isInitializing && !initError,
       sessionStats: {
         lastPromptTokenCount,
@@ -1844,6 +1854,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       dismissPromptSuggestion,
       promptSuggestion,
       elapsedTime,
+      sessionDisplayName,
       historyManager,
       historyRemountKey,
       initError,
@@ -2158,17 +2169,19 @@ function buildDialogModel(
     permissionSummary: string;
     authSummary: string;
     commandNames: string[];
+    commands: Array<{ name: string; description: string }>;
   },
 ): { title: string; lines: string[] } | null {
   if (!dialog) return null;
 
   if (dialog === "help") {
+    const maxNameLen = Math.max(...options.commands.map((c) => c.name.length + 1));
     return {
-      title: "Help",
-      lines: [
-        "Available commands:",
-        ...options.commandNames,
-      ],
+      title: "Comandos disponíveis",
+      lines: options.commands.map((c) => {
+        const label = `/${c.name}`.padEnd(maxNameLen + 1);
+        return `${label}  ${c.description}`;
+      }),
     };
   }
 
