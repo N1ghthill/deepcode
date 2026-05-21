@@ -70,7 +70,7 @@ DeepCode only calls the LLM when **actually needed** — not for chit-chat, not 
 
 ## Installation
 
-Requires Node.js 20.20.0 or newer.
+Requires Node.js 22 or newer.
 
 ```bash
 npm install -g deepcode-ai
@@ -80,6 +80,12 @@ Or with pnpm:
 
 ```bash
 pnpm add -g deepcode-ai
+```
+
+Check published channels and upgrade hints:
+
+```bash
+deepcode update
 ```
 
 ---
@@ -121,6 +127,7 @@ deepcode run "refactor the auth module" --mode plan
 deepcode config show --effective
 deepcode config set defaultProvider openai
 deepcode doctor
+deepcode update
 
 # GitHub
 deepcode github login

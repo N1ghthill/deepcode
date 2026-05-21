@@ -79,6 +79,10 @@ describe("deepcode CLI e2e", () => {
     expect(sessions.stdout).toContain("manage persisted sessions");
     expect(sessions.stdout).toContain("clear");
 
+    const update = await runCli(["update", "--help"]);
+    expect(update.exitCode).toBe(0);
+    expect(update.stdout).toContain("check for published updates");
+
     const github = await runCli(["github", "login", "--help"]);
     expect(github.exitCode).toBe(0);
     expect(github.stdout).toContain("OAuth device flow");
