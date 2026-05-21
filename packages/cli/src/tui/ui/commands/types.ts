@@ -82,6 +82,8 @@ export interface CommandContext {
     getCwd?: () => string;
     /** Returns a snapshot of runtime health for /doctor. */
     getRuntimeDiagnostics?: () => RuntimeDiagnostics | null;
+    /** Returns token counts from the last agent turn for /stats. */
+    getTokenStats?: () => { lastPromptTokens: number; lastOutputTokens: number; sessionStartedAt: number };
   };
   /** Session-scoped data. */
   session: {

@@ -3,6 +3,7 @@ import os from "node:os";
 import { useUIState } from "../contexts/UIStateContext.js";
 import { StreamingState } from "../types.js";
 import { theme } from "../semantic-colors.js";
+import { useGitBranchName } from "../hooks/useGitBranchName.js";
 
 interface IterationInfo {
   round: number;
@@ -53,6 +54,7 @@ export const AppHeader = ({
     terminalWidth,
   } = useUIState();
 
+  const branchName = useGitBranchName(cwd);
   const status = statusLabel(streamingState);
   const displayDir = tildeify(cwd);
   const hasTokens = lastPromptTokenCount > 0;
@@ -102,10 +104,17 @@ export const AppHeader = ({
         )}
       </Box>
 
-      {/* Row 2: working directory */}
-      <Text color={theme.text.secondary} dimColor>
-        {displayDir}
-      </Text>
+      {/* Row 2: working directory + git branch */}
+      <Box flexDirection="row">
+        <Text color={theme.text.secondary} dimColor>
+          {displayDir}
+        </Text>
+        {branchName && (
+          <Text color={theme.text.accent} dimColor>
+            {"  "}({branchName})
+          </Text>
+        )}
+      </Box>
     </Box>
   );
 };

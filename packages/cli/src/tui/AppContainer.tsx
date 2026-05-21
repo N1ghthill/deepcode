@@ -71,6 +71,7 @@ import { exportCommand } from "./ui/commands/exportCommand.js";
 import { contextCommand } from "./ui/commands/contextCommand.js";
 import { clearCommand, compactCommand, helpCommand, undoCommand } from "./ui/commands/basicCommands.js";
 import { doctorCommand } from "./ui/commands/doctorCommand.js";
+import { statsCommand } from "./ui/commands/statsCommand.js";
 import { updateCommand } from "./ui/commands/updateCommand.js";
 import {
   modeCommand,
@@ -196,6 +197,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
     [startupWarnings],
   );
 
+  const sessionStartedAtRef = useRef<number>(Date.now());
   const runtimeRef = useRef<DeepCodeRuntime | null>(null);
   const sessionRef = useRef<Session | null>(null);
   const configAdapterRef = useRef<DeepCodeConfigAdapter | null>(null);
@@ -281,6 +283,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       exportCommand,
       contextCommand,
       doctorCommand,
+      statsCommand,
       providerCommand,
       modelCommand,
       modeCommand,
@@ -487,12 +490,17 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
             agentMode,
           };
         },
+        getTokenStats: () => ({
+          lastPromptTokens: lastPromptTokenCount,
+          lastOutputTokens: lastOutputTokenCount,
+          sessionStartedAt: sessionStartedAtRef.current,
+        }),
       },
       session: {
         sessionShellAllowlist: sessionShellAllowlistRef.current,
       },
     }),
-    [agentMode, configAdapter, cwd, handleCompact, handleUndo, historyManager, mcpConnected, mcpTotal, pendingItem, sessionCommandServices],
+    [agentMode, configAdapter, cwd, handleCompact, handleUndo, historyManager, lastOutputTokenCount, lastPromptTokenCount, mcpConnected, mcpTotal, pendingItem, sessionCommandServices],
   );
 
   useEffect(() => {

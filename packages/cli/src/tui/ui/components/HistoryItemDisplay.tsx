@@ -14,6 +14,8 @@ import { CompressionMessage } from "./messages/CompressionMessage.js";
 import { SummaryMessage } from "./messages/SummaryMessage.js";
 import { ContextUsage } from "./views/ContextUsage.js";
 import { DoctorReport } from "./views/DoctorReport.js";
+import { BtwMessage } from "./messages/BtwMessage.js";
+import { StatsDisplay } from "./views/StatsDisplay.js";
 import { theme } from "../semantic-colors.js";
 import { escapeAnsiCtrlCodes } from "../utils/textUtils.js";
 import { useCompactMode } from "../contexts/CompactModeContext.js";
@@ -125,6 +127,17 @@ export const HistoryItemDisplay: React.FC<HistoryItemDisplayProps> = ({
       {safeItem.type === "doctor" && (
         <DoctorReport checks={safeItem.checks} summary={safeItem.summary} />
       )}
+      {safeItem.type === "stats" && (
+        <StatsDisplay
+          duration={safeItem.duration}
+          promptTokens={safeItem.promptTokens}
+          outputTokens={safeItem.outputTokens}
+          messageCount={safeItem.messageCount}
+        />
+      )}
+      {safeItem.type === "btw" && (
+        <BtwMessage btw={safeItem.btw} containerWidth={boxWidth} />
+      )}
       {safeItem.type === "compression" && (
         <CompressionMessage compression={safeItem.compression} />
       )}
@@ -159,7 +172,6 @@ function shouldRenderFallback(type: HistoryItem["type"]): boolean {
     || type === "extensions_list"
     || type === "model_stats"
     || type === "tool_stats"
-    || type === "stats"
   );
 }
 

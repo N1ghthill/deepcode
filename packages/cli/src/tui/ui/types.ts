@@ -173,6 +173,9 @@ export type HistoryItemHelp = HistoryItemBase & {
 export type HistoryItemStats = HistoryItemBase & {
   type: 'stats';
   duration: string;
+  promptTokens?: number;
+  outputTokens?: number;
+  messageCount?: number;
 };
 
 /**
