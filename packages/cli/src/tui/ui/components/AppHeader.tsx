@@ -50,7 +50,7 @@ export const AppHeader = ({
 }: AppHeaderProps) => {
   const {
     streamingState,
-    sessionStats: { lastPromptTokenCount, lastOutputTokenCount },
+    sessionStats: { lastPromptTokenCount, lastOutputTokenCount, totalPromptTokenCount, totalOutputTokenCount },
     elapsedTime,
     terminalWidth,
   } = useUIState();
@@ -59,6 +59,7 @@ export const AppHeader = ({
   const status = statusLabel(streamingState);
   const displayDir = tildeify(cwd);
   const hasTokens = lastPromptTokenCount > 0;
+  const hasSessionTokens = totalPromptTokenCount > 0;
 
   return (
     <Box
@@ -110,7 +111,7 @@ export const AppHeader = ({
         )}
       </Box>
 
-      {/* Row 2: working directory + git branch */}
+      {/* Row 2: working directory + git branch + session token totals */}
       <Box flexDirection="row">
         <Text color={theme.text.secondary} dimColor>
           {displayDir}
@@ -118,6 +119,11 @@ export const AppHeader = ({
         {branchName && (
           <Text color={theme.text.accent} dimColor>
             {"  "}({branchName})
+          </Text>
+        )}
+        {hasSessionTokens && (
+          <Text color={theme.text.secondary} dimColor>
+            {"  "}sessão ↑{fmt(totalPromptTokenCount)} ↓{fmt(totalOutputTokenCount)}
           </Text>
         )}
       </Box>

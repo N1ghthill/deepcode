@@ -6,6 +6,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.2.15] — 2026-05-21
+
+### Added
+- **Live session name**: o nome auto-gerado pelo modelo após o primeiro turno aparece em tempo real no canto superior direito do prompt; persiste ao resumir sessões e atualiza ao trocar de sessão via `/sessions`
+- **`/help` com descrições**: o diálogo de ajuda exibe `/comando  —  descrição` alinhados por colunas em vez de só listar nomes
+- **`/history`**: mostra contagem total de mensagens da sessão e últimos N prompts do usuário; aceita argumento numérico (`/history 10`)
+- **GoalStatusMessage**: renderização visual do ciclo de vida de um goal (`set/checking/achieved/failed/aborted/cleared`) com ícones e duração; `GoalStatusKind` adicionado ao sistema de tipos
+- **Elapsed time no AppHeader**: exibe "running 12s" durante execução do agente, incrementando por segundo
+- **Timestamps relativos no SessionsDialog**: "há 2 min", "ontem", "há 3 dias" em vez da data locale completa
+- **`useGitBranchName`**: hook que detecta branch git via `execFile` e assina `.git/logs/HEAD` para atualização automática em checkout; integrado no AppHeader row 2
+- **`BtwMessage`**: renderização de mensagens `/btw` em box amarelo com resposta em Markdown
+- **`StatsDisplay` + `/stats`**: painel de estatísticas da sessão (tempo, mensagens, tokens do último turno)
+
+## [1.2.14] — 2026-05-21
+
+### Added
+- **`useLoadingIndicator`**: hook de loading com frases PT-BR cíclicas a cada 15s ("Processando...", "Analisando o código...", etc.); retém tempo decorrido durante `WaitingForConfirmation`
+- **`StickyTodoList`**: painel "Tarefas em andamento" acima do Composer, atualizado em tempo real a partir de resultados de ferramentas `todo_list`; ordena `in_progress → pending → completed`
+- **`DoctorReport` + `/doctor`**: diagnóstico visual de ambiente e configuração por categoria (pass/warn/fail); verifica Node.js ≥ 22, CWD, git, .deepcode, provider, modelo, API key e MCP
+
 ## [1.2.13] — 2026-05-21
 
 ### Added

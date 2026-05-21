@@ -39,6 +39,9 @@ export interface SubagentEntry {
 export interface SessionStatsState {
   lastPromptTokenCount: number;
   lastOutputTokenCount: number;
+  /** Running totals across all turns in this session. */
+  totalPromptTokenCount: number;
+  totalOutputTokenCount: number;
 }
 
 export interface UIState {

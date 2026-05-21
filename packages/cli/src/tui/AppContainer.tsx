@@ -74,6 +74,7 @@ import { doctorCommand } from "./ui/commands/doctorCommand.js";
 import { historyCommand } from "./ui/commands/historyCommand.js";
 import { statsCommand } from "./ui/commands/statsCommand.js";
 import { updateCommand } from "./ui/commands/updateCommand.js";
+import { memoryCommand } from "./ui/commands/memoryCommand.js";
 import {
   modeCommand,
   modelCommand,
@@ -165,6 +166,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   const [pendingItem, setPendingItem] = useState<HistoryItemWithoutId | null>(null);
   const [lastPromptTokenCount, setLastPromptTokenCount] = useState(0);
   const [lastOutputTokenCount, setLastOutputTokenCount] = useState(0);
+  const [totalPromptTokenCount, setTotalPromptTokenCount] = useState(0);
+  const [totalOutputTokenCount, setTotalOutputTokenCount] = useState(0);
   const [isReceivingContent, setIsReceivingContent] = useState(false);
   const [iterationInfo, setIterationInfo] = useState<{ round: number; max: number } | null>(null);
   const [liveToolCalls, setLiveToolCalls] = useState<IndividualToolCallDisplay[]>([]);
@@ -287,6 +290,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       doctorCommand,
       historyCommand,
       statsCommand,
+      memoryCommand,
       providerCommand,
       modelCommand,
       modeCommand,
@@ -889,6 +893,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           onUsage: (inputTokens: number, outputTokens: number) => {
             setLastPromptTokenCount(inputTokens);
             setLastOutputTokenCount(outputTokens);
+            setTotalPromptTokenCount((prev) => prev + inputTokens);
+            setTotalOutputTokenCount((prev) => prev + outputTokens);
           },
           onIteration: (round: number, max: number) => {
             setIterationInfo({ round, max });
@@ -1824,6 +1830,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       sessionStats: {
         lastPromptTokenCount,
         lastOutputTokenCount,
+        totalPromptTokenCount,
+        totalOutputTokenCount,
       },
 
       dialogsVisible: activeDialog !== null || pendingCommandConfirmation !== null,
@@ -1863,6 +1871,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       iterationInfo,
       lastOutputTokenCount,
       lastPromptTokenCount,
+      totalOutputTokenCount,
+      totalPromptTokenCount,
       mainAreaWidth,
       mcpConnected,
       mcpTotal,
