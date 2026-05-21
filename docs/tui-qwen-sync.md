@@ -81,10 +81,10 @@ Esses arquivos existem em ambos mas o Qwen tem mudanças significativas que pode
 - [ ] **`ui/components/SettingsDialog.tsx`**
   Diálogo de configurações mais completo que o atual. Avaliar o delta em relação ao `PermissionsDialog` do DeepCode.
 
-- [ ] **`ui/hooks/useGitBranchName.ts`**
-  Branch git atual para exibir no status line / footer.
+- [x] **`ui/hooks/useGitBranchName.ts`** ✓ _portado em b2ac57e_
+  Branch git atual — integrado no AppHeader row 2 com fs.watch para atualização em checkout.
 
-- [ ] **`ui/components/messages/BtwMessage.tsx`**
+- [x] **`ui/components/messages/BtwMessage.tsx`** ✓ _portado em b2ac57e_
   Mensagens "by the way" — dicas contextuais inline do modelo.
 
 - [ ] **`ui/components/messages/GoalStatusMessage.tsx`** + tipo `HistoryItemGoalStatus`
@@ -95,8 +95,8 @@ Esses arquivos existem em ambos mas o Qwen tem mudanças significativas que pode
 
 ### Baixa prioridade / avaliar depois
 
-- [ ] **`ui/components/StatsDisplay.tsx`** + `ModelStatsDisplay.tsx` + `ToolStatsDisplay.tsx`
-  Painéis de estatísticas de uso (tokens, latência, ferramentas). Expostos via `/stats`.
+- [x] **`ui/components/StatsDisplay.tsx`** ✓ _portado nativamente em b2ac57e_
+  Painel de estatísticas de sessão (tokens, mensagens, tempo). Exposto via `/stats`.
 
 - [ ] **`ui/utils/historyUtils.ts`** + `historyMapping.ts`
   Utilitários para manipulação de histórico (normalização, mapeamento).
