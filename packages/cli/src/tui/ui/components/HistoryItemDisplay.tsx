@@ -12,6 +12,7 @@ import {
 import { ToolGroupMessage } from "./messages/ToolGroupMessage.js";
 import { CompressionMessage } from "./messages/CompressionMessage.js";
 import { SummaryMessage } from "./messages/SummaryMessage.js";
+import { ContextUsage } from "./views/ContextUsage.js";
 import { theme } from "../semantic-colors.js";
 import { escapeAnsiCtrlCodes } from "../utils/textUtils.js";
 import { useCompactMode } from "../contexts/CompactModeContext.js";
@@ -104,6 +105,20 @@ export const HistoryItemDisplay: React.FC<HistoryItemDisplayProps> = ({
           memoryReadCount={safeItem.memoryReadCount}
           isUserInitiated={safeItem.isUserInitiated}
           compactLabel={compactLabel}
+        />
+      )}
+      {safeItem.type === "context_usage" && (
+        <ContextUsage
+          modelName={safeItem.modelName}
+          totalTokens={safeItem.totalTokens}
+          contextWindowSize={safeItem.contextWindowSize}
+          breakdown={safeItem.breakdown}
+          builtinTools={safeItem.builtinTools}
+          mcpTools={safeItem.mcpTools}
+          memoryFiles={safeItem.memoryFiles}
+          skills={safeItem.skills}
+          isEstimated={safeItem.isEstimated}
+          showDetails={safeItem.showDetails}
         />
       )}
       {safeItem.type === "compression" && (

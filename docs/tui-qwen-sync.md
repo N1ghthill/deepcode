@@ -69,8 +69,8 @@ Esses arquivos existem em ambos mas o Qwen tem mudanças significativas que pode
 - [ ] **`ui/components/SessionPicker.tsx` + `SessionPreview.tsx` + `StandaloneSessionPicker.tsx`**
   UI de seleção de sessões mais refinada (com preview de conteúdo). O DeepCode tem `SessionsDialog` próprio — avaliar se vale substituir ou mesclar.
 
-- [ ] **`ui/components/views/ContextUsage.tsx`**
-  Mostra uso do context window (tokens usados / total). Exposto via `/context`.
+- [x] **`ui/components/views/ContextUsage.tsx`** ✓ _portado (versão nativa DeepCode)_
+  Mostra uso estimado do context window com progress bar e breakdown por categoria. Exposto via `/context` (e `/context detail` para detalhamento). Estimativa baseada em `estimateTokens()` local — janela padrão de 128k tokens.
 
 - [ ] **`ui/components/views/DoctorReport.tsx`**
   Relatório visual do `/doctor` com status formatado por categoria (pass/warn/fail).

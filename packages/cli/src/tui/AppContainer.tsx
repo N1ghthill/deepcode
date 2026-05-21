@@ -65,6 +65,7 @@ import type {
 } from "./ui/hooks/useSlashCompletion.js";
 import { diffCommand } from "./ui/commands/diffCommand.js";
 import { exportCommand } from "./ui/commands/exportCommand.js";
+import { contextCommand } from "./ui/commands/contextCommand.js";
 import { clearCommand, compactCommand, helpCommand, undoCommand } from "./ui/commands/basicCommands.js";
 import { updateCommand } from "./ui/commands/updateCommand.js";
 import {
@@ -275,6 +276,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       compactCommand,
       diffCommand,
       exportCommand,
+      contextCommand,
       providerCommand,
       modelCommand,
       modeCommand,
