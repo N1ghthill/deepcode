@@ -20,14 +20,28 @@ describe("resolveModelExecutionProfile", () => {
     expect(p.toolCallStrategy).toBe("native-with-xml-fallback");
   });
 
-  it("deepseek reasoner returns minimal + fallback", () => {
+  it("deepseek-v4-pro returns minimal + native (reasoning model, standard tool_calls)", () => {
+    const p = resolveModelExecutionProfile("deepseek", "deepseek-v4-pro");
+    expect(p.toolSchemaMode).toBe("minimal");
+    expect(p.toolCallStrategy).toBe("native");
+    expect(p.supportsRequiredToolChoice).toBe(false);
+  });
+
+  it("deepseek-v4-flash returns compact + native (lightweight, no reasoning)", () => {
+    const p = resolveModelExecutionProfile("deepseek", "deepseek-v4-flash");
+    expect(p.toolSchemaMode).toBe("compact");
+    expect(p.toolCallStrategy).toBe("native");
+    expect(p.supportsRequiredToolChoice).toBe(false);
+  });
+
+  it("deepseek-reasoner (legacy) returns minimal + fallback", () => {
     const p = resolveModelExecutionProfile("deepseek", "deepseek-reasoner");
     expect(p.toolSchemaMode).toBe("minimal");
     expect(p.toolCallStrategy).toBe("native-with-xml-fallback");
     expect(p.supportsRequiredToolChoice).toBe(false);
   });
 
-  it("deepseek non-reasoner returns compact + fallback", () => {
+  it("deepseek-chat (legacy) returns compact + fallback", () => {
     const p = resolveModelExecutionProfile("deepseek", "deepseek-chat");
     expect(p.toolSchemaMode).toBe("compact");
     expect(p.toolCallStrategy).toBe("native-with-xml-fallback");

@@ -352,6 +352,11 @@ function normalizeProviderModelId(providerId: ProviderId, model: string): string
 
 function shouldDisableDeepSeekThinking(model?: string): boolean {
   const normalized = model?.toLowerCase() ?? "";
+  // v4-pro is the unified reasoning model — keep thinking enabled (the API default)
+  if (normalized.includes("v4-pro")) return false;
+  // v4-flash is the lightweight non-reasoning model
+  if (normalized.includes("v4-flash")) return true;
+  // Legacy model names
   return !normalized.includes("reasoner") && !normalized.includes("thinking");
 }
 
