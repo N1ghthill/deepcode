@@ -33,9 +33,12 @@ function relativeTime(iso: string): string {
 }
 
 function sessionLabel(session: Session): string {
-  const name = typeof session.metadata["name"] === "string" ? session.metadata["name"] : undefined;
+  const name = typeof session.metadata["name"] === "string" && session.metadata["name"].trim()
+    ? session.metadata["name"].trim()
+    : undefined;
   const firstUser = session.messages.find((m) => m.role === "user");
-  return name ?? firstUser?.content?.slice(0, 55) ?? "(no messages)";
+  const preview = typeof firstUser?.content === "string" ? firstUser.content.trim().slice(0, 60) : "";
+  return name ?? (preview || "(sem mensagens)");
 }
 
 export const SessionsDialog: React.FC<SessionsDialogProps> = ({ cwd, onSelect, onClose }) => {

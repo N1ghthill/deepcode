@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { execFile } from 'node:child_process';
-import os from 'node:os';
 import { useConfig } from '../contexts/ConfigContext.js';
 
 export interface UseStatusLineReturn {
@@ -31,9 +30,7 @@ export function useStatusLine(): UseStatusLineReturn {
     };
   }, [cwd]);
 
-  if (!branch) return { lines: [] };
-
-  const home = os.homedir();
-  const displayCwd = cwd.startsWith(home) ? `~${cwd.slice(home.length)}` : cwd;
-  return { lines: [`${displayCwd} [${branch}]`] };
+  // AppHeader row 2 already shows cwd + branch — suppress here to avoid duplication.
+  void branch;
+  return { lines: [] };
 }

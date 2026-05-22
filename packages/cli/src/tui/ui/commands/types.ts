@@ -86,6 +86,8 @@ export interface CommandContext {
     getTokenStats?: () => { lastPromptTokens: number; lastOutputTokens: number; sessionStartedAt: number };
     /** Sets permission modes (used by /yolo, /safe). */
     setPermissions?: (modes: Record<string, string>) => void;
+    /** Starts a fresh blank session, clearing history. */
+    newSession?: () => Promise<void>;
   };
   /** Session-scoped data. */
   session: {

@@ -76,6 +76,7 @@ import { statsCommand } from "./ui/commands/statsCommand.js";
 import { updateCommand } from "./ui/commands/updateCommand.js";
 import { memoryCommand } from "./ui/commands/memoryCommand.js";
 import { yoloCommand, safeCommand } from "./ui/commands/permissionsCommands.js";
+import { newCommand } from "./ui/commands/newCommand.js";
 import {
   modeCommand,
   modelCommand,
@@ -303,6 +304,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       memoryCommand,
       yoloCommand,
       safeCommand,
+      newCommand,
       providerCommand,
       modelCommand,
       modeCommand,
@@ -440,6 +442,22 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
     return runtime.agent.undo(session.id);
   }, []);
 
+  const handleNewSession = useCallback(async () => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    const currentSession = sessionRef.current;
+    const target = {
+      provider: currentSession?.provider ?? "anthropic" as import("@deepcode/shared").ProviderId,
+      model: currentSession?.model,
+    };
+    const fresh = runtime.sessions.create(target);
+    sessionRef.current = fresh;
+    setSessionDisplayName("");
+    historyManager.clearItems();
+    setHistoryRemountKey((k) => k + 1);
+    historyManager.addItem({ type: "info", text: "Nova sessão iniciada." }, Date.now());
+  }, [historyManager]);
+
   const handleCompact = useCallback(async () => {
     const runtime = runtimeRef.current;
     const session = sessionRef.current;
@@ -515,12 +533,13 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           sessionStartedAt: sessionStartedAtRef.current,
         }),
         setPermissions: (modes) => setPermissionModes((prev) => ({ ...prev, ...modes }) as PermissionModes),
+        newSession: handleNewSession,
       },
       session: {
         sessionShellAllowlist: sessionShellAllowlistRef.current,
       },
     }),
-    [agentMode, configAdapter, cwd, handleCompact, handleUndo, historyManager, lastOutputTokenCount, lastPromptTokenCount, mcpConnected, mcpTotal, pendingItem, sessionCommandServices, setPermissionModes],
+    [agentMode, configAdapter, cwd, handleCompact, handleNewSession, handleUndo, historyManager, lastOutputTokenCount, lastPromptTokenCount, mcpConnected, mcpTotal, pendingItem, sessionCommandServices, setPermissionModes],
   );
 
   useEffect(() => {

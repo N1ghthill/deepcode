@@ -90,7 +90,7 @@ export const Footer: React.FC = () => {
     showAutoAcceptIndicator !== ApprovalMode.DEFAULT ? (
     <AutoAcceptIndicator approvalMode={showAutoAcceptIndicator} />
   ) : suppressHint ? null : (
-    <Text color={theme.text.secondary}>{t('? for shortcuts')}</Text>
+    <Text color={theme.text.secondary}>/help para ajuda  ·  /yolo para aprovar tudo</Text>
   );
 
   const rightItems: Array<{ key: string; node: React.ReactNode }> = [];
