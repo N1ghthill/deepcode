@@ -2291,26 +2291,32 @@ function formatAuthSummary(config: {
   return `github token=${tokenState}, ${oauthState}, ${enterprise}`;
 }
 
-const APPROVAL_PREVIEW_MAX_LINES = 6;
+const APPROVAL_PREVIEW_MAX_LINES = 4;
 
 const ApprovalPrompt: React.FC<{ request?: ApprovalRequest }> = ({ request }) => {
   if (!request) return null;
 
   const operationLabel = formatApprovalOperationLabel(request);
+  const hasDiff = !!(request.diff?.before && request.diff?.after);
 
-  // Build a brief content preview (diff after-lines or file content)
-  let previewLines: string[] = [];
-  if (request.diff?.after) {
-    previewLines = request.diff.after
-      .split("\n")
-      .slice(0, APPROVAL_PREVIEW_MAX_LINES);
-  } else if (request.preview?.content) {
-    previewLines = request.preview.content
-      .split("\n")
-      .slice(0, APPROVAL_PREVIEW_MAX_LINES);
+  // For edit operations with before/after diff, show both sides.
+  // For write/other operations, show after or preview content.
+  let beforeLines: string[] = [];
+  let afterLines: string[] = [];
+  let singleLines: string[] = [];
+  let truncated = false;
+
+  if (hasDiff) {
+    beforeLines = request.diff!.before.split("\n").slice(0, APPROVAL_PREVIEW_MAX_LINES);
+    afterLines = request.diff!.after.split("\n").slice(0, APPROVAL_PREVIEW_MAX_LINES);
+    truncated =
+      request.diff!.before.split("\n").length > APPROVAL_PREVIEW_MAX_LINES ||
+      request.diff!.after.split("\n").length > APPROVAL_PREVIEW_MAX_LINES;
+  } else {
+    const raw = request.diff?.after ?? request.preview?.content ?? "";
+    singleLines = raw.split("\n").slice(0, APPROVAL_PREVIEW_MAX_LINES);
+    truncated = raw.split("\n").length > APPROVAL_PREVIEW_MAX_LINES;
   }
-  const previewTruncated = (request.diff?.after ?? request.preview?.content ?? "")
-    .split("\n").length > APPROVAL_PREVIEW_MAX_LINES;
 
   return (
     <Box
@@ -2335,16 +2341,32 @@ const ApprovalPrompt: React.FC<{ request?: ApprovalRequest }> = ({ request }) =>
         </Text>
       )}
 
-      {previewLines.length > 0 && (
+      {hasDiff && (
         <Box flexDirection="column" marginTop={1}>
-          {previewLines.map((line, i) => (
+          <Text color={theme.status.error} dimColor>── antes</Text>
+          {beforeLines.map((line, i) => (
+            <Text key={`b${i}`} color={theme.status.error} dimColor wrap="truncate">
+              {"− "}{line}
+            </Text>
+          ))}
+          <Text color={theme.status.success} dimColor>── depois</Text>
+          {afterLines.map((line, i) => (
+            <Text key={`a${i}`} color={theme.status.success} dimColor wrap="truncate">
+              {"+ "}{line}
+            </Text>
+          ))}
+          {truncated && <Text color={theme.ui.comment} dimColor>…</Text>}
+        </Box>
+      )}
+
+      {!hasDiff && singleLines.length > 0 && (
+        <Box flexDirection="column" marginTop={1}>
+          {singleLines.map((line, i) => (
             <Text key={i} color={theme.ui.comment} dimColor wrap="truncate">
               {line}
             </Text>
           ))}
-          {previewTruncated && (
-            <Text color={theme.ui.comment} dimColor>…</Text>
-          )}
+          {truncated && <Text color={theme.ui.comment} dimColor>…</Text>}
         </Box>
       )}
 

@@ -309,13 +309,18 @@ export const ModelDialog: React.FC<ModelDialogProps> = ({
         </Box>
       )}
 
-      {/* count */}
+      {/* count + position */}
       {loadState === "ready" && (
-        <Box marginTop={1}>
+        <Box marginTop={1} justifyContent="space-between">
           <Text color={theme.ui.comment} dimColor>
             {selectableCount} model{selectableCount !== 1 ? "s" : ""}
             {search ? ` · "${search}"` : ""}
           </Text>
+          {selectableCount > MAX_VISIBLE && (
+            <Text color={theme.ui.comment} dimColor>
+              {clampedIndex + 1}/{selectableCount}
+            </Text>
+          )}
         </Box>
       )}
 

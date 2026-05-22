@@ -204,11 +204,16 @@ export const SessionsDialog: React.FC<SessionsDialogProps> = ({ cwd, onSelect, o
 
           {canScrollDown && <Text color={theme.ui.comment} dimColor>  ↓</Text>}
 
-          <Box marginTop={1}>
+          <Box marginTop={1} justifyContent="space-between">
             <Text color={theme.ui.comment} dimColor>
               {sessions.length} session{sessions.length !== 1 ? "s" : ""}
               {search ? ` · "${search}"` : ""}
             </Text>
+            {sessions.length > MAX_VISIBLE && (
+              <Text color={theme.ui.comment} dimColor>
+                {clampedIndex + 1}/{sessions.length}
+              </Text>
+            )}
           </Box>
         </Box>
       )}
