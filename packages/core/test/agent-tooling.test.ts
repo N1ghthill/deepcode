@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   compactToolDescription,
   simplifyToolSchema,
+  applyFallbackToolCallParsing,
 } from "../src/agent/agent-tooling.js";
 
 // ── compactToolDescription ────────────────────────────────────────────────────
@@ -121,5 +122,70 @@ describe("simplifyToolSchema", () => {
   it("returns empty schema for non-object input", () => {
     const result = simplifyToolSchema(null, "full");
     expect(result).toEqual({ type: "object", properties: {} });
+  });
+});
+
+// ── applyFallbackToolCallParsing ──────────────────────────────────────────────
+
+describe("applyFallbackToolCallParsing", () => {
+  const allowed = new Set(["list_dir", "read_file"]);
+
+  it("returns native tool calls when present, stripping any XML", () => {
+    const native = [{ id: "tc1", name: "list_dir", arguments: { path: "." } }];
+    const text = "checking <tool_call>{\"name\":\"list_dir\",\"arguments\":{\"path\":\".\"}}</tool_call>";
+    const result = applyFallbackToolCallParsing(text, native, allowed);
+    expect(result.toolCalls).toEqual(native);
+    expect(result.assistantText).not.toContain("<tool_call>");
+  });
+
+  it("extracts a single XML fallback tool call", () => {
+    const text = '<tool_call>{"name":"read_file","arguments":{"path":"/tmp/x"}}</tool_call>';
+    const result = applyFallbackToolCallParsing(text, [], allowed);
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0]!.name).toBe("read_file");
+    expect(result.toolCalls[0]!.arguments).toEqual({ path: "/tmp/x" });
+    expect(result.assistantText).not.toContain("<tool_call>");
+  });
+
+  it("extracts multiple XML fallback tool calls in one response", () => {
+    const text = [
+      '<tool_call>{"name":"list_dir","arguments":{"path":"."}}</tool_call>',
+      '<tool_call>{"name":"read_file","arguments":{"path":"/tmp/x"}}</tool_call>',
+    ].join("\n");
+    const result = applyFallbackToolCallParsing(text, [], allowed);
+    expect(result.toolCalls).toHaveLength(2);
+    expect(result.toolCalls.map((c) => c.name)).toEqual(["list_dir", "read_file"]);
+  });
+
+  it("silently drops tool calls with unknown names", () => {
+    const text = [
+      '<tool_call>{"name":"list_dir","arguments":{"path":"."}}</tool_call>',
+      '<tool_call>{"name":"unknown_tool","arguments":{}}</tool_call>',
+    ].join("\n");
+    const result = applyFallbackToolCallParsing(text, [], allowed);
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0]!.name).toBe("list_dir");
+  });
+
+  it("returns no tool calls when all XML blocks have unknown names", () => {
+    const text = '<tool_call>{"name":"hack_system","arguments":{}}</tool_call>';
+    const result = applyFallbackToolCallParsing(text, [], allowed);
+    expect(result.toolCalls).toHaveLength(0);
+    expect(result.assistantText).not.toContain("<tool_call>");
+  });
+
+  it("preserves surrounding text and strips XML envelopes", () => {
+    const text = "Here is the plan.\n<tool_call>{\"name\":\"list_dir\",\"arguments\":{\"path\":\".\"}}</tool_call>\nDone.";
+    const result = applyFallbackToolCallParsing(text, [], allowed);
+    expect(result.assistantText).toContain("Here is the plan.");
+    expect(result.assistantText).toContain("Done.");
+    expect(result.assistantText).not.toContain("<tool_call>");
+  });
+
+  it("returns empty tool calls and strips XML when no valid blocks present", () => {
+    const text = "Just a normal answer with no tool calls.";
+    const result = applyFallbackToolCallParsing(text, [], allowed);
+    expect(result.toolCalls).toHaveLength(0);
+    expect(result.assistantText).toBe(text);
   });
 });

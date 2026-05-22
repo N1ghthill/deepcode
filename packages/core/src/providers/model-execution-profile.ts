@@ -22,57 +22,98 @@ export function resolveModelExecutionProfile(
   const miniMaxFamily = normalized.includes("minimax");
   const deepSeekFamily = normalized.includes("deepseek");
   const reasonerFamily = matchesAny(normalized, ["reasoner", "thinking"]);
+  const llamaFamily = normalized.includes("llama");
+  const mistralFamily = matchesAny(normalized, ["mistral", "mixtral", "devstral", "codestral"]);
+  const phiFamily = normalized.includes("phi");
+  const yiFamily = matchesAny(normalized, ["yi-", "/yi"]);
+  const gemmaFamily = normalized.includes("gemma");
 
   if (provider === "anthropic") {
-      return {
-        toolSchemaMode: "full",
-        supportsRequiredToolChoice: true,
-        toolCallStrategy: "native",
-      };
+    return {
+      toolSchemaMode: "full",
+      supportsRequiredToolChoice: true,
+      toolCallStrategy: "native",
+    };
   }
 
   if (provider === "openai") {
-      return {
-        toolSchemaMode: openAIFamily ? "full" : "compact",
-        supportsRequiredToolChoice: true,
-        toolCallStrategy: openAIFamily ? "native" : "native-with-xml-fallback",
-      };
+    return {
+      toolSchemaMode: openAIFamily ? "full" : "compact",
+      supportsRequiredToolChoice: true,
+      toolCallStrategy: openAIFamily ? "native" : "native-with-xml-fallback",
+    };
   }
 
   if (provider === "deepseek") {
-      return {
-        toolSchemaMode: reasonerFamily ? "minimal" : "compact",
-        supportsRequiredToolChoice: false,
-        toolCallStrategy: "native-with-xml-fallback",
-      };
+    return {
+      toolSchemaMode: reasonerFamily ? "minimal" : "compact",
+      supportsRequiredToolChoice: false,
+      toolCallStrategy: "native-with-xml-fallback",
+    };
   }
 
   if (openAIFamily || claudeFamily || geminiFamily) {
-      return {
-        toolSchemaMode: "full",
-        supportsRequiredToolChoice: true,
-        toolCallStrategy: "native",
-      };
+    return {
+      toolSchemaMode: "full",
+      supportsRequiredToolChoice: true,
+      toolCallStrategy: "native",
+    };
   }
 
   if (reasonerFamily) {
-      return {
-        toolSchemaMode: "minimal",
-        supportsRequiredToolChoice: false,
-        toolCallStrategy: "native-with-xml-fallback",
-      };
+    return {
+      toolSchemaMode: "minimal",
+      supportsRequiredToolChoice: false,
+      toolCallStrategy: "native-with-xml-fallback",
+    };
   }
 
   if (qwenFamily || kimiFamily || miniMaxFamily || deepSeekFamily) {
-      return {
-        toolSchemaMode: "compact",
-        supportsRequiredToolChoice: false,
-        toolCallStrategy: "native-with-xml-fallback",
-      };
+    return {
+      toolSchemaMode: "compact",
+      supportsRequiredToolChoice: false,
+      toolCallStrategy: "native-with-xml-fallback",
+    };
+  }
+
+  // Llama 3.1+ and Mistral support native tool calling
+  if (llamaFamily || mistralFamily) {
+    return {
+      toolSchemaMode: "compact",
+      supportsRequiredToolChoice: false,
+      toolCallStrategy: "native",
+    };
+  }
+
+  // Phi, Yi, Gemma have limited or unreliable native tool calling
+  if (phiFamily || yiFamily || gemmaFamily) {
+    return {
+      toolSchemaMode: "compact",
+      supportsRequiredToolChoice: false,
+      toolCallStrategy: "native-with-xml-fallback",
+    };
+  }
+
+  // Ollama: local models are heterogeneous — default to safe fallback strategy
+  if (provider === "ollama") {
+    return {
+      toolSchemaMode: "compact",
+      supportsRequiredToolChoice: false,
+      toolCallStrategy: "native-with-xml-fallback",
+    };
+  }
+
+  // Groq: hosts known capable models; compact schema, native tool calling
+  if (provider === "groq") {
+    return {
+      toolSchemaMode: "compact",
+      supportsRequiredToolChoice: false,
+      toolCallStrategy: "native",
+    };
   }
 
   return {
-    toolSchemaMode: provider === "openrouter" || provider === "opencode" ? "compact" : "full",
+    toolSchemaMode: "compact",
     supportsRequiredToolChoice: false,
     toolCallStrategy: "native",
   };
