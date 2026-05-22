@@ -84,6 +84,8 @@ export interface CommandContext {
     getRuntimeDiagnostics?: () => RuntimeDiagnostics | null;
     /** Returns token counts from the last agent turn for /stats. */
     getTokenStats?: () => { lastPromptTokens: number; lastOutputTokens: number; sessionStartedAt: number };
+    /** Sets permission modes (used by /yolo, /safe). */
+    setPermissions?: (modes: Record<string, string>) => void;
   };
   /** Session-scoped data. */
   session: {

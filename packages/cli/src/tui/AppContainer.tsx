@@ -75,6 +75,7 @@ import { historyCommand } from "./ui/commands/historyCommand.js";
 import { statsCommand } from "./ui/commands/statsCommand.js";
 import { updateCommand } from "./ui/commands/updateCommand.js";
 import { memoryCommand } from "./ui/commands/memoryCommand.js";
+import { yoloCommand, safeCommand } from "./ui/commands/permissionsCommands.js";
 import {
   modeCommand,
   modelCommand,
@@ -278,6 +279,15 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
     [historyManager.history],
   );
 
+  const approvalMode = useMemo<ApprovalMode>(() => {
+    const vals = Object.values(permissionModes);
+    if (vals.every((m) => m === "allow")) return ApprovalMode.YOLO;
+    if (permissionModes.write === "allow" && permissionModes.read === "allow" && permissionModes.gitLocal === "allow") {
+      return ApprovalMode.AUTO_EDIT;
+    }
+    return ApprovalMode.DEFAULT;
+  }, [permissionModes]);
+
   const slashCommands = useMemo<readonly SlashCommand[]>(
     () => [
       helpCommand,
@@ -291,6 +301,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       historyCommand,
       statsCommand,
       memoryCommand,
+      yoloCommand,
+      safeCommand,
       providerCommand,
       modelCommand,
       modeCommand,
@@ -502,12 +514,13 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           lastOutputTokens: lastOutputTokenCount,
           sessionStartedAt: sessionStartedAtRef.current,
         }),
+        setPermissions: (modes) => setPermissionModes((prev) => ({ ...prev, ...modes }) as PermissionModes),
       },
       session: {
         sessionShellAllowlist: sessionShellAllowlistRef.current,
       },
     }),
-    [agentMode, configAdapter, cwd, handleCompact, handleUndo, historyManager, lastOutputTokenCount, lastPromptTokenCount, mcpConnected, mcpTotal, pendingItem, sessionCommandServices],
+    [agentMode, configAdapter, cwd, handleCompact, handleUndo, historyManager, lastOutputTokenCount, lastPromptTokenCount, mcpConnected, mcpTotal, pendingItem, sessionCommandServices, setPermissionModes],
   );
 
   useEffect(() => {
@@ -1843,13 +1856,14 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       isPermissionsDialogOpen: activeDialog === "permissions",
       isFeedbackDialogOpen: false,
 
-      showAutoAcceptIndicator: ApprovalMode.DEFAULT,
+      showAutoAcceptIndicator: approvalMode,
 
       mcpConnected,
       mcpTotal,
       activeSubagents,
     }),
     [
+      approvalMode,
       approvalQueue.length,
       subagentMap,
       activeDialog,

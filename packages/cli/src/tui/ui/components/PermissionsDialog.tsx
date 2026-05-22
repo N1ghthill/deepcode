@@ -1,9 +1,8 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Box, Text } from "ink";
 import type { PermissionMode } from "@deepcode/shared";
 import { theme } from "../semantic-colors.js";
 import { useKeypress } from "../hooks/useKeypress.js";
-import { RadioButtonSelect, type RadioSelectItem } from "./shared/RadioButtonSelect.js";
 
 /** The five permission keys editable from the dialog. */
 export type PermissionKey = "read" | "write" | "gitLocal" | "shell" | "dangerous";
@@ -20,8 +19,28 @@ const PERMISSION_KEYS: readonly PermissionKey[] = [
 
 const MODE_CYCLE: readonly PermissionMode[] = ["allow", "ask", "deny"];
 
-const SAVE_VALUE = "__save__";
-const CANCEL_VALUE = "__cancel__";
+const ACTIONS = ["save", "cancel"] as const;
+
+const ALL_ROWS = [...PERMISSION_KEYS, ...ACTIONS] as const;
+
+function nextMode(mode: PermissionMode): PermissionMode {
+  const index = MODE_CYCLE.indexOf(mode);
+  return MODE_CYCLE[(index + 1) % MODE_CYCLE.length]!;
+}
+
+function modeColor(mode: PermissionMode): string {
+  if (mode === "allow") return theme.status.success;
+  if (mode === "deny") return theme.status.error;
+  return theme.status.warning;
+}
+
+const KEY_LABEL: Record<PermissionKey, string> = {
+  read: "read",
+  write: "write",
+  gitLocal: "git local",
+  shell: "shell",
+  dangerous: "dangerous",
+};
 
 interface PermissionsDialogProps {
   /** Current persisted permission modes. */
@@ -32,15 +51,9 @@ interface PermissionsDialogProps {
   onClose: () => void;
 }
 
-function nextMode(mode: PermissionMode): PermissionMode {
-  const index = MODE_CYCLE.indexOf(mode);
-  return MODE_CYCLE[(index + 1) % MODE_CYCLE.length]!;
-}
-
 /**
- * Interactive permission-policy editor. Enter on a permission row cycles its
- * mode (allow → ask → deny); "Save changes" persists; Esc / "Cancel" discards.
- * DeepCode-authored (Qwen's permissions dialog was not ported).
+ * Interactive permission-policy editor. ↑↓ navigates rows; Enter on a
+ * permission row cycles allow→ask→deny; Enter on "save" persists; Esc cancels.
  */
 export const PermissionsDialog: React.FC<PermissionsDialogProps> = ({
   current,
@@ -48,48 +61,41 @@ export const PermissionsDialog: React.FC<PermissionsDialogProps> = ({
   onClose,
 }) => {
   const [modes, setModes] = useState<PermissionModes>(current);
+  const [focusIndex, setFocusIndex] = useState(0);
 
-  const dirty = useMemo(
-    () => PERMISSION_KEYS.some((key) => modes[key] !== current[key]),
-    [modes, current],
-  );
+  const dirty = PERMISSION_KEYS.some((k) => modes[k] !== current[k]);
 
-  const items = useMemo<Array<RadioSelectItem<string>>>(() => {
-    const rows: Array<RadioSelectItem<string>> = PERMISSION_KEYS.map((key) => ({
-      key,
-      value: key,
-      label: `${key.padEnd(10)} ${modes[key]}`,
-    }));
-    rows.push({ key: SAVE_VALUE, value: SAVE_VALUE, label: dirty ? "Save changes" : "Save changes (no edits)" });
-    rows.push({ key: CANCEL_VALUE, value: CANCEL_VALUE, label: "Cancel" });
-    return rows;
-  }, [modes, dirty]);
-
-  const handleSelect = useCallback(
-    (value: string) => {
-      if (value === SAVE_VALUE) {
-        onSave(modes);
-        return;
-      }
-      if (value === CANCEL_VALUE) {
-        onClose();
-        return;
-      }
-      const key = value as PermissionKey;
-      setModes((prev) => ({ ...prev, [key]: nextMode(prev[key]) }));
-    },
-    [modes, onClose, onSave],
-  );
-
-  const handleEscape = useCallback(
-    (key: { name: string }) => {
+  const handleKey = useCallback(
+    (key: { name: string; ctrl: boolean }) => {
       if (key.name === "escape") {
         onClose();
+        return;
+      }
+      if (key.name === "up" || (key.ctrl && key.name === "p")) {
+        setFocusIndex((i) => (i - 1 + ALL_ROWS.length) % ALL_ROWS.length);
+        return;
+      }
+      if (key.name === "down" || (key.ctrl && key.name === "n")) {
+        setFocusIndex((i) => (i + 1) % ALL_ROWS.length);
+        return;
+      }
+      if (key.name === "return") {
+        const row = ALL_ROWS[focusIndex];
+        if (row === "save") {
+          onSave(modes);
+          return;
+        }
+        if (row === "cancel") {
+          onClose();
+          return;
+        }
+        setModes((prev) => ({ ...prev, [row]: nextMode(prev[row]) }));
       }
     },
-    [onClose],
+    [focusIndex, modes, onClose, onSave],
   );
-  useKeypress(handleEscape, { isActive: true });
+
+  useKeypress(handleKey, { isActive: true });
 
   return (
     <Box
@@ -103,9 +109,46 @@ export const PermissionsDialog: React.FC<PermissionsDialogProps> = ({
       <Text bold color={theme.text.accent}>
         Permission policy
       </Text>
-      <RadioButtonSelect items={items} onSelect={handleSelect} isFocused showNumbers={false} />
-      <Text color={theme.text.secondary}>
-        ↑↓ navigate · Enter cycles allow/ask/deny · Esc cancel
+
+      {PERMISSION_KEYS.map((key, i) => {
+        const focused = focusIndex === i;
+        const mode = modes[key];
+        return (
+          <Box key={key} flexDirection="row" gap={1}>
+            <Text color={focused ? theme.text.accent : theme.text.secondary}>
+              {focused ? "›" : " "}
+            </Text>
+            <Text color={focused ? theme.text.primary : theme.text.secondary} bold={focused}>
+              {KEY_LABEL[key].padEnd(10)}
+            </Text>
+            <Text color={modeColor(mode)} bold={focused}>
+              {mode}
+            </Text>
+          </Box>
+        );
+      })}
+
+      <Box marginTop={1} flexDirection="column">
+        {ACTIONS.map((action, i) => {
+          const focused = focusIndex === PERMISSION_KEYS.length + i;
+          const label = action === "save"
+            ? dirty ? "Save changes" : "Save changes (no edits)"
+            : "Cancel";
+          return (
+            <Box key={action} flexDirection="row" gap={1}>
+              <Text color={focused ? theme.text.accent : theme.text.secondary}>
+                {focused ? "›" : " "}
+              </Text>
+              <Text color={focused ? theme.text.primary : theme.text.secondary} bold={focused}>
+                {label}
+              </Text>
+            </Box>
+          );
+        })}
+      </Box>
+
+      <Text color={theme.text.secondary} dimColor>
+        ↑↓ navigate · Enter cycles allow/ask/deny or selects action · Esc cancel
       </Text>
     </Box>
   );
