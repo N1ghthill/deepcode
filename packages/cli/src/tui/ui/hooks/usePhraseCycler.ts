@@ -51,8 +51,7 @@ export const usePhraseCycler = (
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, isWaiting]);
+  }, [isActive, isWaiting]); // `phrases` ref is stable within a render cycle
 
   return phrase;
 };
