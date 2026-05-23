@@ -167,7 +167,12 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   const [targetSource, setTargetSource] = useState<TargetSource>("config");
   const [currentModel, setCurrentModel] = useState<string>("(unconfigured)");
   const [agentMode, setAgentMode] = useState<AgentMode>("build");
-  const [streamingState, setStreamingState] = useState<StreamingState>(StreamingState.Idle);
+  // Derived synchronously — avoids a second render (and terminal redraw) caused by useEffect → setState
+  const streamingState = useMemo<StreamingState>(() => {
+    if (approvalQueue.length > 0) return StreamingState.WaitingForConfirmation;
+    if (isRunning) return StreamingState.Responding;
+    return StreamingState.Idle;
+  }, [approvalQueue.length, isRunning]);
   const [compactMode, setCompactMode] = useState(true);
   const [constrainHeight, setConstrainHeight] = useState(true);
   const [shellModeActive, setShellModeActive] = useState(false);
@@ -566,16 +571,10 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   useEffect(() => {
     if (approvalQueue.length > 0) {
       approvalPromptVisibleAtRef.current ??= Date.now();
-      setStreamingState(StreamingState.WaitingForConfirmation);
-      return;
+    } else {
+      approvalPromptVisibleAtRef.current = null;
     }
-    approvalPromptVisibleAtRef.current = null;
-    if (isRunning) {
-      setStreamingState(StreamingState.Responding);
-      return;
-    }
-    setStreamingState(StreamingState.Idle);
-  }, [approvalQueue.length, isRunning]);
+  }, [approvalQueue.length]);
 
   useEffect(() => {
     if (!isRunning) {
