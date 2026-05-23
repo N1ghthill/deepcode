@@ -14,12 +14,12 @@ import { GeminiRespondingSpinner } from './GeminiRespondingSpinner.js';
 import { formatDuration, formatTokenCount } from '../utils/formatters.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
 import { useAnimationFrame } from '../hooks/useAnimationFrame.js';
+import { useElapsedTime } from '../hooks/useElapsedTime.js';
 import { isNarrowWidth } from '../utils/isNarrowWidth.js';
 import { t } from '../../i18n/index.js';
 
 interface LoadingIndicatorProps {
   currentLoadingPhrase?: string;
-  elapsedTime: number;
   rightContent?: React.ReactNode;
   thought?: ThoughtSummary | null;
   candidatesTokens?: number;
@@ -42,7 +42,6 @@ interface LoadingIndicatorProps {
 
 export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({
   currentLoadingPhrase,
-  elapsedTime,
   rightContent,
   thought,
   candidatesTokens,
@@ -51,6 +50,7 @@ export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({
   isReceivingContent = true,
 }) => {
   const streamingState = useStreamingContext();
+  const elapsedTime = useElapsedTime(streamingState);
   const { columns: terminalWidth } = useTerminalSize();
   const isNarrow = isNarrowWidth(terminalWidth);
 

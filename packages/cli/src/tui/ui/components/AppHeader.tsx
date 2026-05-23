@@ -4,6 +4,7 @@ import { useUIState } from "../contexts/UIStateContext.js";
 import { StreamingState } from "../types.js";
 import { theme } from "../semantic-colors.js";
 import { useGitBranchName } from "../hooks/useGitBranchName.js";
+import { useElapsedTime } from "../hooks/useElapsedTime.js";
 
 interface IterationInfo {
   round: number;
@@ -55,9 +56,9 @@ export const AppHeader = ({
   const {
     streamingState,
     sessionStats: { lastPromptTokenCount, lastOutputTokenCount, totalPromptTokenCount, totalOutputTokenCount },
-    elapsedTime,
     terminalWidth,
   } = useUIState();
+  const elapsedTime = useElapsedTime(streamingState);
 
   const branchName = useGitBranchName(cwd);
   const status = statusLabel(streamingState);

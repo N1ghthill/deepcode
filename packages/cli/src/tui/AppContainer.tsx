@@ -52,7 +52,7 @@ import { Notifications } from "./ui/components/Notifications.js";
 import { AppHeader } from "./ui/components/AppHeader.js";
 import { ApprovalPrompt } from "./ui/components/ApprovalPrompt.js";
 import { StickyTodoList } from "./ui/components/StickyTodoList.js";
-import { useLoadingIndicator } from "./ui/hooks/useLoadingIndicator.js";
+import { usePhraseCycler } from "./ui/hooks/usePhraseCycler.js";
 import { getStickyTodos, getStickyTodoMaxVisibleItems } from "./utils/todoSnapshot.js";
 import { useTerminalSize } from "./ui/hooks/useTerminalSize.js";
 import { theme } from "./ui/semantic-colors.js";
@@ -589,7 +589,10 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
     }
   }, [isRunning]);
 
-  const { elapsedTime, currentLoadingPhrase: hookPhrase } = useLoadingIndicator(streamingState);
+  const hookPhrase = usePhraseCycler(
+    streamingState === StreamingState.Responding,
+    streamingState === StreamingState.WaitingForConfirmation,
+  );
 
   const stickyTodos = useMemo(
     () => getStickyTodos(historyManager.history, pendingGeminiHistoryItems),
@@ -1824,8 +1827,6 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
     () => ({
       history: historyManager.history,
       historyManager,
-      pendingHistoryItems: pendingGeminiHistoryItems,
-      pendingGeminiHistoryItems,
       historyRemountKey,
       quittingMessages: null,
 
@@ -1834,7 +1835,6 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       currentLoadingPhrase: iterationInfo
         ? `Iteration ${iterationInfo.round}/${iterationInfo.max}`
         : hookPhrase,
-      elapsedTime,
       streamingResponseLengthRef,
       isReceivingContent,
       initError,
@@ -1912,7 +1912,6 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       cwd,
       dismissPromptSuggestion,
       promptSuggestion,
-      elapsedTime,
       sessionDisplayName,
       historyManager,
       historyRemountKey,
@@ -1929,7 +1928,6 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       mcpTotal,
       messageQueue,
       pendingCommandConfirmation,
-      pendingGeminiHistoryItems,
       promptWidths.inputWidth,
       promptWidths.suggestionsWidth,
       recentSlashCommands,

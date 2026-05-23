@@ -13,7 +13,6 @@ import type { MutableRefObject, RefObject } from "react";
 import type { DOMElement } from "ink";
 import type {
   HistoryItem,
-  HistoryItemWithoutId,
   StreamingState,
   ThoughtSummary,
 } from "../types.js";
@@ -48,10 +47,6 @@ export interface UIState {
   // ── History & rendering ──────────────────────────────────────────────────
   history: HistoryItem[];
   historyManager: UseHistoryManagerReturn;
-  /** Items rendered below <Static> while a turn is in flight. */
-  pendingHistoryItems: HistoryItemWithoutId[];
-  /** Pending assistant-side items (model output + tool groups). */
-  pendingGeminiHistoryItems: HistoryItemWithoutId[];
   /** Bumped to force a full <Static> remount (Ctrl+O, render-mode change). */
   historyRemountKey: number;
   quittingMessages: HistoryItem[] | null;
@@ -60,7 +55,6 @@ export interface UIState {
   streamingState: StreamingState;
   thought: ThoughtSummary | null;
   currentLoadingPhrase: string;
-  elapsedTime: number;
   /** Polled char-length of the in-flight response (not React state). */
   streamingResponseLengthRef: RefObject<number>;
   /** true = receiving content (↓), false = waiting for response (↑). */
