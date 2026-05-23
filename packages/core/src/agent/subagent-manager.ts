@@ -2,6 +2,7 @@ import type { ProviderId, Session } from "@deepcode/shared";
 import type { Agent } from "./agent.js";
 import type { SessionManager } from "../sessions/session-manager.js";
 import type { EventBus } from "../events/event-bus.js";
+import { formatErrorChain } from "../utils/error-chain.js";
 
 export interface SubagentTask {
   id: string;
@@ -93,7 +94,7 @@ export class SubagentManager {
       this.events?.emit("subagent:complete", { taskId: task.id });
       return { taskId: task.id, sessionId: session.id, output };
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
+      const errMsg = formatErrorChain(error);
       this.events?.emit("subagent:complete", { taskId: task.id, error: errMsg });
       return {
         taskId: task.id,
