@@ -592,6 +592,11 @@ export class Agent {
       });
       return { ok: true, output };
     } catch (error) {
+      // Propagate abort so the outer run() loop stops immediately
+      if ((error as any)?.name === "AbortError") {
+        onToolActivity?.(call.name, false);
+        throw error;
+      }
       const message = formatErrorChain(error);
       const isPermissionError = error instanceof Error && (error as any).code === "PERMISSION_DENIED";
       const hint = isPermissionError ? " Try a different approach or ask the user to adjust permissions in .deepcode/config.json." : "";

@@ -1757,6 +1757,10 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       }
       if (pressed === "n" || key.escape || (key.ctrl && input === "c")) {
         resolveApproval({ allowed: false, reason: "Rejected in TUI" });
+        // ESC/Ctrl+C = full cancel; N = reject just this tool call
+        if (key.escape || (key.ctrl && input === "c")) {
+          abortRef.current?.abort();
+        }
       }
       return;
     }

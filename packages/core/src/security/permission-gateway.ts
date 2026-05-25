@@ -220,7 +220,9 @@ export class PermissionGateway {
         clearTimeout(timeoutId);
         cleanup();
         this.pendingApprovals.delete(request.id);
-        reject(new Error("Approval check aborted"));
+        const abortError = new Error("Approval check aborted");
+        abortError.name = "AbortError";
+        reject(abortError);
       };
       check.signal?.addEventListener("abort", onAbort, { once: true });
 
