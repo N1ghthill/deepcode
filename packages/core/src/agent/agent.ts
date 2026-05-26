@@ -1,5 +1,4 @@
 import { Effect } from "effect";
-import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import {
@@ -49,7 +48,7 @@ import {
   simplifyToolSchema,
   truncateToolOutput,
 } from "./agent-tooling.js";
-import { execFileAsync } from "../tools/process.js";
+import { ProjectDiscovery } from "./project-discovery.js";
 import {
   formatUtilityResult,
   directLocalResponse,
@@ -105,34 +104,12 @@ interface UndoEntry {
   previousContent: string | null;
 }
 
-interface ProjectMatch {
-  path: string;
-  markers: string[];
-}
-
-const PROJECT_MARKER = ".git";
-
-const PROJECT_DISCOVERY_SKIP_DIRS = new Set([
-  ".git",
-  ".hg",
-  ".svn",
-  "node_modules",
-  "dist",
-  "build",
-  "coverage",
-  ".next",
-  ".turbo",
-  ".cache",
-  "target",
-  "__pycache__",
-  "vendor",
-]);
-
 export class Agent {
   /** Per-session undo stacks. Each write_file / edit_file pushes one entry. */
   private readonly undoStacks = new Map<string, UndoEntry[]>();
   /** Active token budget for the current run(), keyed by sessionId. */
   private readonly activeBudgets = new Map<string, SessionBudget>();
+  private readonly projectDiscovery = new ProjectDiscovery();
 
   constructor(
     private readonly providerManager: ProviderManager,
@@ -594,12 +571,12 @@ export class Agent {
       return { ok: true, output };
     } catch (error) {
       // Propagate abort so the outer run() loop stops immediately
-      if ((error as any)?.name === "AbortError") {
+      if (error instanceof Error && error.name === "AbortError") {
         onToolActivity?.(call.name, false);
         throw error;
       }
       const message = formatErrorChain(error);
-      const isPermissionError = error instanceof Error && (error as any).code === "PERMISSION_DENIED";
+      const isPermissionError = error instanceof Error && (error as Error & { code?: string }).code === "PERMISSION_DENIED";
       const hint = isPermissionError ? " Try a different approach or ask the user to adjust permissions in .deepcode/config.json." : "";
       this.logToolActivity(session, {
         type: "tool_error",
@@ -868,13 +845,22 @@ export class Agent {
 
     if (request.kind === "list_projects") {
       try {
-        const output = await this.discoverProjects(session, request.path ?? ".");
+        const security = this.securityForSession(session);
+        const { formatted, paths } = await this.projectDiscovery.discover(
+          session.worktree,
+          request.path ?? ".",
+          security.pathSecurity,
+          security.permissions,
+        );
+        if (paths.length > 0) {
+          session.metadata.pendingProjectList = paths;
+        }
         this.sessions.addMessage(session.id, {
           role: "assistant",
           source: "assistant",
-          content: formatUtilityResult(request, output),
+          content: formatUtilityResult(request, formatted),
         });
-        return formatUtilityResult(request, output);
+        return formatUtilityResult(request, formatted);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const output = `Nao consegui localizar projetos em ${request.rawPath ?? request.path ?? "."}: ${message}`;
@@ -917,95 +903,7 @@ export class Agent {
     return output;
   }
 
-  private async discoverProjects(session: Session, inputPath: string): Promise<string> {
-    if (!(await this.isGitAvailable(session.worktree))) {
-      return "Git nao esta instalado. Quer que eu instale?";
-    }
 
-    // When no explicit path given, scan from home for broader discovery
-    const scanInput = inputPath === "." ? (process.env.HOME ?? inputPath) : inputPath;
-    const security = this.securityForSession(session);
-    const rootPath = await security.pathSecurity.normalize(scanInput, { enforceAccess: false });
-    await security.permissions.ensure({ operation: "list_projects", kind: "read", path: rootPath });
-    const results: ProjectMatch[] = [];
-    await this.walkForProjects(rootPath, 3, results, new Set<string>());
-    if (results.length === 0) {
-      return "";
-    }
-
-    const sorted = results.sort((left, right) => left.path.localeCompare(right.path));
-    // Store paths so the next turn can resolve a numeric selection
-    session.metadata.pendingProjectList = sorted.map((m) => m.path);
-
-    const lines = sorted.map((match, i) => {
-      const name = path.basename(match.path);
-      return `${i + 1}. ${name}`;
-    });
-
-    return lines.join("\n") + "\n\nDigite o número para selecionar:";
-  }
-
-  private async walkForProjects(
-    directory: string,
-    depthRemaining: number,
-    results: ProjectMatch[],
-    seen: Set<string>,
-  ): Promise<void> {
-    if (seen.has(directory) || results.length >= 200) {
-      return;
-    }
-    seen.add(directory);
-
-    const entries = await readdir(directory, { withFileTypes: true });
-    const markerSet = new Set(
-      entries
-        .filter((entry) => entry.name === PROJECT_MARKER)
-        .map((entry) => entry.name),
-    );
-
-    if (markerSet.size > 0) {
-      results.push({
-        path: directory,
-        markers: Array.from(markerSet).sort(),
-      });
-    }
-
-    if (depthRemaining <= 0) {
-      return;
-    }
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      if (PROJECT_DISCOVERY_SKIP_DIRS.has(entry.name) || entry.name.startsWith(".")) {
-        continue;
-      }
-
-      const fullPath = path.join(directory, entry.name);
-      try {
-        const info = await lstat(fullPath);
-        if (info.isSymbolicLink()) {
-          continue;
-        }
-        await this.walkForProjects(fullPath, depthRemaining - 1, results, seen);
-      } catch {
-        continue;
-      }
-    }
-  }
-
-  private async isGitAvailable(cwd: string): Promise<boolean> {
-    try {
-      const result = await execFileAsync("git", ["--version"], {
-        cwd,
-        timeoutMs: 5_000,
-      });
-      return result.exitCode === 0;
-    } catch {
-      return false;
-    }
-  }
 
   private resolveTurnStrategy(input: string, mode: AgentMode): TurnStrategy {
     return resolveTurnStrategy(input, mode, this.config.buildTurnPolicy);
