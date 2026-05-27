@@ -4,7 +4,7 @@ import { ToolExecutionError } from "../errors.js";
 import { runShell } from "./process.js";
 import { defineTool } from "./tool.js";
 
-export type ShellRisk = "shell" | "dangerous" | "blocked";
+export type ShellRisk = "shell" | "dangerous" | "blocked" | "escalation";
 
 const MAX_SHELL_OUTPUT_BYTES = 50_000;
 
@@ -20,6 +20,21 @@ export function classifyShellCommand(command: string): ShellRisk {
     /\bchown\s+-R\b.*\s+(?:\/|\/\*)/,
   ].some((pattern) => pattern.test(normalized));
   if (blocked) return "blocked";
+
+  const escalation = [
+    // System package managers — modifies state outside the project worktree; user must run manually
+    /\b(?:apt|apt-get|aptitude)\s+(?:install|remove|purge|upgrade|dist-upgrade)\b/,
+    /\b(?:yum|dnf|zypper)\s+(?:install|remove|update|upgrade)\b/,
+    /\bpacman\s+(?:-S\b|-U\b|-R\b|--sync\b|--upgrade\b|--remove\b)/,
+    /\bapk\s+(?:add|del|update|upgrade)\b/,
+    /\bbrew\s+(?:install|uninstall|upgrade)\b/,
+    /\bpip3?\s+install\b(?!.*--user\b)(?!.*--target\b)/,
+    // Browser/driver system dependency installers
+    /\bplaywright\s+install(?:-deps|.*--with-deps)\b/,
+    /\bpuppeteer\b.*\binstall\b/,
+    /\bwebdriver-manager\s+update\b/,
+  ].some((pattern) => pattern.test(normalized));
+  if (escalation) return "escalation";
 
   const dangerous = [
     /\brm\s+-[^\n]*r[^\n]*f\b/,
@@ -56,6 +71,13 @@ export const bashTool = defineTool({
         const risk = classifyShellCommand(args.command);
         if (risk === "blocked") {
           throw new Error(`Blocked unsafe shell command: ${args.command}`);
+        }
+        if (risk === "escalation") {
+          throw new Error(
+            `Cannot install system packages or browser drivers autonomously. ` +
+            `This requires elevated access or modifies state outside the project. ` +
+            `Report the missing dependency to the user and stop — do not retry with a different approach.`,
+          );
         }
 
         // Normalize path

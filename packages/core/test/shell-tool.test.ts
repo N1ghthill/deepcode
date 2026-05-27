@@ -51,6 +51,34 @@ describe("classifyShellCommand", () => {
     expect(classifyShellCommand("rm -rf ./node_modules")).toBe("dangerous");
   });
 
+  it("blocks system package manager commands as escalation", () => {
+    expect(classifyShellCommand("apt install chromium")).toBe("escalation");
+    expect(classifyShellCommand("apt-get install -y nodejs")).toBe("escalation");
+    expect(classifyShellCommand("aptitude install build-essential")).toBe("escalation");
+    expect(classifyShellCommand("yum install git")).toBe("escalation");
+    expect(classifyShellCommand("dnf install python3")).toBe("escalation");
+    expect(classifyShellCommand("pacman -S chromium")).toBe("escalation");
+    expect(classifyShellCommand("apk add curl")).toBe("escalation");
+    expect(classifyShellCommand("brew install node")).toBe("escalation");
+    expect(classifyShellCommand("pip install requests")).toBe("escalation");
+    expect(classifyShellCommand("pip3 install flask")).toBe("escalation");
+  });
+
+  it("blocks browser driver installers as escalation", () => {
+    expect(classifyShellCommand("npx playwright install --with-deps chromium")).toBe("escalation");
+    expect(classifyShellCommand("playwright install-deps")).toBe("escalation");
+    expect(classifyShellCommand("npx playwright install-deps")).toBe("escalation");
+  });
+
+  it("allows pip install with --user or --target (project-scoped)", () => {
+    expect(classifyShellCommand("pip install --user requests")).toBe("shell");
+    expect(classifyShellCommand("pip3 install --target ./vendor flask")).toBe("shell");
+  });
+
+  it("allows plain playwright install without --with-deps (user-scoped, no system mutation)", () => {
+    expect(classifyShellCommand("npx playwright install chromium")).toBe("shell");
+  });
+
   it("executes an allowed command in the real worktree root", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "deepcode-shell-"));
     const config = DeepCodeConfigSchema.parse({
