@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.2.46] — 2026-05-28
+
+### Fixed
+
+- TUI flicker during subagent execution: batch flush interval halved (50ms → 100ms), cutting live-area redraws from ~20fps to ~10fps
+- Live tool-call panel height capped at 40% of terminal rows (8–20 lines) so large tool outputs no longer force full-screen redraws on every tick
+- Token-counter animation in Composer now pauses while only subagents are running (`isReceivingContent=false`), eliminating spurious re-renders when no tokens are arriving
+
 ## [1.2.45] — 2026-05-28
 
 ### Changed
@@ -430,7 +438,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Persistent sessions, local config, telemetry collector
 - GitHub integration: OAuth, issues, pull requests
 
-[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.2.45...HEAD
+[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.2.46...HEAD
+[1.2.46]: https://github.com/N1ghthill/deepcode/compare/v1.2.45...v1.2.46
 [1.2.45]: https://github.com/N1ghthill/deepcode/compare/v1.2.44...v1.2.45
 [1.2.44]: https://github.com/N1ghthill/deepcode/compare/v1.2.43...v1.2.44
 [1.2.43]: https://github.com/N1ghthill/deepcode/compare/v1.2.42...v1.2.43
