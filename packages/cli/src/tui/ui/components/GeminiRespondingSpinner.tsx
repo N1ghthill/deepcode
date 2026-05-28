@@ -16,8 +16,8 @@ import {
 } from '../textConstants.js';
 import { theme } from '../semantic-colors.js';
 
-const TMUX_SPINNER_INTERVAL_MS = 750;
-const TMUX_SPINNER_FRAMES = ['.  ', '.. ', '...'];
+const TMUX_SPINNER_INTERVAL_MS = 100;
+const TMUX_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 interface GeminiRespondingSpinnerProps {
   /**

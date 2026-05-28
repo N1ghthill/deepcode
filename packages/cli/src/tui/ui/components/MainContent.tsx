@@ -95,8 +95,11 @@ export const MainContent: React.FC<MainContentProps> = ({
 
   // Trigger refreshStatic when a merge happens: history grew but merged length
   // did not — Static won't repaint committed items on its own.
+  // Debounced to 300ms so rapid consecutive merges produce a single remount
+  // instead of one full Static repaint per tool call.
   const prevHistoryLengthRef = useRef(history.length);
   const prevMergedLengthRef = useRef(mergedHistory.length);
+  const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!compactMode) {
       prevHistoryLengthRef.current = history.length;
@@ -108,11 +111,18 @@ export const MainContent: React.FC<MainContentProps> = ({
     const prevM = prevMergedLengthRef.current;
     const currM = mergedHistory.length;
     if (currH > prevH && currM <= prevM) {
-      refreshStatic();
+      if (refreshDebounceRef.current !== null) clearTimeout(refreshDebounceRef.current);
+      refreshDebounceRef.current = setTimeout(() => {
+        refreshDebounceRef.current = null;
+        refreshStatic();
+      }, 300);
     }
     prevHistoryLengthRef.current = currH;
     prevMergedLengthRef.current = currM;
   }, [compactMode, history, mergedHistory, refreshStatic]);
+  useEffect(() => () => {
+    if (refreshDebounceRef.current !== null) clearTimeout(refreshDebounceRef.current);
+  }, []);
 
   // Progressive replay: start with a small slice, grow via setImmediate.
   const [replayCount, setReplayCount] = useState(() =>

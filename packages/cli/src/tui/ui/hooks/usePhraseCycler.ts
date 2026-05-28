@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 const PHRASE_CHANGE_INTERVAL_MS = 15_000;
+const PHRASE_TRANSITION_MS = 300;
 
 const DEFAULT_PHRASES: string[] = [
   "Processando...",
@@ -23,34 +24,37 @@ export const usePhraseCycler = (
   const phrases = customPhrases && customPhrases.length > 0 ? customPhrases : DEFAULT_PHRASES;
   const [phrase, setPhrase] = useState(phrases[0] ?? "");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const transitionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    const clearTimers = () => {
+      if (intervalRef.current !== null) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      if (transitionRef.current !== null) { clearTimeout(transitionRef.current); transitionRef.current = null; }
+    };
+
     if (isWaiting) {
+      clearTimers();
       setPhrase("Aguardando confirmação...");
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      return;
+      return clearTimers;
     }
 
     if (isActive) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      clearTimers();
       setPhrase(phrases[Math.floor(Math.random() * phrases.length)] ?? "");
       intervalRef.current = setInterval(() => {
-        setPhrase(phrases[Math.floor(Math.random() * phrases.length)] ?? "");
+        const next = phrases[Math.floor(Math.random() * phrases.length)] ?? "";
+        setPhrase("...");
+        transitionRef.current = setTimeout(() => {
+          transitionRef.current = null;
+          setPhrase(next);
+        }, PHRASE_TRANSITION_MS);
       }, PHRASE_CHANGE_INTERVAL_MS);
     } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      clearTimers();
       setPhrase(phrases[0] ?? "");
     }
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return clearTimers;
   }, [isActive, isWaiting]); // `phrases` ref is stable within a render cycle
 
   return phrase;
