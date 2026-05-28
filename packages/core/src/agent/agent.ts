@@ -303,6 +303,7 @@ export class Agent {
 
     let consecutiveErrorKey = "";
     let consecutiveErrorCount = 0;
+    let brokeFromNoTools = false;
 
     toolLoop: while (iterations < maxIterations) {
       iterations += 1;
@@ -393,7 +394,10 @@ export class Agent {
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         });
       }
-      if (toolCalls.length === 0) break;
+      if (toolCalls.length === 0) {
+        brokeFromNoTools = true;
+        break toolLoop;
+      }
 
       for (let callIdx = 0; callIdx < toolCalls.length; callIdx++) {
         const call = toolCalls[callIdx]!;
@@ -441,6 +445,12 @@ export class Agent {
           consecutiveErrorCount = 0;
         }
       }
+    }
+
+    if (!brokeFromNoTools && iterations >= maxIterations) {
+      const limitMsg = `\n[Limite de ${maxIterations} iterações atingido — a tarefa pode estar incompleta. Aumente \`maxIterations\` nas configurações para continuar.]`;
+      finalText += limitMsg;
+      options.onChunk?.(limitMsg);
     }
 
     return finalText;

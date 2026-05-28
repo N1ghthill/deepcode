@@ -222,6 +222,10 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   );
 
   const sessionStartedAtRef = useRef<number>(Date.now());
+  // Refs for refreshStatic guard: skip remount while an approval is pending and
+  // defer it until the queue drains so compact-mode merges aren't silently lost.
+  const approvalQueueRef = useRef<ApprovalRequest[]>([]);
+  const deferredRefreshRef = useRef(false);
   const runtimeRef = useRef<DeepCodeRuntime | null>(null);
   const sessionRef = useRef<Session | null>(null);
   const configAdapterRef = useRef<DeepCodeConfigAdapter | null>(null);
@@ -796,7 +800,11 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         const unsubscribers: Array<() => void> = [];
         unsubscribers.push(
           runtime.events.on("approval:request", (request) => {
-            setApprovalQueue((prev) => [...prev, request]);
+            setApprovalQueue((prev) => {
+              const next = [...prev, request];
+              approvalQueueRef.current = next;
+              return next;
+            });
           }),
         );
         unsubscribers.push(
@@ -942,7 +950,16 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         requestId: current.id,
         decision,
       });
-      setApprovalQueue((prev) => prev.slice(1));
+      setApprovalQueue((prev) => {
+        const next = prev.slice(1);
+        approvalQueueRef.current = next;
+        // Fire any deferred refreshStatic now that the queue drained.
+        if (next.length === 0 && deferredRefreshRef.current) {
+          deferredRefreshRef.current = false;
+          setHistoryRemountKey((k) => k + 1);
+        }
+        return next;
+      });
     },
     [approvalQueue],
   );
@@ -1068,6 +1085,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         setIterationInfo(null);
         // Clear any stale approval prompts — the gateway already rejected them on abort.
         setApprovalQueue([]);
+        approvalQueueRef.current = [];
+        deferredRefreshRef.current = false;
         // Reflect the actual provider/model used (agent may have fallen back).
         const sess = sessionRef.current;
         if (sess) {
@@ -1834,6 +1853,13 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   const uiActions = useMemo<UIActions>(
     () => ({
       refreshStatic: () => {
+        // Don't remount Static while an approval prompt is visible — the
+        // terminal repaint would make the prompt flash. Defer until the
+        // queue drains (resolveApproval fires the deferred key bump then).
+        if (approvalQueueRef.current.length > 0) {
+          deferredRefreshRef.current = true;
+          return;
+        }
         setHistoryRemountKey((prev) => prev + 1);
       },
       handleFinalSubmit,
