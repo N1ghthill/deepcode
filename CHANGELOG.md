@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.2.47] — 2026-05-28
+
+### Fixed
+
+- Compact mode: `refreshStatic()` is now debounced (300ms) so rapid tool-call merges produce a single `Static` remount instead of one full history repaint per merge event
+
+### Changed
+
+- tmux spinner replaced with smooth braille animation (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` at 100ms) instead of the old 3-dot cycle at 750ms
+- Loading phrase transition: shows `...` for 300ms before swapping to the next phrase, replacing the instant text-swap at each 15s interval
+
 ## [1.2.46] — 2026-05-28
 
 ### Fixed
@@ -438,7 +449,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Persistent sessions, local config, telemetry collector
 - GitHub integration: OAuth, issues, pull requests
 
-[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.2.46...HEAD
+[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.2.47...HEAD
+[1.2.47]: https://github.com/N1ghthill/deepcode/compare/v1.2.46...v1.2.47
 [1.2.46]: https://github.com/N1ghthill/deepcode/compare/v1.2.45...v1.2.46
 [1.2.45]: https://github.com/N1ghthill/deepcode/compare/v1.2.44...v1.2.45
 [1.2.44]: https://github.com/N1ghthill/deepcode/compare/v1.2.43...v1.2.44
