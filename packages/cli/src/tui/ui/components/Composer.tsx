@@ -36,7 +36,7 @@ export const Composer = () => {
   // the 100ms polling only re-renders that one component — keeping InputPrompt
   // and Footer static avoids terminal flicker during streaming.
   const isStreaming =
-    uiState.streamingState === StreamingState.Responding ||
+    (uiState.streamingState === StreamingState.Responding && uiState.isReceivingContent) ||
     uiState.streamingState === StreamingState.WaitingForConfirmation;
   // `isStreaming` covers Responding|WaitingForConfirmation, but we only
   // suppress during Responding (active token output). A confirmation prompt

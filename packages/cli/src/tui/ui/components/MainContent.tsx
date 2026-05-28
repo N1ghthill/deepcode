@@ -27,6 +27,7 @@ interface MainContentProps {
   terminalWidth: number;
   mainAreaWidth: number;
   isFocused?: boolean;
+  liveAreaMaxHeight?: number;
 }
 
 export const MainContent: React.FC<MainContentProps> = ({
@@ -37,6 +38,7 @@ export const MainContent: React.FC<MainContentProps> = ({
   terminalWidth,
   mainAreaWidth,
   isFocused = true,
+  liveAreaMaxHeight,
 }) => {
   const { compactMode } = useCompactMode();
   const { refreshStatic } = useUIActions();
@@ -181,6 +183,7 @@ export const MainContent: React.FC<MainContentProps> = ({
           isPending={true}
           isFocused={isFocused}
           compactLabel={getCompactLabel({ type: "tool_group", tools: liveToolCalls })}
+          availableTerminalHeight={liveAreaMaxHeight}
         />
       )}
     </Box>

@@ -610,7 +610,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   );
 
   // Throttle streaming re-renders: batch all high-frequency updates and flush
-  // at ~20fps instead of calling setState on every individual event/chunk.
+  // at ~10fps instead of calling setState on every individual event/chunk.
   useEffect(() => {
     const id = setInterval(() => {
       const text = pendingTextBufferRef.current;
@@ -674,7 +674,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           return next;
         });
       }
-    }, 50);
+    }, 100);
     return () => clearInterval(id);
   }, []);
 
@@ -2045,6 +2045,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
                                   terminalWidth={terminalWidth}
                                   mainAreaWidth={mainAreaWidth}
                                   isFocused={approvalQueue.length === 0}
+                                  liveAreaMaxHeight={Math.max(8, Math.min(20, Math.floor(terminalHeight * 0.4)))}
                                 />
                                 <ShowMoreLines constrainHeight={constrainHeight} />
                               </Box>
