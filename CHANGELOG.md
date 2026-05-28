@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.2.48] — 2026-05-28
+
+### Fixed
+
+- Agent loop: when `maxIterations` is exhausted while tool calls are still pending, the TUI now shows a clear message instead of silently ending with no assistant response
+- TUI: `refreshStatic()` (compact-mode Static remount) is now deferred while an approval prompt is visible — prevents the approval prompt from flashing/disappearing during a terminal repaint; the deferred remount fires immediately after the approval resolves
+
 ## [1.2.47] — 2026-05-28
 
 ### Fixed
@@ -449,7 +456,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Persistent sessions, local config, telemetry collector
 - GitHub integration: OAuth, issues, pull requests
 
-[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.2.47...HEAD
+[Unreleased]: https://github.com/N1ghthill/deepcode/compare/v1.2.48...HEAD
+[1.2.48]: https://github.com/N1ghthill/deepcode/compare/v1.2.47...v1.2.48
 [1.2.47]: https://github.com/N1ghthill/deepcode/compare/v1.2.46...v1.2.47
 [1.2.46]: https://github.com/N1ghthill/deepcode/compare/v1.2.45...v1.2.46
 [1.2.45]: https://github.com/N1ghthill/deepcode/compare/v1.2.44...v1.2.45
