@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.2.52] — 2026-05-29
+
+### Fixed
+
+- TUI: streaming text is now capped to the last 20 lines (bounded by `liveAreaMaxHeight`) during generation — previously the dynamic render area grew with the response, causing Ink to erase and rewrite an ever-larger block on every 40ms tick, producing a visible flash/blink; the area is now a fixed height that slides to show the latest content, and the full text appears in Static when the turn commits
+
+## [1.2.51] — 2026-05-29
+
+### Fixed
+
+- TUI: split the single 40ms flush interval into two independent intervals — 40ms for text streaming only (smooth ~25fps reveal) and 100ms for tool-call activity and subagent events (matches the stable rate from v1.2.46 that prevents live-area flicker during parallel execution); a shared 40ms interval caused Ink render drops under tool load, producing larger visible chunks
+
 ## [1.2.50] — 2026-05-29
 
 ### Fixed
