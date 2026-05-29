@@ -34,7 +34,7 @@ const DIRECT_SHELL_COMMAND_PATTERN = /^(?:ls|dir|pwd|date|tree|find|rg|grep|cat|
 const DIRECT_UTILITY_PATH_PATTERN = /(?:^|\s)(?:~\/|\.{1,2}\/|\/)[^\s]*/;
 const DIRECT_UTILITY_VERB_PATTERN = /\b(?:list|lista|liste|listar|mostre|mostrar|show|display|open|abrir|abra|read|leia|print|imprima|exiba)\b/i;
 const PROJECT_DISCOVERY_VERB_PATTERN = /\b(?:list|lista|liste|listar|show|mostre|mostrar|find|busque|buscar|procure|procurar|track|rastreie|rastrear|scan|escanear|discover|descubra)\b/i;
-const PROJECT_DISCOVERY_NOUN_PATTERN = /\b(?:projects|repo|repos|repository|repositories|repositorios|projetos)\b/i;
+const PROJECT_DISCOVERY_NOUN_PATTERN = /\b(?:projects|project|repo|repos|repository|repositories|repositorios?|projetos?)\b/i;
 const DATE_TIME_QUESTION_PATTERN = /\b(?:que dia e hoje|que dia é hoje|data de hoje|dia de hoje|what day is it|what day is today|today'?s date|current date|que horas sao|que horas são|hora atual|current time|what time is it)\b/i;
 // Shell-style single-step commands (bypass planning phase)
 const SIMPLE_SHELL_COMMAND_PATTERN = /^(?:mkdir|touch|rmdir|cp|mv|chmod|chown|echo|ln|git\s+(?:init|clone|add|commit|push|pull|checkout|branch|stash|tag))\b/i;

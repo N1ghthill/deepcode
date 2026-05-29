@@ -594,7 +594,16 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
 
   useEffect(() => {
     setApprovalPromptVisible(false);
-    if (currentApprovalId === undefined) return;
+    if (currentApprovalId === undefined) {
+      // Queue just drained. Fire any deferred refreshStatic here — in the same
+      // state-update batch that hides the approval prompt — so Static never
+      // remounts while the prompt is still visible (which caused the flash).
+      if (deferredRefreshRef.current) {
+        deferredRefreshRef.current = false;
+        setHistoryRemountKey((k) => k + 1);
+      }
+      return;
+    }
 
     const timeout = setTimeout(() => {
       setApprovalPromptVisible(true);
@@ -966,11 +975,6 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       setApprovalQueue((prev) => {
         const next = prev.slice(1);
         approvalQueueRef.current = next;
-        // Fire any deferred refreshStatic now that the queue drained.
-        if (next.length === 0 && deferredRefreshRef.current) {
-          deferredRefreshRef.current = false;
-          setHistoryRemountKey((k) => k + 1);
-        }
         return next;
       });
     },
@@ -1868,7 +1872,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       refreshStatic: () => {
         // Don't remount Static while an approval prompt is visible — the
         // terminal repaint would make the prompt flash. Defer until the
-        // queue drains (resolveApproval fires the deferred key bump then).
+        // queue drains (currentApprovalId effect fires the deferred key bump).
         if (approvalQueueRef.current.length > 0) {
           deferredRefreshRef.current = true;
           return;
