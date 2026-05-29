@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.2.50] — 2026-05-29
+
+### Fixed
+
+- TUI: deferred `refreshStatic` now fires in the same state-update batch that hides the approval prompt (`currentApprovalId` effect), eliminating a residual race where the Static area could remount while `approvalPromptVisible` was still `true`
+- Runtime: "Liste meus projeto" and other singular/typo forms (`projeto`, `repositorio`) now correctly trigger `list_projects` — `PROJECT_DISCOVERY_NOUN_PATTERN` extended with `projetos?` and `repositorios?` to cover singular and plural
+
+### Changed
+
+- TUI streaming frame rate increased from 10fps (100ms interval) to 25fps (40ms interval) — text reveals in smaller, more frequent bursts instead of chunky 100ms dumps
+
+## [1.2.49] — 2026-05-28
+
+### Fixed
+
+- TUI: approval prompt now waits 150ms before becoming visible (`APPROVAL_PROMPT_REVEAL_DELAY_MS`) — suppresses transient flashes caused by approvals that are queued and resolved before the first paint
+
 ## [1.2.48] — 2026-05-28
 
 ### Fixed
