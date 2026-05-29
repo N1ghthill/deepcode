@@ -635,8 +635,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
     [terminalHeight],
   );
 
-  // Throttle streaming re-renders: batch all high-frequency updates and flush
-  // at ~10fps instead of calling setState on every individual event/chunk.
+  // Throttle streaming re-renders: batch high-frequency updates and flush
+  // at ~25fps so text reveals smoothly without calling setState per token.
   useEffect(() => {
     const id = setInterval(() => {
       const text = pendingTextBufferRef.current;
@@ -700,7 +700,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           return next;
         });
       }
-    }, 100);
+    }, 40);
     return () => clearInterval(id);
   }, []);
 
