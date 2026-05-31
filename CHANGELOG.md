@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [1.2.54] — 2026-05-31
+
+### Fixed
+
+- TUI: streaming window now uses the full available terminal height (`terminalHeight - 4`) instead of the previous cap of 20 lines — fast models (e.g. DeepSeek v4-flash at ~2k tok/s) were generating the final response within the window but the first half was above the cap; at turn-end those hidden lines "popped in" from the top as a visible flash; with a larger window the streaming view matches the committed Static content and the transition is seamless for typical response lengths
+
 ## [1.2.53] — 2026-05-31
 
 ### Fixed
