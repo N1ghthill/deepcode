@@ -231,6 +231,14 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   // defer it until the queue drains so compact-mode merges aren't silently lost.
   const approvalQueueRef = useRef<ApprovalRequest[]>([]);
   const deferredRefreshRef = useRef(false);
+  // Set to true while runPrompt is executing. Used to suppress the compact-mode
+  // debounce that fires 300ms after onIteration commits intermediate items — without
+  // this guard, refreshStatic runs during final-iteration streaming and causes the
+  // entire screen to flicker between Static history and the live streaming area.
+  const isRunningActiveRef = useRef(false);
+  // Set by refreshStatic when suppressed during an active run; cleared and honoured
+  // at run end so compact-merge views are corrected in one clean post-run repaint.
+  const compactRefreshNeededRef = useRef(false);
   const runtimeRef = useRef<DeepCodeRuntime | null>(null);
   const sessionRef = useRef<Session | null>(null);
   const configAdapterRef = useRef<DeepCodeConfigAdapter | null>(null);
@@ -1026,6 +1034,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       subagentChunkBufferRef.current = new Map();
       subagentStartBufferRef.current = [];
       subagentCompleteBufferRef.current = [];
+      isRunningActiveRef.current = true;
+      compactRefreshNeededRef.current = false;
       setPendingAssistantText("");
       setIsRunning(true);
       setIsReceivingContent(false);
@@ -1174,6 +1184,12 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           Date.now(),
         );
       } finally {
+        isRunningActiveRef.current = false;
+        // If refreshStatic was suppressed during the run (compact-mode debounce from
+        // onIteration), fire one clean repaint now — batched with the state clears
+        // below so Static remounts together with pendingText being cleared (no flash).
+        const needsCompactRefresh = compactRefreshNeededRef.current;
+        compactRefreshNeededRef.current = false;
         runEndedAtRef.current = Date.now();
         abortRef.current = null;
         pendingTextBufferRef.current = '';
@@ -1189,6 +1205,9 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         setApprovalQueue([]);
         approvalQueueRef.current = [];
         deferredRefreshRef.current = false;
+        if (needsCompactRefresh) {
+          setHistoryRemountKey((k) => k + 1);
+        }
         // Reflect the actual provider/model used (agent may have fallen back).
         const sess = sessionRef.current;
         if (sess) {
@@ -1965,6 +1984,15 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         // queue drains (currentApprovalId effect fires the deferred key bump).
         if (approvalQueueRef.current.length > 0) {
           deferredRefreshRef.current = true;
+          return;
+        }
+        // Suppress compact-merge debounces while a run is active. onIteration
+        // commits intermediate items 300ms before the debounce fires; by then the
+        // final iteration may be streaming, causing the screen to flicker between
+        // Static history and the live area. The finally block fires one clean
+        // repaint after the run ends (compactRefreshNeededRef path).
+        if (isRunningActiveRef.current) {
+          compactRefreshNeededRef.current = true;
           return;
         }
         // Suppress the debounced compact-merge refresh for 1s after run end.

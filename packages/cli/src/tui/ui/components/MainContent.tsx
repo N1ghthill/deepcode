@@ -215,12 +215,12 @@ export const MainContent: React.FC<MainContentProps> = ({
       </Static>
       {pendingAssistantText.trim().length > 0 && (
         <HistoryItemDisplay
-          item={{ id: -1, type: "gemini", text: streamingWindow(pendingAssistantText, liveAreaMaxHeight) + '▌' }}
+          item={{ id: -1, type: "gemini", text: streamingWindow(pendingAssistantText) + '▌' }}
           terminalWidth={terminalWidth}
           mainAreaWidth={mainAreaWidth}
           isPending={true}
           isFocused={isFocused}
-          availableTerminalHeight={liveAreaMaxHeight}
+          availableTerminalHeight={STREAMING_WINDOW_LINES}
         />
       )}
       {liveToolCalls.length > 0 && (
