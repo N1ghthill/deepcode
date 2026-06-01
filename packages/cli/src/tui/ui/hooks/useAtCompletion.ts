@@ -125,9 +125,9 @@ export function useAtCompletion(props: UseAtCompletionProps): void {
 
   // Pre-warm: start indexing the project tree on mount so the first @ search
   // is instant instead of paying the initialization cost on first keypress.
+  // Empty deps intentional — runs once on mount only.
   useEffect(() => {
     dispatch({ type: 'INITIALIZE' });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reacts to user input (`pattern`) ONLY.
