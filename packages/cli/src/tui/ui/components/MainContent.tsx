@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Static } from "ink";
 import type { HistoryItem, HistoryItemWithoutId, IndividualToolCallDisplay } from "../types.js";
-import { ToolCallStatus } from "../types.js";
 import { HistoryItemDisplay } from "./HistoryItemDisplay.js";
 import { useCompactMode } from "../contexts/CompactModeContext.js";
 import { useUIActions } from "../contexts/UIActionsContext.js";
@@ -191,7 +190,7 @@ export const MainContent: React.FC<MainContentProps> = ({
       </Static>
       {pendingAssistantText.trim().length > 0 && (
         <HistoryItemDisplay
-          item={{ id: -1, type: "gemini", text: streamingWindow(pendingAssistantText, liveAreaMaxHeight) }}
+          item={{ id: -1, type: "gemini", text: streamingWindow(pendingAssistantText, liveAreaMaxHeight) + '▌' }}
           terminalWidth={terminalWidth}
           mainAreaWidth={mainAreaWidth}
           isPending={true}
@@ -199,9 +198,9 @@ export const MainContent: React.FC<MainContentProps> = ({
           availableTerminalHeight={liveAreaMaxHeight}
         />
       )}
-      {liveToolCalls.some((t) => t.status === ToolCallStatus.Executing || t.status === ToolCallStatus.Confirming) && (
+      {liveToolCalls.length > 0 && (
         <HistoryItemDisplay
-          item={{ id: -2, type: "tool_group", tools: liveToolCalls.filter((t) => t.status === ToolCallStatus.Executing || t.status === ToolCallStatus.Confirming) }}
+          item={{ id: -2, type: "tool_group", tools: liveToolCalls }}
           terminalWidth={terminalWidth}
           mainAreaWidth={mainAreaWidth}
           isPending={true}

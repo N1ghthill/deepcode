@@ -102,6 +102,8 @@ export interface UIState {
   sessionName: string | null;
   isConfigInitialized: boolean;
   sessionStats: SessionStatsState;
+  /** Model context limit from config (undefined if not yet loaded). */
+  maxTokens?: number;
 
   // ── Dialogs ──────────────────────────────────────────────────────────────
   dialogsVisible: boolean;

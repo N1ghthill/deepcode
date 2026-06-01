@@ -57,6 +57,7 @@ export const AppHeader = ({
     streamingState,
     sessionStats: { lastPromptTokenCount, lastOutputTokenCount, totalPromptTokenCount, totalOutputTokenCount },
     terminalWidth,
+    maxTokens,
   } = useUIState();
   const elapsedTime = useElapsedTime(streamingState);
 
@@ -65,6 +66,16 @@ export const AppHeader = ({
   const displayDir = tildeify(cwd);
   const hasTokens = lastPromptTokenCount > 0;
   const hasSessionTokens = totalPromptTokenCount > 0;
+
+  const tokenBudgetPct = maxTokens && maxTokens > 0
+    ? Math.min(100, Math.round((totalPromptTokenCount / maxTokens) * 100))
+    : null;
+  const showBudgetBar = tokenBudgetPct !== null && tokenBudgetPct >= 50;
+  const budgetBarColor = tokenBudgetPct !== null && tokenBudgetPct >= 90
+    ? theme.status.error
+    : tokenBudgetPct !== null && tokenBudgetPct >= 75
+      ? theme.status.warning
+      : theme.text.secondary;
 
   return (
     <Box
@@ -144,6 +155,15 @@ export const AppHeader = ({
           <Text color={theme.text.secondary} dimColor>
             nova versão disponível: {updateAvailable} — execute /update
           </Text>
+        </Box>
+      )}
+
+      {showBudgetBar && tokenBudgetPct !== null && (
+        <Box flexDirection="row" gap={1}>
+          <Text color={budgetBarColor}>
+            {'█'.repeat(Math.round(tokenBudgetPct / 5))}{'░'.repeat(20 - Math.round(tokenBudgetPct / 5))}
+          </Text>
+          <Text color={budgetBarColor}>{tokenBudgetPct}% contexto usado</Text>
         </Box>
       )}
     </Box>

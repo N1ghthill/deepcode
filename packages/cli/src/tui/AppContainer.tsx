@@ -235,6 +235,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   const unsubscribeRef = useRef<Array<() => void>>([]);
   const lastSubmittedPromptRef = useRef<string | null>(null);
   const runStartedAtRef = useRef<number | null>(null);
+  const iterStartedAtRef = useRef<number>(Date.now());
   const streamingResponseLengthRef = useRef(0);
   const pendingTextBufferRef = useRef('');
   const liveToolCallsBufferRef = useRef<Activity[]>([]);
@@ -1028,6 +1029,10 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
 
       const startIndex = session.messages.length;
       const isFirstTurn = startIndex === 0;
+      // Tracks how many session messages have been committed to TUI history so
+      // incremental commits at each iteration boundary don't re-commit earlier turns.
+      let committedUpTo = startIndex;
+      iterStartedAtRef.current = Date.now();
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -1050,12 +1055,42 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           },
           onIteration: (round: number, max: number) => {
             setIterationInfo({ round, max });
+            // Drain and clear text — the completed turn's text is in session.messages.
+            pendingTextBufferRef.current = '';
+            setPendingAssistantText("");
             liveToolCallsBufferRef.current = [];
             setLiveToolCalls([]);
+            // Commit the previous iteration's messages to static history immediately.
+            // onIteration fires at the TOP of the loop so session.messages already
+            // contains the prior turn's assistant text + all tool call/result pairs.
+            const iterMessages = session.messages.slice(committedUpTo);
+            if (iterMessages.length > 0) {
+              committedUpTo = session.messages.length;
+              appendTurnItems(mapMessagesToHistoryItems(iterMessages));
+              // Compact summary line: count tools by name and show elapsed time.
+              const toolCounts = new Map<string, number>();
+              for (const msg of iterMessages) {
+                if (msg.role === 'assistant' && msg.toolCalls?.length) {
+                  for (const call of msg.toolCalls) {
+                    toolCounts.set(call.name, (toolCounts.get(call.name) ?? 0) + 1);
+                  }
+                }
+              }
+              if (toolCounts.size > 0) {
+                const elapsed = Math.round((Date.now() - iterStartedAtRef.current) / 1000);
+                const parts = Array.from(toolCounts.entries()).map(([name, n]) => `${n}× ${name}`);
+                historyManager.addItem(
+                  { type: 'info', text: `Iteração ${round - 1}/${max}: ${parts.join(', ')} (${elapsed}s)` },
+                  Date.now(),
+                );
+              }
+            }
+            iterStartedAtRef.current = Date.now();
           },
         });
 
-        const newMessages = session.messages.slice(startIndex);
+        // Only commit messages that haven't been committed at iteration boundaries.
+        const newMessages = session.messages.slice(committedUpTo);
         const turnItems = mapMessagesToHistoryItems(newMessages);
         if (
           !turnItems.some((item) => item.type === "gemini")
@@ -1063,6 +1098,11 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         ) {
           turnItems.push({ type: "gemini", text: output.trim() });
         }
+        // Clear live state before committing to Static so both land in one React render,
+        // preventing a frame where pending text disappears before Static shows new items.
+        pendingTextBufferRef.current = '';
+        setPendingAssistantText("");
+        setLiveToolCalls([]);
         appendTurnItems(turnItems);
 
         // Generate follow-up suggestions only for turns that actually used the model.
@@ -1091,7 +1131,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         const aborted = controller.signal.aborted;
         // Render whatever the agent committed before the abort/error so the
         // partial turn is not lost — only the warning would otherwise show.
-        const partialMessages = session.messages.slice(startIndex);
+        // Use committedUpTo so already-committed iterations aren't duplicated.
+        const partialMessages = session.messages.slice(committedUpTo);
         appendTurnItems(mapMessagesToHistoryItems(partialMessages, { aborted }));
         const message = aborted
           ? "Execution cancelled."
@@ -2017,6 +2058,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       mcpConnected,
       mcpTotal,
       activeSubagents,
+      maxTokens: runtimeRef.current?.config.maxTokens,
     }),
     [
       approvalMode,
@@ -2106,7 +2148,13 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
                             )}
 
                             {approvalQueue.length > 0 && approvalPromptVisible && (
-                              <Box marginLeft={2} marginRight={2} marginTop={1}>
+                              <Box flexDirection="column" marginLeft={2} marginRight={2} marginTop={1}>
+                                <Box>
+                                  <Text color={theme.status.warning} bold>⏸ </Text>
+                                  <Text color={theme.status.warning}>
+                                    {`Aguardando aprovação${approvalQueue.length > 1 ? ` (${approvalQueue.length} na fila)` : ''} — responda abaixo com y/n/s/a`}
+                                  </Text>
+                                </Box>
                                 <ApprovalPrompt request={approvalQueue[0]} queueLength={approvalQueue.length} />
                               </Box>
                             )}
