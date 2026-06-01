@@ -239,6 +239,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   const lastSubmittedPromptRef = useRef<string | null>(null);
   const runStartedAtRef = useRef<number | null>(null);
   const iterStartedAtRef = useRef<number>(Date.now());
+  const runEndedAtRef = useRef<number>(0);
   const context32kWarnedRef = useRef(false);
   const streamingResponseLengthRef = useRef(0);
   const pendingTextBufferRef = useRef('');
@@ -1173,6 +1174,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           Date.now(),
         );
       } finally {
+        runEndedAtRef.current = Date.now();
         abortRef.current = null;
         pendingTextBufferRef.current = '';
         liveToolCallsBufferRef.current = [];
@@ -1963,6 +1965,13 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         // queue drains (currentApprovalId effect fires the deferred key bump).
         if (approvalQueueRef.current.length > 0) {
           deferredRefreshRef.current = true;
+          return;
+        }
+        // Suppress the debounced compact-merge refresh for 1s after run end.
+        // appendTurnItems already renders all items correctly in one batch;
+        // the 300ms debounce from MainContent would cause a second full Static
+        // repaint visible as a flash. Items already in Static remain correct.
+        if (Date.now() - runEndedAtRef.current < 1000) {
           return;
         }
         setHistoryRemountKey((prev) => prev + 1);
