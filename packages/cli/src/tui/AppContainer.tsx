@@ -191,6 +191,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   const [totalOutputTokenCount, setTotalOutputTokenCount] = useState(0);
   const [isReceivingContent, setIsReceivingContent] = useState(false);
   const [iterationInfo, setIterationInfo] = useState<{ round: number; max: number } | null>(null);
+  const iterationInfoRef = useRef<{ round: number; max: number } | null>(null);
   const [liveToolCalls, setLiveToolCalls] = useState<IndividualToolCallDisplay[]>([]);
   const [recentSlashCommandsState, setRecentSlashCommandsState] = useState<
     Map<string, RecentSlashCommand>
@@ -1084,37 +1085,55 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           },
           onIteration: (round: number, max: number) => {
             setIterationInfo({ round, max });
-            // Drain and clear text — the completed turn's text is in session.messages.
+            iterationInfoRef.current = { round, max };
+            // Drain streaming text — onToolsComplete already committed the
+            // previous iteration's tool messages; onIteration's job is just to
+            // clear the live area and start the timer for the new iteration.
             pendingTextBufferRef.current = '';
             setPendingAssistantText("");
             liveToolCallsBufferRef.current = [];
             setLiveToolCalls([]);
-            // Commit the previous iteration's messages to static history immediately.
-            // onIteration fires at the TOP of the loop so session.messages already
-            // contains the prior turn's assistant text + all tool call/result pairs.
+            // Commit any messages not yet committed (e.g. assistant text from
+            // the final LLM call of the previous round, before tools ran).
             const iterMessages = session.messages.slice(committedUpTo);
             if (iterMessages.length > 0) {
               committedUpTo = session.messages.length;
               appendTurnItems(mapMessagesToHistoryItems(iterMessages));
-              // Compact summary line: count tools by name and show elapsed time.
+            }
+            iterStartedAtRef.current = Date.now();
+          },
+          onToolsComplete: () => {
+            // All tools for this iteration batch finished — their results are
+            // now in session.messages. Commit them to Static immediately so the
+            // terminal shows each file/result as soon as it arrives, instead of
+            // dumping everything at once when the next onIteration fires.
+            const newMessages = session.messages.slice(committedUpTo);
+            if (newMessages.length > 0) {
+              committedUpTo = session.messages.length;
+              // Count tools for the summary line, using just the new messages.
               const toolCounts = new Map<string, number>();
-              for (const msg of iterMessages) {
+              for (const msg of newMessages) {
                 if (msg.role === 'assistant' && msg.toolCalls?.length) {
                   for (const call of msg.toolCalls) {
                     toolCounts.set(call.name, (toolCounts.get(call.name) ?? 0) + 1);
                   }
                 }
               }
+              appendTurnItems(mapMessagesToHistoryItems(newMessages));
+              // Emit the per-iteration tool summary after the items so it
+              // appears below them in the scrollback.
               if (toolCounts.size > 0) {
                 const elapsed = Math.round((Date.now() - iterStartedAtRef.current) / 1000);
                 const parts = Array.from(toolCounts.entries()).map(([name, n]) => `${n}× ${name}`);
+                // The round number isn't available here — get it from iterationInfo ref.
+                const iterNum = iterationInfoRef.current?.round ?? '?';
+                const iterMax = iterationInfoRef.current?.max ?? '?';
                 historyManager.addItem(
-                  { type: 'info', text: `Iteração ${round - 1}/${max}: ${parts.join(', ')} (${elapsed}s)` },
+                  { type: 'info', text: `Iteração ${iterNum}/${iterMax}: ${parts.join(', ')} (${elapsed}s)` },
                   Date.now(),
                 );
               }
             }
-            iterStartedAtRef.current = Date.now();
           },
         });
 
@@ -1201,6 +1220,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         setIsRunning(false);
         setLiveToolCalls([]);
         setIterationInfo(null);
+        iterationInfoRef.current = null;
         // Clear any stale approval prompts — the gateway already rejected them on abort.
         setApprovalQueue([]);
         approvalQueueRef.current = [];

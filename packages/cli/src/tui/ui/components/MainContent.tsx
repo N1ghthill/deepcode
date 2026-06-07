@@ -17,6 +17,7 @@ const STREAMING_WINDOW_LINES = 20;
 // results to this many lines to keep the panel compact.
 const LIVE_COMPLETED_RESULT_LINES = 3;
 
+
 function truncateLiveResult(tool: IndividualToolCallDisplay): IndividualToolCallDisplay {
   const done =
     tool.status === ToolCallStatus.Success ||

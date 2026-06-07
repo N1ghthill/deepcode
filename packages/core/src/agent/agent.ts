@@ -79,6 +79,15 @@ export interface AgentRunOptions {
   disallowedTools?: string[];
   /** Called when a tool execution starts (active=true) or ends (active=false). */
   onToolActivity?: (toolName: string, active: boolean) => void;
+  /**
+   * Called after ALL tools in a given iteration batch have run and their
+   * results are saved to session.messages. The TUI uses this to commit the
+   * completed iteration's messages to Static immediately — before the next LLM
+   * call — rather than waiting for the onIteration boundary of the next round.
+   * This prevents large tool outputs (e.g. read_file on a big file) from
+   * flooding the terminal all at once when the next onIteration fires.
+   */
+  onToolsComplete?: () => void;
 }
 
 export interface AgentUtilityCompletionOptions {
@@ -446,6 +455,11 @@ export class Agent {
           consecutiveErrorCount = 0;
         }
       }
+      // All tools for this iteration are done and their messages are in
+      // session.messages — notify the TUI so it can commit them to Static
+      // immediately, before the next LLM call, instead of waiting for the
+      // onIteration boundary of the following round.
+      options.onToolsComplete?.();
     }
 
     if (!brokeFromNoTools && iterations >= maxIterations) {
