@@ -646,6 +646,21 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
     }
   }, [isRunning]);
 
+  // Remount Static when the terminal width changes so committed items reflow
+  // to the new column width. Skipped during active runs (flicker risk) and
+  // during approvals (deferred to when the queue drains).
+  const prevTerminalWidthRef = useRef(terminalWidth);
+  useEffect(() => {
+    if (terminalWidth === prevTerminalWidthRef.current) return;
+    prevTerminalWidthRef.current = terminalWidth;
+    if (isRunningActiveRef.current) return;
+    if (approvalQueueRef.current.length > 0) {
+      deferredRefreshRef.current = true;
+      return;
+    }
+    setHistoryRemountKey((k) => k + 1);
+  }, [terminalWidth]);
+
   const hookPhrase = usePhraseCycler(
     streamingState === StreamingState.Responding,
     streamingState === StreamingState.WaitingForConfirmation,

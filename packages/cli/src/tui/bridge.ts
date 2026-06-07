@@ -39,6 +39,18 @@ export function toToolCallDisplay(call: ToolCall): IndividualToolCallDisplay {
   };
 }
 
+// Tool results beyond this many lines are truncated in Static to keep the
+// scrollback readable and rendering fast. The model always has the full data.
+const MAX_STATIC_RESULT_LINES = 200;
+
+function truncateStaticResult(output: string): string {
+  const lines = output.split("\n");
+  if (lines.length <= MAX_STATIC_RESULT_LINES) return output;
+  const truncated = lines.slice(0, MAX_STATIC_RESULT_LINES).join("\n");
+  const extra = lines.length - MAX_STATIC_RESULT_LINES;
+  return `${truncated}\n… +${extra} linhas`;
+}
+
 /**
  * Map the messages produced by an agent turn into TUI history items: assistant
  * text becomes `gemini` items, tool calls become a `tool_group`, and `tool`
@@ -82,7 +94,7 @@ export function mapMessagesToHistoryItems(
       const tool = toolByCallId.get(message.toolCallId);
       if (!tool) continue;
       const output = message.content ?? "";
-      tool.resultDisplay = output;
+      tool.resultDisplay = truncateStaticResult(output);
       tool.status = output.trimStart().startsWith("Error")
         ? ToolCallStatus.Error
         : ToolCallStatus.Success;
