@@ -60,6 +60,7 @@ import { getStickyTodos, getStickyTodoMaxVisibleItems } from "./utils/todoSnapsh
 import { useTerminalSize } from "./ui/hooks/useTerminalSize.js";
 import { useSubagentState } from "./ui/hooks/useSubagentState.js";
 import { useTokenStats } from "./ui/hooks/useTokenStats.js";
+import { useStreamingText } from "./ui/hooks/useStreamingText.js";
 import { theme } from "./ui/semantic-colors.js";
 import type { LoadedSettings } from "./config/settings.js";
 import type {
@@ -120,7 +121,6 @@ import {
   restoreHistoryFromSession,
   toToolCallDisplay,
 } from "./bridge.js";
-import { findLastSafeSplitPoint } from "./utils/markdownUtilities.js";
 import { buildSummaryMessage, generateCompactSummary } from "./compact-summary.js";
 import { generateSessionName } from "./session-name.js";
 import { resolveSessionTarget } from "../target-resolution.js";
@@ -168,10 +168,12 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   const historyManagerRef = useRef(historyManager);
   historyManagerRef.current = historyManager;
   const addHistoryItem = historyManager.addItem;
+  const streaming = useStreamingText(
+    (item, ts) => historyManagerRef.current.addItem(item, ts),
+  );
   const [initError, setInitError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
-  const [pendingAssistantText, setPendingAssistantText] = useState("");
   const [approvalQueue, setApprovalQueue] = useState<ApprovalRequest[]>([]);
   const [approvalPromptVisible, setApprovalPromptVisible] = useState(false);
   const [providerLabel, setProviderLabel] = useState<string>("(unconfigured)");
@@ -266,13 +268,6 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   const iterStartedAtRef = useRef<number>(Date.now());
   const runEndedAtRef = useRef<number>(0);
   const context32kWarnedRef = useRef(false);
-  const streamingResponseLengthRef = useRef(0);
-  const pendingTextBufferRef = useRef('');
-  // Accumulates ALL streaming text since the last commit/clear, used for split-point detection.
-  const fullStreamingTextRef = useRef('');
-  // True once onChunk fires for the current run — signals that streaming is live
-  // and assistant text should come from streaming splits, not session.messages.
-  const streamingWasUsedRef = useRef(false);
   const liveToolCallsBufferRef = useRef<Activity[]>([]);
   const drainingQueueRef = useRef(false);
   const messageQueueRef = useRef<string[]>([]);
@@ -323,10 +318,10 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   });
 
   const pendingGeminiHistoryItems = useMemo<HistoryItemWithoutId[]>(
-    () => (pendingAssistantText
-      ? [{ type: "gemini", text: pendingAssistantText }]
+    () => (streaming.pendingText
+      ? [{ type: "gemini", text: streaming.pendingText }]
       : []),
-    [pendingAssistantText],
+    [streaming.pendingText],
   );
 
   const userMessages = useMemo(
@@ -679,38 +674,6 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
     [terminalHeight],
   );
 
-  // Fast interval (40ms ≈ 25fps): text streaming + progressive Static commits.
-  // On each tick, new chunks are appended to `fullStreamingTextRef`. When a safe
-  // markdown split point (paragraph break outside code fences) is found, the
-  // completed portion is committed to Static immediately so it doesn't flood in
-  // at the next iteration boundary. The live area shows only the current paragraph.
-  useEffect(() => {
-    const id = setInterval(() => {
-      const newChunk = pendingTextBufferRef.current;
-      if (!newChunk) return;
-      pendingTextBufferRef.current = '';
-
-      fullStreamingTextRef.current += newChunk;
-      const fullText = fullStreamingTextRef.current;
-      const splitPoint = findLastSafeSplitPoint(fullText);
-      if (splitPoint < fullText.length) {
-        const beforeText = fullText.substring(0, splitPoint);
-        const afterText = fullText.substring(splitPoint);
-        if (beforeText.trim().length > 0) {
-          historyManagerRef.current.addItem(
-            { type: 'gemini', text: beforeText.trimEnd() },
-            Date.now(),
-          );
-        }
-        fullStreamingTextRef.current = afterText;
-        setPendingAssistantText(afterText);
-      } else {
-        setPendingAssistantText(fullText);
-      }
-    }, 40);
-    return () => clearInterval(id);
-  }, []);
-
   // Slow interval (100ms ≈ 10fps): tool calls and subagent events.
   // 100ms matches the rate established in v1.2.46 to prevent live-area flicker
   // during concurrent subagent / tool execution.
@@ -993,19 +956,15 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       historyManager.addItem({ type: "user", text: prompt }, Date.now());
       lastSubmittedPromptRef.current = prompt;
       setPromptSuggestion(null);
-      fullStreamingTextRef.current = '';
-      streamingWasUsedRef.current = false;
-      pendingTextBufferRef.current = '';
+      streaming.reset();
       liveToolCallsBufferRef.current = [];
       subagentChunkBufferRef.current = new Map();
       subagentStartBufferRef.current = [];
       subagentCompleteBufferRef.current = [];
       isRunningActiveRef.current = true;
       compactRefreshNeededRef.current = false;
-      setPendingAssistantText("");
       setIsRunning(true);
       setIsReceivingContent(false);
-      streamingResponseLengthRef.current = 0;
       setLiveToolCalls([]);
       setIterationInfo(null);
 
@@ -1031,9 +990,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
           mode: agentMode,
           signal: controller.signal,
           onChunk: (text: string) => {
-            streamingResponseLengthRef.current += text.length;
-            pendingTextBufferRef.current += text;
-            streamingWasUsedRef.current = true;
+            streaming.appendChunk(text);
             setIsReceivingContent(true);
           },
           onUsage: (inputTokens: number, outputTokens: number) => {
@@ -1051,15 +1008,9 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
             iterationInfoRef.current = { round, max };
             // Commit any remaining streaming text chunk to Static, then clear
             // the live area ready for the new iteration.
-            const wasStreaming = streamingWasUsedRef.current;
-            streamingWasUsedRef.current = false;
-            const finalPendingText = fullStreamingTextRef.current.trim();
-            if (wasStreaming && finalPendingText) {
-              historyManager.addItem({ type: 'gemini', text: finalPendingText }, Date.now());
-            }
-            fullStreamingTextRef.current = '';
-            pendingTextBufferRef.current = '';
-            setPendingAssistantText("");
+            const wasStreaming = streaming.flush();
+            streaming.streamingWasUsedRef.current = false;
+            streaming.setPendingText("");
             liveToolCallsBufferRef.current = [];
             setLiveToolCalls([]);
             // Commit any messages not yet committed (tool results when no
@@ -1075,14 +1026,8 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
             // Commit the final streaming text chunk before tool results so that
             // both land in the same React render — no frame where text disappears
             // before Static shows the new items.
-            const wasStreaming = streamingWasUsedRef.current;
-            const finalPendingText = fullStreamingTextRef.current.trim();
-            if (wasStreaming && finalPendingText) {
-              historyManager.addItem({ type: 'gemini', text: finalPendingText }, Date.now());
-            }
-            fullStreamingTextRef.current = '';
-            pendingTextBufferRef.current = '';
-            setPendingAssistantText("");
+            const wasStreaming = streaming.flush();
+            streaming.setPendingText("");
 
             // All tools for this iteration batch finished — commit to Static immediately.
             const newMessages = session.messages.slice(committedUpTo);
@@ -1113,12 +1058,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         });
 
         // Commit any remaining streaming text (text-only final iteration, no tools).
-        const wasStreaming = streamingWasUsedRef.current;
-        const finalPendingText = fullStreamingTextRef.current.trim();
-        if (wasStreaming && finalPendingText) {
-          historyManager.addItem({ type: 'gemini', text: finalPendingText }, Date.now());
-        }
-        fullStreamingTextRef.current = '';
+        const wasStreaming = streaming.flush();
 
         // Only commit messages that haven't been committed at iteration boundaries.
         const newMessages = session.messages.slice(committedUpTo);
@@ -1142,8 +1082,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
 
         // Clear live state before committing to Static so both land in one React render,
         // preventing a frame where pending text disappears before Static shows new items.
-        pendingTextBufferRef.current = '';
-        setPendingAssistantText("");
+        streaming.setPendingText("");
         setLiveToolCalls([]);
         appendTurnItems(turnItems);
         if (diffSummary) {
@@ -1175,12 +1114,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       } catch (error) {
         const aborted = controller.signal.aborted;
         // Commit any partial streaming text before the error/abort items.
-        const wasStreamingOnError = streamingWasUsedRef.current;
-        const errorFinalText = fullStreamingTextRef.current.trim();
-        if (wasStreamingOnError && errorFinalText) {
-          historyManager.addItem({ type: 'gemini', text: errorFinalText }, Date.now());
-        }
-        fullStreamingTextRef.current = '';
+        const wasStreamingOnError = streaming.flush();
         // Render whatever the agent committed before the abort/error so the
         // partial turn is not lost — only the warning would otherwise show.
         // Use committedUpTo so already-committed iterations aren't duplicated.
@@ -1202,14 +1136,11 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
         compactRefreshNeededRef.current = false;
         runEndedAtRef.current = Date.now();
         abortRef.current = null;
-        fullStreamingTextRef.current = '';
-        streamingWasUsedRef.current = false;
-        pendingTextBufferRef.current = '';
+        streaming.reset();
         liveToolCallsBufferRef.current = [];
         subagentChunkBufferRef.current = new Map();
         subagentStartBufferRef.current = [];
         subagentCompleteBufferRef.current = [];
-        setPendingAssistantText("");
         setIsRunning(false);
         setLiveToolCalls([]);
         setIterationInfo(null);
@@ -2081,7 +2012,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
       currentLoadingPhrase: iterationInfo
         ? `Iteration ${iterationInfo.round}/${iterationInfo.max}`
         : hookPhrase,
-      streamingResponseLengthRef,
+      streamingResponseLengthRef: streaming.streamingResponseLengthRef,
       isReceivingContent,
       initError,
 
@@ -2221,7 +2152,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
                                 <MainContent
                                   history={historyManager.history}
                                   historyRemountKey={historyRemountKey}
-                                  pendingAssistantText={pendingAssistantText}
+                                  pendingAssistantText={streaming.pendingText}
                                   liveToolCalls={liveToolCalls}
                                   terminalWidth={terminalWidth}
                                   mainAreaWidth={mainAreaWidth}
