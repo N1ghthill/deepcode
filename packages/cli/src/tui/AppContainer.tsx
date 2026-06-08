@@ -59,6 +59,7 @@ import { usePhraseCycler } from "./ui/hooks/usePhraseCycler.js";
 import { getStickyTodos, getStickyTodoMaxVisibleItems } from "./utils/todoSnapshot.js";
 import { useTerminalSize } from "./ui/hooks/useTerminalSize.js";
 import { useSubagentState } from "./ui/hooks/useSubagentState.js";
+import { useTokenStats } from "./ui/hooks/useTokenStats.js";
 import { theme } from "./ui/semantic-colors.js";
 import type { LoadedSettings } from "./config/settings.js";
 import type {
@@ -190,10 +191,13 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
   const [messageQueue, setMessageQueue] = useState<string[]>([]);
   const [historyRemountKey, setHistoryRemountKey] = useState(0);
   const [pendingItem, setPendingItem] = useState<HistoryItemWithoutId | null>(null);
-  const [lastPromptTokenCount, setLastPromptTokenCount] = useState(0);
-  const [lastOutputTokenCount, setLastOutputTokenCount] = useState(0);
-  const [totalPromptTokenCount, setTotalPromptTokenCount] = useState(0);
-  const [totalOutputTokenCount, setTotalOutputTokenCount] = useState(0);
+  const {
+    lastPromptTokenCount,
+    lastOutputTokenCount,
+    totalPromptTokenCount,
+    totalOutputTokenCount,
+    recordUsage,
+  } = useTokenStats();
   const [isReceivingContent, setIsReceivingContent] = useState(false);
   const [iterationInfo, setIterationInfo] = useState<{ round: number; max: number } | null>(null);
   const iterationInfoRef = useRef<{ round: number; max: number } | null>(null);
@@ -1033,10 +1037,7 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
             setIsReceivingContent(true);
           },
           onUsage: (inputTokens: number, outputTokens: number) => {
-            setLastPromptTokenCount(inputTokens);
-            setLastOutputTokenCount(outputTokens);
-            setTotalPromptTokenCount((prev) => prev + inputTokens);
-            setTotalOutputTokenCount((prev) => prev + outputTokens);
+            recordUsage(inputTokens, outputTokens);
             if (inputTokens >= 32_000 && !context32kWarnedRef.current) {
               context32kWarnedRef.current = true;
               historyManager.addItem({
