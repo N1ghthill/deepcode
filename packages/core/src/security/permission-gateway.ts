@@ -309,10 +309,11 @@ export class PermissionGateway {
 
 function buildApprovalPreview(check: PermissionCheck): ApprovalRequest["preview"] {
   if (check.kind === "shell" || check.kind === "dangerous") {
+    const parts = check.operation.trim().split(/\s+/);
     return {
       type: "shell_command",
-      command: check.operation,
-      args: typeof check.details?.command === "string" ? splitCommandPreview(check.details.command) : [],
+      command: parts[0] ?? check.operation,
+      args: parts.slice(1, 12),
     };
   }
 
@@ -334,9 +335,6 @@ function buildApprovalPreview(check: PermissionCheck): ApprovalRequest["preview"
   return undefined;
 }
 
-function splitCommandPreview(command: string): string[] {
-  return command.trim().split(/\s+/).slice(1, 12);
-}
 
 function normalizeShellPermissionOperation(operation: string): string {
   return operation.trim().replace(/\s+/g, " ");
