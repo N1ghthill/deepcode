@@ -31,6 +31,8 @@ export interface ToolDefinition<TSchema extends z.ZodTypeAny = z.ZodTypeAny, TRe
   description: string;
   parameters: TSchema;
   execute(args: z.infer<TSchema>, context: ToolContext): Effect.Effect<TResult, Error>;
+  /** Optional semantic kind for activity consumers that need specialized presentation. */
+  activityKind?: "subagent";
   /** When true, the tool is not sent in the initial schema — activated via tool_search. */
   deferred?: boolean;
 }

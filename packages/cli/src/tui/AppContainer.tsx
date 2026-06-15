@@ -2156,11 +2156,11 @@ export const AppContainer = ({ cwd, config, provider, model, resumeSessionId, st
                                   history={historyManager.history}
                                   historyRemountKey={historyRemountKey}
                                   pendingAssistantText={streaming.pendingText}
-                                  liveToolCalls={approvalQueue.length > 0 ? [] : liveToolCalls}
+                                  liveToolCalls={approvalPromptVisible ? [] : liveToolCalls}
                                   terminalWidth={terminalWidth}
                                   mainAreaWidth={mainAreaWidth}
-                                  isFocused={approvalQueue.length === 0}
-                                  liveAreaMaxHeight={approvalQueue.length > 0
+                                  isFocused={!approvalPromptVisible}
+                                  liveAreaMaxHeight={approvalPromptVisible
                                     ? Math.max(3, terminalHeight - APPROVAL_PROMPT_RESERVED_HEIGHT)
                                     : Math.max(8, terminalHeight - 4)}
                                 />

@@ -5,22 +5,27 @@
  * Ink: these functions take plain data and return plain data. DeepCode-authored
  * (not ported from Qwen).
  */
-import { createId, type Activity, type Message, type Session, type ToolCall } from "@deepcode/shared";
+import {
+  createId,
+  type Activity,
+  type Message,
+  type Session,
+  type ToolCall,
+} from "@deepcode/shared";
 import {
   ToolCallStatus,
   type HistoryItemWithoutId,
   type IndividualToolCallDisplay,
 } from "./ui/types.js";
 import type { SlashCommand } from "./ui/commands/types.js";
+import type { AgentResultDisplay } from "./qwen-core/index.js";
 
 /** JSON-serialize tool arguments for a one-line description, bounded in length. */
 export function safeStringify(value: unknown, maxLength = 220): string {
   try {
     const serialized = JSON.stringify(value);
     if (!serialized || serialized === "{}") return "";
-    return serialized.length > maxLength
-      ? `${serialized.slice(0, maxLength)}...`
-      : serialized;
+    return serialized.length > maxLength ? `${serialized.slice(0, maxLength)}...` : serialized;
   } catch {
     return "";
   }
@@ -49,6 +54,45 @@ function truncateStaticResult(output: string): string {
   const truncated = lines.slice(0, MAX_STATIC_RESULT_LINES).join("\n");
   const extra = lines.length - MAX_STATIC_RESULT_LINES;
   return `${truncated}\n… +${extra} linhas`;
+}
+
+function isSubagentActivity(metadata: Record<string, unknown>): boolean {
+  return metadata["activityKind"] === "subagent";
+}
+
+function taskPromptFromMetadata(metadata: Record<string, unknown>): string {
+  const args = metadata["args"];
+  if (typeof args !== "object" || args === null) return "";
+  const prompt = (args as Record<string, unknown>)["prompt"];
+  return typeof prompt === "string" ? prompt : "";
+}
+
+function taskTypeFromMetadata(metadata: Record<string, unknown>): string {
+  const args = metadata["args"];
+  if (typeof args !== "object" || args === null) return "subagent";
+  const subagentType = (args as Record<string, unknown>)["subagent_type"];
+  return typeof subagentType === "string" && subagentType.trim() ? subagentType.trim() : "subagent";
+}
+
+function createLiveSubagentDisplay(metadata: Record<string, unknown>): AgentResultDisplay {
+  const prompt = taskPromptFromMetadata(metadata);
+  return {
+    type: "task_execution",
+    subagentName: taskTypeFromMetadata(metadata),
+    taskDescription: prompt || "Subagent task",
+    taskPrompt: prompt,
+    status: "running",
+  };
+}
+
+function isLiveSubagentDisplay(tool: IndividualToolCallDisplay): boolean {
+  const resultDisplay = tool.resultDisplay;
+  return (
+    typeof resultDisplay === "object" &&
+    resultDisplay !== null &&
+    "type" in resultDisplay &&
+    (resultDisplay as AgentResultDisplay).type === "task_execution"
+  );
 }
 
 /**
@@ -104,8 +148,7 @@ export function mapMessagesToHistoryItems(
   for (const tool of toolByCallId.values()) {
     if (tool.status === ToolCallStatus.Executing || tool.status === ToolCallStatus.Pending) {
       tool.status = options.aborted ? ToolCallStatus.Canceled : ToolCallStatus.Success;
-      tool.resultDisplay = tool.resultDisplay
-        ?? (options.aborted ? "Cancelled." : "(no output)");
+      tool.resultDisplay = tool.resultDisplay ?? (options.aborted ? "Cancelled." : "(no output)");
     }
   }
 
@@ -135,7 +178,7 @@ export function reduceToolActivity(
         callId: createId("livetool"),
         name: toolName,
         description: serialized ? `${toolName} ${serialized}` : toolName,
-        resultDisplay: undefined,
+        resultDisplay: isSubagentActivity(meta) ? createLiveSubagentDisplay(meta) : undefined,
         status: ToolCallStatus.Executing,
         confirmationDetails: undefined,
       },
@@ -145,12 +188,19 @@ export function reduceToolActivity(
   if (activity.type === "tool_result" || activity.type === "tool_error") {
     const isError = activity.type === "tool_error";
     const output = isError
-      ? (typeof meta.error === "string" ? meta.error : activity.message)
-      : (typeof meta.result === "string" ? meta.result : "(no output)");
+      ? typeof meta.error === "string"
+        ? meta.error
+        : activity.message
+      : typeof meta.result === "string"
+        ? meta.result
+        : "(no output)";
     const index = prev.findIndex(
       (tool) => tool.name === toolName && tool.status === ToolCallStatus.Executing,
     );
     if (index === -1) return prev;
+    if (isSubagentActivity(meta) || isLiveSubagentDisplay(prev[index]!)) {
+      return prev.filter((_, i) => i !== index);
+    }
     const next = [...prev];
     next[index] = {
       ...next[index]!,
@@ -234,8 +284,8 @@ export function resolveSlashInvocation(
 
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]!;
-    const candidate: SlashCommand | undefined = currentLevel?.find(
-      (command: SlashCommand) => matchesSlashToken(command, token),
+    const candidate: SlashCommand | undefined = currentLevel?.find((command: SlashCommand) =>
+      matchesSlashToken(command, token),
     );
     if (!candidate) {
       break;

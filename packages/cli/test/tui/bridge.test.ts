@@ -106,16 +106,80 @@ describe("reduceToolActivity", () => {
     expect(next[0]?.status).toBe(ToolCallStatus.Executing);
   });
 
+  it("marks subagent activity so the live tool renderer can delegate it to the subagent panel", () => {
+    const next = reduceToolActivity(
+      [],
+      activity("tool_call", {
+        tool: "task",
+        activityKind: "subagent",
+        args: { prompt: "inspect the auth module", subagent_type: "code-reviewer" },
+      }),
+    );
+    expect(next).toHaveLength(1);
+    expect(next[0]?.resultDisplay).toMatchObject({
+      type: "task_execution",
+      status: "running",
+      subagentName: "code-reviewer",
+      taskPrompt: "inspect the auth module",
+    });
+  });
+
+  it("removes completed subagent activity from the live tool list", () => {
+    const start = reduceToolActivity(
+      [],
+      activity("tool_call", {
+        tool: "task",
+        activityKind: "subagent",
+        args: { prompt: "inspect the auth module" },
+      }),
+    );
+    const done = reduceToolActivity(
+      start,
+      activity("tool_result", {
+        tool: "task",
+        activityKind: "subagent",
+        result: "done",
+      }),
+    );
+    expect(done).toEqual([]);
+  });
+
+  it("removes failed subagent activity from the live tool list", () => {
+    const start = reduceToolActivity(
+      [],
+      activity("tool_call", {
+        tool: "task",
+        activityKind: "subagent",
+        args: { prompt: "inspect the auth module" },
+      }),
+    );
+    const failed = reduceToolActivity(
+      start,
+      activity("tool_error", {
+        tool: "task",
+        activityKind: "subagent",
+        error: "boom",
+      }),
+    );
+    expect(failed).toEqual([]);
+  });
+
   it("resolves the oldest executing entry on tool_result", () => {
     const start = reduceToolActivity([], activity("tool_call", { tool: "shell" }));
-    const done = reduceToolActivity(start, activity("tool_result", { tool: "shell", result: "done" }));
+    const done = reduceToolActivity(
+      start,
+      activity("tool_result", { tool: "shell", result: "done" }),
+    );
     expect(done[0]?.status).toBe(ToolCallStatus.Success);
     expect(done[0]?.resultDisplay).toBe("done");
   });
 
   it("marks the entry as Error on tool_error", () => {
     const start = reduceToolActivity([], activity("tool_call", { tool: "shell" }));
-    const failed = reduceToolActivity(start, activity("tool_error", { tool: "shell", error: "boom" }));
+    const failed = reduceToolActivity(
+      start,
+      activity("tool_error", { tool: "shell", error: "boom" }),
+    );
     expect(failed[0]?.status).toBe(ToolCallStatus.Error);
     expect(failed[0]?.resultDisplay).toBe("boom");
   });
@@ -222,7 +286,11 @@ describe("resolveSlashInvocation", () => {
     kind: CommandKind.BUILT_IN,
     ...extra,
   });
-  const commands: SlashCommand[] = [cmd("help"), cmd("auth", { altNames: ["login"] }), cmd("model")];
+  const commands: SlashCommand[] = [
+    cmd("help"),
+    cmd("auth", { altNames: ["login"] }),
+    cmd("model"),
+  ];
 
   it("resolves a plain command", () => {
     const result = resolveSlashInvocation("/help", commands);

@@ -10,14 +10,25 @@ import { loadAgentConfigs } from "../agent/agent-config-loader.js";
 const MAX_SUBAGENT_DEPTH = 3;
 
 const TaskSchema = z.object({
-  prompt: z.string().describe("Full task description for the subagent — be specific and self-contained."),
-  subagent_type: z.string().optional().describe(
-    "Named agent type from .deepcode/agents/*.md (e.g. 'code-reviewer'). " +
-    "When set, the subagent uses the named agent's system prompt and tool restrictions.",
-  ),
-  provider: z.string().optional().describe("Provider override (e.g. 'anthropic', 'openai'). Defaults to current provider."),
+  prompt: z
+    .string()
+    .describe("Full task description for the subagent — be specific and self-contained."),
+  subagent_type: z
+    .string()
+    .optional()
+    .describe(
+      "Named agent type from .deepcode/agents/*.md (e.g. 'code-reviewer'). " +
+        "When set, the subagent uses the named agent's system prompt and tool restrictions.",
+    ),
+  provider: z
+    .string()
+    .optional()
+    .describe("Provider override (e.g. 'anthropic', 'openai'). Defaults to current provider."),
   model: z.string().optional().describe("Model override. Defaults to current model."),
-  fork: z.boolean().optional().describe("If true, the subagent starts with the current conversation history as context."),
+  fork: z
+    .boolean()
+    .optional()
+    .describe("If true, the subagent starts with the current conversation history as context."),
 });
 
 export function createTaskTool(
@@ -27,6 +38,7 @@ export function createTaskTool(
 ): ToolDefinition {
   return defineTool({
     name: "task",
+    activityKind: "subagent",
     description:
       "Launch a subagent to handle a self-contained task in a child session. " +
       "Use for parallelizable work, delegating a well-scoped subtask, or specialized analysis. " +
@@ -43,7 +55,7 @@ export function createTaskTool(
         if (currentDepth >= MAX_SUBAGENT_DEPTH) {
           throw new Error(
             `Maximum subagent depth (${MAX_SUBAGENT_DEPTH}) reached. ` +
-            `Cannot spawn a nested subagent from depth ${currentDepth}.`,
+              `Cannot spawn a nested subagent from depth ${currentDepth}.`,
           );
         }
 
@@ -59,7 +71,7 @@ export function createTaskTool(
           if (!agentConfig) {
             throw new Error(
               `Unknown subagent_type '${args.subagent_type}'. ` +
-              `Available: ${configs.map((c) => c.name).join(", ") || "(none — create .deepcode/agents/<name>.md)"}`,
+                `Available: ${configs.map((c) => c.name).join(", ") || "(none — create .deepcode/agents/<name>.md)"}`,
             );
           }
           systemPrompt = agentConfig.systemPrompt || undefined;

@@ -28,11 +28,7 @@ import {
   type ToolSchemaMode,
 } from "../providers/model-execution-profile.js";
 import { formatErrorChain } from "../utils/error-chain.js";
-import {
-  failoverOrder,
-  PLAN_ALLOWED_TOOLS,
-  UTILITY_SYSTEM_PROMPT,
-} from "./agent-prompts.js";
+import { failoverOrder, PLAN_ALLOWED_TOOLS, UTILITY_SYSTEM_PROMPT } from "./agent-prompts.js";
 import {
   buildSummaryMessage,
   buildSummaryPrompt,
@@ -138,22 +134,18 @@ export class Agent {
     const turnStrategy = options.systemPrompt
       ? { ...baseTurnStrategy, systemPrompt: options.systemPrompt }
       : baseTurnStrategy;
-    const resolvedTarget = resolveExecutionTarget(
-      this.config,
-      session,
-      mode,
-      options.provider,
-    );
+    const resolvedTarget = resolveExecutionTarget(this.config, session, mode, options.provider);
     const resolvedModel = resolvedTarget.model;
-    const parsedLocalUtility = turnStrategy.kind === "utility"
-      ? parseUtilityRequest(options.input)
-      : undefined;
+    const parsedLocalUtility =
+      turnStrategy.kind === "utility" ? parseUtilityRequest(options.input) : undefined;
 
     session.provider = resolvedTarget.provider;
     session.model = resolvedModel;
     session.metadata.lastTurnUsedLlm = !(
-      parsedLocalUtility
-      || (turnStrategy.kind === "chat" && !turnStrategy.allowTools && directLocalResponse(turnStrategy.intent))
+      parsedLocalUtility ||
+      (turnStrategy.kind === "chat" &&
+        !turnStrategy.allowTools &&
+        directLocalResponse(turnStrategy.intent))
     );
 
     this.sessions.addMessage(session.id, { role: "user", source: "user", content: options.input });
@@ -163,7 +155,8 @@ export class Agent {
     const numberMatch = /^\s*(\d+)\s*$/.exec(options.input);
     if (numberMatch && Array.isArray(pendingList) && pendingList.length > 0) {
       const idx = parseInt(numberMatch[1]!, 10) - 1;
-      const selectedPath = typeof pendingList[idx] === "string" ? (pendingList[idx] as string) : null;
+      const selectedPath =
+        typeof pendingList[idx] === "string" ? (pendingList[idx] as string) : null;
       session.metadata.pendingProjectList = undefined;
       if (selectedPath) {
         session.worktree = selectedPath;
@@ -172,7 +165,11 @@ export class Agent {
         await this.sessions.persist(session.id);
         const name = path.basename(selectedPath);
         const output = `✅ Trabalhando em **${name}**\n\nCaminho: ${selectedPath}`;
-        this.sessions.addMessage(session.id, { role: "assistant", source: "assistant", content: output });
+        this.sessions.addMessage(session.id, {
+          role: "assistant",
+          source: "assistant",
+          content: output,
+        });
         return output;
       }
     } else {
@@ -180,9 +177,10 @@ export class Agent {
       session.metadata.pendingProjectList = undefined;
     }
 
-    const directResponse = turnStrategy.kind === "chat" && !turnStrategy.allowTools
-      ? directLocalResponse(turnStrategy.intent)
-      : undefined;
+    const directResponse =
+      turnStrategy.kind === "chat" && !turnStrategy.allowTools
+        ? directLocalResponse(turnStrategy.intent)
+        : undefined;
     if (directResponse) {
       session.metadata.lastTurnUsedLlm = false;
       session.status = "executing";
@@ -217,11 +215,16 @@ export class Agent {
     const effectiveModel = resolvedModel;
     if (!effectiveModel) {
       throw new Error(
-        `No model configured for ${resolvedTarget.provider}. Run /model or set `
-        + `defaultModels.${resolvedTarget.provider} in .deepcode/config.json, or set DEEPCODE_MODEL.`
+        `No model configured for ${resolvedTarget.provider}. Run /model or set ` +
+          `defaultModels.${resolvedTarget.provider} in .deepcode/config.json, or set DEEPCODE_MODEL.`,
       );
     }
-    await this.assertModelAvailable(session, resolvedTarget.provider, effectiveModel, options.signal);
+    await this.assertModelAvailable(
+      session,
+      resolvedTarget.provider,
+      effectiveModel,
+      options.signal,
+    );
     this.activeBudgets.set(session.id, new SessionBudget(this.config.tokenBudget));
 
     try {
@@ -233,7 +236,14 @@ export class Agent {
       if (turnStrategy.kind === "utility") {
         finalText = await this.executeUtilityTurn(session, options.input, mode, options);
       } else {
-        finalText = await this.executeTraditional(session, mode, maxIterations, iterations, options, turnStrategy);
+        finalText = await this.executeTraditional(
+          session,
+          mode,
+          maxIterations,
+          iterations,
+          options,
+          turnStrategy,
+        );
       }
 
       session.status = "idle";
@@ -252,13 +262,12 @@ export class Agent {
   async completeUtility(options: AgentUtilityCompletionOptions): Promise<string> {
     const session = options.session;
     const providerId = options.provider ?? session.provider;
-    const model = options.model
-      ?? session.model
-      ?? resolveConfiguredModelForProvider(this.config, providerId);
+    const model =
+      options.model ?? session.model ?? resolveConfiguredModelForProvider(this.config, providerId);
     if (!model) {
       throw new Error(
-        `No model configured for ${providerId}. Run /model or set `
-        + `defaultModels.${providerId} in .deepcode/config.json, or set DEEPCODE_MODEL.`
+        `No model configured for ${providerId}. Run /model or set ` +
+          `defaultModels.${providerId} in .deepcode/config.json, or set DEEPCODE_MODEL.`,
       );
     }
 
@@ -301,9 +310,12 @@ export class Agent {
   ): Promise<string> {
     let finalText = "";
     let iterations = startingIterations;
-    const resolvedModel = session.model ?? resolveConfiguredModelForProvider(this.config, session.provider);
+    const resolvedModel =
+      session.model ?? resolveConfiguredModelForProvider(this.config, session.provider);
     const toolProfile = resolveModelExecutionProfile(session.provider, resolvedModel);
-    const baseAllowedToolNames = turnStrategy.allowTools ? this.allowedToolNamesForMode(mode) : new Set<string>();
+    const baseAllowedToolNames = turnStrategy.allowTools
+      ? this.allowedToolNamesForMode(mode)
+      : new Set<string>();
     const allowedToolNames = this.applyToolOverrides(baseAllowedToolNames, options);
     // Restore tools revealed in previous turns of this session
     for (const name of this.getRevealedTools(session)) {
@@ -320,8 +332,11 @@ export class Agent {
       this.enforceBudget(session.id);
 
       // Recompute each iteration — tool_search may have expanded allowedToolNames
-      const toolDefinitions = turnStrategy.allowTools ? this.toolDefinitionsForNames(allowedToolNames, toolProfile.toolSchemaMode) : [];
-      const textToolFallbackEnabled = toolDefinitions.length > 0 && toolProfile.toolCallStrategy !== "native";
+      const toolDefinitions = turnStrategy.allowTools
+        ? this.toolDefinitionsForNames(allowedToolNames, toolProfile.toolSchemaMode)
+        : [];
+      const textToolFallbackEnabled =
+        toolDefinitions.length > 0 && toolProfile.toolCallStrategy !== "native";
 
       await this.compressContextIfNeeded(session, turnStrategy.systemPrompt, options);
       const chunks = this.providerManager.chat(
@@ -330,9 +345,7 @@ export class Agent {
           turnStrategy.systemPrompt,
           turnStrategy.allowTools,
           [],
-          textToolFallbackEnabled
-            ? buildFallbackToolCallPrompt(allowedToolNames)
-            : undefined,
+          textToolFallbackEnabled ? buildFallbackToolCallPrompt(allowedToolNames) : undefined,
           mode === "build" ? this.buildDeferredToolsHint(session) : undefined,
         ),
         {
@@ -412,7 +425,12 @@ export class Agent {
       for (let callIdx = 0; callIdx < toolCalls.length; callIdx++) {
         const call = toolCalls[callIdx]!;
         const result = await this.executeTool(
-          call, session, mode, options.signal, allowedToolNames, options.onToolActivity,
+          call,
+          session,
+          mode,
+          options.signal,
+          allowedToolNames,
+          options.onToolActivity,
           (names) => {
             for (const name of names) {
               if (this.tools.get(name)) allowedToolNames.add(name);
@@ -422,7 +440,13 @@ export class Agent {
         this.sessions.addMessage(session.id, {
           role: "tool",
           source: "tool",
-          content: await truncateToolOutput(result.output, call.name, session.worktree, undefined, allowedToolNames),
+          content: await truncateToolOutput(
+            result.output,
+            call.name,
+            session.worktree,
+            undefined,
+            allowedToolNames,
+          ),
           toolCallId: call.id,
         });
         if (!result.ok) {
@@ -503,7 +527,8 @@ export class Agent {
     onRevealTools?: (names: string[]) => void,
   ): Promise<ToolExecutionOutcome> {
     if (!this.isToolAllowed(call.name, mode)) {
-      const modeHint = mode === "plan" ? "Switch to BUILD mode (press Tab in the TUI) to enable this tool." : "";
+      const modeHint =
+        mode === "plan" ? "Switch to BUILD mode (press Tab in the TUI) to enable this tool." : "";
       return {
         ok: false,
         output: `Error: tool ${call.name} is not available in ${mode.toUpperCase()} mode. ${modeHint} Provide analysis and a proposed plan without applying changes.`,
@@ -531,7 +556,8 @@ export class Agent {
       if (call.name === "write_file") {
         const args = call.arguments as Record<string, unknown> | undefined;
         if (!args?.path || !args?.content) {
-          hint = " Sua saída foi provavelmente truncada antes da chamada completar. Use múltiplas chamadas edit_file para aplicar as mudanças em partes menores em vez de reescrever o arquivo inteiro.";
+          hint =
+            " Sua saída foi provavelmente truncada antes da chamada completar. Use múltiplas chamadas edit_file para aplicar as mudanças em partes menores em vez de reescrever o arquivo inteiro.";
         }
       }
       return {
@@ -562,7 +588,9 @@ export class Agent {
       snapshotForUndo: async (filePath: string) => {
         let previousContent: string | null = null;
         try {
-          previousContent = await import("node:fs/promises").then((fs) => fs.readFile(filePath, "utf8"));
+          previousContent = await import("node:fs/promises").then((fs) =>
+            fs.readFile(filePath, "utf8"),
+          );
         } catch {
           // File doesn't exist yet — previousContent stays null (new file)
         }
@@ -579,10 +607,11 @@ export class Agent {
     };
 
     try {
+      const activityKind = tool.activityKind ? { activityKind: tool.activityKind } : {};
       this.logToolActivity(session, {
         type: "tool_call",
         message: `Calling ${call.name}`,
-        metadata: { tool: call.name, args: call.arguments },
+        metadata: { tool: call.name, args: call.arguments, ...activityKind },
       });
       onToolActivity?.(call.name, true);
       const result = await Effect.runPromise(tool.execute(parsed.data, context));
@@ -591,7 +620,7 @@ export class Agent {
       this.logToolActivity(session, {
         type: "tool_result",
         message: `Completed ${call.name}`,
-        metadata: { tool: call.name, result: truncateForMetadata(output) },
+        metadata: { tool: call.name, result: truncateForMetadata(output), ...activityKind },
       });
       return { ok: true, output };
     } catch (error) {
@@ -601,12 +630,19 @@ export class Agent {
         throw error;
       }
       const message = formatErrorChain(error);
-      const isPermissionError = error instanceof Error && (error as Error & { code?: string }).code === "PERMISSION_DENIED";
-      const hint = isPermissionError ? " Try a different approach or ask the user to adjust permissions in .deepcode/config.json." : "";
+      const isPermissionError =
+        error instanceof Error && (error as Error & { code?: string }).code === "PERMISSION_DENIED";
+      const hint = isPermissionError
+        ? " Try a different approach or ask the user to adjust permissions in .deepcode/config.json."
+        : "";
       this.logToolActivity(session, {
         type: "tool_error",
         message: `Failed ${call.name}: ${message}`,
-        metadata: { tool: call.name, error: message },
+        metadata: {
+          tool: call.name,
+          error: message,
+          ...(tool.activityKind ? { activityKind: tool.activityKind } : {}),
+        },
       });
       return {
         ok: false,
@@ -632,8 +668,6 @@ export class Agent {
     session.activities.push(full);
     this.eventBus.emit("activity", full);
   }
-
-
 
   private resolveTraditionalToolChoice(
     turnStrategy: TurnStrategy,
@@ -666,7 +700,8 @@ export class Agent {
 
   private allowedToolNamesForMode(mode: AgentMode): Set<string> {
     return new Set(
-      this.tools.list()
+      this.tools
+        .list()
         .filter((tool) => this.isToolAllowed(tool.name, mode) && !tool.deferred)
         .map((tool) => tool.name),
     );
@@ -700,18 +735,24 @@ export class Agent {
     return new Set([...names].filter((n) => base.has(n)));
   }
 
-  private toolDefinitionsForNames(names: Set<string>, schemaMode: ToolSchemaMode = "full"): Array<Record<string, unknown>> {
-    return this.tools.list().filter((tool) => names.has(tool.name)).map((tool) => ({
-      type: "function",
-      function: {
-        name: tool.name,
-        description: compactToolDescription(tool.description, schemaMode),
-        parameters: simplifyToolSchema(
-          zodToJsonSchema(tool.parameters, { target: "jsonSchema7" }),
-          schemaMode,
-        ),
-      },
-    }));
+  private toolDefinitionsForNames(
+    names: Set<string>,
+    schemaMode: ToolSchemaMode = "full",
+  ): Array<Record<string, unknown>> {
+    return this.tools
+      .list()
+      .filter((tool) => names.has(tool.name))
+      .map((tool) => ({
+        type: "function",
+        function: {
+          name: tool.name,
+          description: compactToolDescription(tool.description, schemaMode),
+          parameters: simplifyToolSchema(
+            zodToJsonSchema(tool.parameters, { target: "jsonSchema7" }),
+            schemaMode,
+          ),
+        },
+      }));
   }
 
   private messagesForSystemPrompt(
@@ -736,20 +777,24 @@ export class Agent {
         createdAt: session.createdAt,
       },
       ...(deferredToolsHint
-        ? [{
-            id: "deferred_tools_system",
-            role: "system" as const,
-            content: deferredToolsHint,
-            createdAt: session.createdAt,
-          }]
+        ? [
+            {
+              id: "deferred_tools_system",
+              role: "system" as const,
+              content: deferredToolsHint,
+              createdAt: session.createdAt,
+            },
+          ]
         : []),
       ...(fallbackToolPrompt
-        ? [{
-            id: "tool_fallback_system",
-            role: "system" as const,
-            content: fallbackToolPrompt,
-            createdAt: session.createdAt,
-          }]
+        ? [
+            {
+              id: "tool_fallback_system",
+              role: "system" as const,
+              content: fallbackToolPrompt,
+              createdAt: session.createdAt,
+            },
+          ]
         : []),
       ...session.messages.filter((message) => this.isSessionMessageSafeForModel(message)),
       ...extraMessages,
@@ -780,7 +825,9 @@ export class Agent {
     const KEEP_RECENT = 8;
     const DEFAULT_MAX_CONTEXT = 128_000;
     const allMessages = this.messagesForSystemPrompt(session, systemPrompt, true);
-    if (!shouldCompressContext(allMessages, DEFAULT_MAX_CONTEXT, this.config.contextWindowThreshold)) {
+    if (
+      !shouldCompressContext(allMessages, DEFAULT_MAX_CONTEXT, this.config.contextWindowThreshold)
+    ) {
       return;
     }
     const split = splitForCompression(session.messages, KEEP_RECENT);
@@ -794,7 +841,12 @@ export class Agent {
     let summary = "";
     const summaryChunks = this.providerManager.chat(
       [
-        { id: "sys", role: "system" as const, content: UTILITY_SYSTEM_PROMPT, createdAt: session.createdAt },
+        {
+          id: "sys",
+          role: "system" as const,
+          content: UTILITY_SYSTEM_PROMPT,
+          createdAt: session.createdAt,
+        },
         { id: "req", role: "user" as const, content: summaryPrompt, createdAt: session.createdAt },
       ],
       {
@@ -832,20 +884,13 @@ export class Agent {
   ): Promise<string> {
     const request = parseUtilityRequest(input);
     if (!request) {
-      return await this.executeTraditional(
-        session,
-        mode,
-        this.config.maxIterations,
-        0,
-        options,
-        {
-          allowTools: true,
-          shouldPlan: false,
-          systemPrompt: UTILITY_SYSTEM_PROMPT,
-          kind: "utility",
-          intent: { kind: "direct_utility" },
-        },
-      );
+      return await this.executeTraditional(session, mode, this.config.maxIterations, 0, options, {
+        allowTools: true,
+        shouldPlan: false,
+        systemPrompt: UTILITY_SYSTEM_PROMPT,
+        kind: "utility",
+        intent: { kind: "direct_utility" },
+      });
     }
 
     if (request.kind === "pwd") {
@@ -915,7 +960,13 @@ export class Agent {
     this.sessions.addMessage(session.id, {
       role: "tool",
       source: "tool",
-      content: await truncateToolOutput(result.output, call.name, session.worktree, undefined, utilityAllowedTools),
+      content: await truncateToolOutput(
+        result.output,
+        call.name,
+        session.worktree,
+        undefined,
+        utilityAllowedTools,
+      ),
       toolCallId: call.id,
     });
 
@@ -927,8 +978,6 @@ export class Agent {
     });
     return output;
   }
-
-
 
   private resolveTurnStrategy(input: string, mode: AgentMode): TurnStrategy {
     return resolveTurnStrategy(input, mode, this.config.buildTurnPolicy);
