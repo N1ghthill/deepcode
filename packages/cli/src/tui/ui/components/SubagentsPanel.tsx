@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import { theme } from "../semantic-colors.js";
 import type { SubagentEntry } from "../contexts/UIStateContext.js";
+import { escapeAnsiCtrlCodes } from "../utils/textUtils.js";
 
 function statusIcon(e: SubagentEntry): React.ReactNode {
   if (e.status === "running") {
@@ -12,11 +13,15 @@ function statusIcon(e: SubagentEntry): React.ReactNode {
 }
 
 function detailText(entry: SubagentEntry): string {
-  if (entry.status === "failed") return entry.error?.slice(0, 60) || "falhou";
+  if (entry.status === "failed") return entry.error ? "falhou: " + entry.error : "falhou";
   if (entry.status === "done") return "concluído";
   if (entry.currentTool) return `ferramenta: ${entry.currentTool}`;
-  if (entry.currentOutput) return entry.currentOutput.trimStart();
-  return "iniciando";
+  return "em execução";
+}
+
+function panelText(value: string, maxLength: number): string {
+  const safe = escapeAnsiCtrlCodes(value).replace(/\s+/g, " ").trim();
+  return safe.length > maxLength ? `${safe.slice(0, maxLength)}…` : safe;
 }
 
 interface SubagentsPanelProps {
@@ -30,6 +35,8 @@ export const SubagentsPanel: React.FC<SubagentsPanelProps> = ({ subagents, mainA
   const running = subagents.filter((s) => s.status === "running").length;
   const done = subagents.filter((s) => s.status === "done").length;
   const failed = subagents.filter((s) => s.status === "failed").length;
+  const activeEntry =
+    subagents.find((s) => s.status === "running") ?? subagents[subagents.length - 1]!;
 
   let titleSuffix: string;
   if (running > 0) {
@@ -42,45 +49,26 @@ export const SubagentsPanel: React.FC<SubagentsPanelProps> = ({ subagents, mainA
 
   const borderColor =
     running > 0 ? theme.text.accent : failed > 0 ? theme.status.error : theme.status.success;
+  const safeDetail = panelText(detailText(activeEntry), 48);
+  const panelWidth = Math.max(20, Math.min(mainAreaWidth, 80));
+  const summary = `${titleSuffix} · ${safeDetail}`;
 
   return (
     <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={borderColor}
+      flexDirection="row"
       marginLeft={2}
       marginRight={2}
       marginTop={1}
-      width={Math.min(mainAreaWidth, 80)}
+      width={panelWidth}
     >
-      <Box paddingX={1}>
-        <Text bold color={borderColor}>
-          Subagents
-        </Text>
-        <Text color={theme.text.secondary}>
-          {" · "}
-          {titleSuffix}
-        </Text>
-      </Box>
-      {subagents.map((entry) => (
-        <Box key={entry.taskId} flexDirection="column" paddingX={1}>
-          <Box flexDirection="row" gap={1}>
-            {statusIcon(entry)}
-            <Text wrap="truncate" color={theme.text.primary}>
-              {entry.prompt}
-              {entry.prompt.length >= 50 ? "…" : ""}
-            </Text>
-          </Box>
-          <Text
-            color={entry.status === "failed" ? theme.status.error : theme.text.secondary}
-            dimColor
-            wrap="truncate"
-          >
-            {"  "}
-            {detailText(entry)}
-          </Text>
-        </Box>
-      ))}
+      {statusIcon(activeEntry)}
+      <Text color={borderColor} bold>
+        {" Subagents"}
+      </Text>
+      <Text color={theme.text.secondary} wrap="truncate">
+        {" · "}
+        {summary}
+      </Text>
     </Box>
   );
 };

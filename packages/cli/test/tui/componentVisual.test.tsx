@@ -4,8 +4,10 @@ import { render, cleanup } from "ink-testing-library";
 import { ToolCallStatus, StreamingState } from "../../src/tui/ui/types.js";
 import type { IndividualToolCallDisplay } from "../../src/tui/ui/types.js";
 import { StickyTodoList } from "../../src/tui/ui/components/StickyTodoList.js";
+import { SubagentsPanel } from "../../src/tui/ui/components/SubagentsPanel.js";
 import { CompactToolGroupDisplay } from "../../src/tui/ui/components/messages/CompactToolGroupDisplay.js";
 import type { TodoItem } from "../../src/tui/ui/components/TodoDisplay.js";
+import type { SubagentEntry } from "../../src/tui/ui/contexts/UIStateContext.js";
 
 // StreamingContext throws without a provider — return Idle so spinners render
 // their nonRespondingDisplay text instead of the animated spinner.
@@ -40,6 +42,16 @@ function makeTool(
     resultDisplay: undefined,
     status,
     confirmationDetails: undefined,
+  };
+}
+
+function makeSubagent(partial: Partial<SubagentEntry> = {}): SubagentEntry {
+  return {
+    taskId: "task-1",
+    prompt: "Inspect auth module",
+    status: "running",
+    startedAt: 1,
+    ...partial,
   };
 }
 
@@ -102,6 +114,57 @@ describe("StickyTodoList", () => {
     const todos = [makeTodo("1", "pending"), makeTodo("2", "pending")];
     const { lastFrame } = render(<StickyTodoList todos={todos} width={80} maxVisibleItems={5} />);
     expect(strip(lastFrame())).not.toContain("mais");
+  });
+});
+
+// ── SubagentsPanel ──────────────────────────────────────────────────────────
+
+describe("SubagentsPanel", () => {
+  it("renders running subagents as a single compact status line", () => {
+    const { lastFrame } = render(
+      <SubagentsPanel
+        mainAreaWidth={80}
+        subagents={[makeSubagent({ prompt: "Inspect auth module", currentTool: "read_file" })]}
+      />,
+    );
+    const lines = strip(lastFrame()).split("\n").filter((line) => line.trim() !== "");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("Subagents");
+    expect(lines[0]).toContain("1 em execução");
+    expect(lines[0]).toContain("ferramenta: read_file");
+    expect(lines[0]).not.toContain("Inspect auth module");
+    expect(lines[0]).not.toContain("╭");
+    expect(lines[0]).not.toContain("╰");
+  });
+
+  it("does not render volatile subagent output", () => {
+    const { lastFrame } = render(
+      <SubagentsPanel
+        mainAreaWidth={80}
+        subagents={[
+          makeSubagent({
+            currentOutput: "streaming text that changes every chunk",
+          }),
+        ]}
+      />,
+    );
+    expect(strip(lastFrame())).not.toContain("streaming text that changes every chunk");
+  });
+
+  it("escapes ANSI control sequences from rendered subagent detail", () => {
+    const { lastFrame } = render(
+      <SubagentsPanel
+        mainAreaWidth={80}
+        subagents={[
+          makeSubagent({
+            currentTool: "\x1b[2Jread_file",
+          }),
+        ]}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).not.toContain("\x1b[2J");
+    expect(frame).toContain("\\u001b[2J");
   });
 });
 
