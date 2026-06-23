@@ -107,19 +107,78 @@ Estas referencias orientam o desenho, sem copiar comportamento de forma cega.
 5. Limites devem gerar checkpoints.
    Todo limite operacional relevante deve produzir estado retomavel: plano, progresso, pendencias, riscos, proximo passo e comando/config para continuar.
 
+## Baseline Atual
+
+Data: 2026-06-23
+
+Versao promovida: `deepcode-ai@1.2.75`
+
+Estado:
+
+- `latest`: `1.2.75`
+- `stable`: `1.2.75`
+- Branch principal: `main` em `67975f0 chore(release): v1.2.75`
+- Validacao automatizada: `pnpm test`, `pnpm exec turbo run typecheck --force`, lint e build de release.
+- Validacao real: DeepSeek oficial autenticado, `doctor` limpo, `run` real, leitura de arquivos real, `subagents run` com duas tarefas paralelas e teste manual da TUI em fluxo real.
+- Resultado observado: fluxo mais fluido, sem problemas perceptiveis de flicker/sobreposicao, experiencia de uso considerada adequada para producao inicial.
+
+Decisao operacional:
+
+- Nao implementar novas features imediatamente sobre `1.2.75`.
+- Usar a versao em tarefas reais por 2-3 dias.
+- Registrar atritos neste documento antes de corrigir, exceto bugs bloqueantes ou regressao clara.
+- Publicar novo patch somente se houver bug real, regressao, falha de instalacao ou ajuste pequeno com alto impacto.
+
+## Janela de Observacao
+
+Periodo sugerido: 2026-06-23 a 2026-06-26.
+
+Objetivo: coletar sinais reais de producao sem introduzir mudancas prematuras.
+
+Sinais a observar:
+
+- [ ] TUI pisca, sobrepoe texto ou limpa area errada durante streaming.
+- [ ] Subagente aparece como terminal/texto bruto na conversa principal.
+- [ ] Aprovacao de subagente rouba foco ou fica visualmente ambigua.
+- [ ] `task_batch` deixa subagente preso como running depois do fim do turno.
+- [ ] Historico restaurado revive estado antigo de subagente.
+- [ ] Limite de 20 iteracoes interrompe trabalho real sem checkpoint util.
+- [ ] DeepSeek falha em modelo/catalogo ou entra em fallback inesperado.
+- [ ] Uso com Node 22 instalado globalmente diverge do Node 22 portatil usado na validacao.
+- [ ] `doctor` volta a falhar em ambiente limpo.
+
+Template para registrar atrito:
+
+```text
+### Observacao YYYY-MM-DD - titulo curto
+
+- Versao: 1.2.75
+- Ambiente: terminal/OS/Node/provider/model
+- Fluxo: TUI | run | subagents run | doctor | install
+- Prompt ou comando:
+- Esperado:
+- Observado:
+- Severidade: baixa | media | alta | bloqueante
+- Reproduzivel: sim | nao | parcial
+- Evidencia: log, screenshot, output, sessao
+- Decisao: observar | corrigir patch | planejar feature | descartar
+```
+
 ## Plano de Implementacao
 
 ### Fase 0 - Consolidar baseline
 
 - [x] Identificar areas locais ja modificadas em TUI, subagentes, permissoes e loop.
 - [x] Registrar diagnostico inicial neste documento.
-- [ ] Rodar a suite relevante antes de novas mudancas de comportamento:
-  - [ ] `pnpm --filter @deepcode/core test`
-  - [ ] `pnpm --filter @deepcode/cli test -- --run packages/cli/test/tui`
-  - [ ] `pnpm typecheck`
-- [ ] Capturar um cenario reproduzivel do flash de subagente:
-  - [ ] prompt que cria `task`
-  - [ ] prompt que cria `task_batch`
+- [x] Rodar a suite relevante antes de novas mudancas de comportamento:
+  - [x] `pnpm --filter @deepcode/core test`
+  - [x] `pnpm --filter @deepcode/cli test -- test/tui`
+  - [x] `pnpm exec turbo run typecheck --force`
+  - [x] `pnpm test`
+- [x] Capturar/validar cenarios principais de subagente:
+  - [x] prompt real com leitura de arquivos
+  - [x] comando `subagents run` com duas tarefas paralelas
+  - [x] teste manual da TUI em fluxo real
   - [ ] prompt com aprovacao vinda de subagente
   - [ ] prompt com output grande de tool
 
@@ -233,17 +292,19 @@ Estas referencias orientam o desenho, sem copiar comportamento de forma cega.
 
 ### Fase 5 - Validacao de producao
 
-- [ ] Criar cenarios e2e de UX:
-  - [ ] tarefa curta sem tools.
+- [ ] Criar cenarios e2e/manuais de UX:
+  - [x] tarefa curta sem tools.
+  - [x] tarefa com leitura de arquivos.
+  - [x] tarefa com subagentes paralelos via `subagents run`.
   - [ ] tarefa com varias tools e output grande.
-  - [ ] tarefa com `task_batch` read-only.
+  - [ ] tarefa com `task_batch` read-only dentro da TUI.
   - [ ] subagente que pede aprovacao.
   - [ ] subagente cancelado.
   - [ ] limite de iteracoes e continuacao.
 - [ ] Adicionar snapshots TUI para largura estreita e larga.
 - [ ] Medir numero de renders/segundo durante subagentes concorrentes.
 - [ ] Confirmar que historico restaurado nao revive subagentes antigos como vivos.
-- [ ] Atualizar README e CHANGELOG antes do publish npm.
+- [x] Publicar e promover versao validada para `stable`.
 
 ## Decisoes Em Aberto
 
@@ -262,11 +323,11 @@ Estas referencias orientam o desenho, sem copiar comportamento de forma cega.
 
 ## Proximas Acoes Recomendadas
 
-1. Rodar testes atuais para descobrir se as modificacoes locais ja estao consistentes.
-2. Corrigir primeiro vazamento visual de subagente para `liveToolCalls`/`MainContent`, pois e o problema com maior impacto de confianca.
-3. Implementar checkpoint de `maxIterations` antes de qualquer aumento de limite padrao.
-4. Introduzir `runtime.log` JSONL pequeno e redigido para conseguir depurar a TUI sem depender de prints visuais.
-5. So entao preparar versao npm, com changelog focado em estabilidade de TUI, subagentes e continuidade de tarefas longas.
+1. Observar `1.2.75` em uso real por 2-3 dias antes de iniciar nova feature.
+2. Registrar atritos na janela de observacao acima, com comando/prompt e severidade.
+3. Corrigir imediatamente apenas bugs bloqueantes, regressao de TUI/subagentes ou falha de instalacao.
+4. Se a versao permanecer estavel, planejar a proxima release pequena focada em observabilidade: `runtime.log` JSONL redigido, eventos por turno/tool/subagente e comando `/logs recent`.
+5. Depois de observabilidade, retomar checkpoint/continuidade de `maxIterations` como proxima melhoria estrutural.
 
 ## Notas de Manutencao
 
