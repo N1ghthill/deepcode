@@ -1,5 +1,9 @@
 # DeepCode
 
+<p align="center">
+  <img src="docs/assets/logo_deepcode.png" alt="DeepCode logo" width="520">
+</p>
+
 > Terminal-first AI coding agent — local, permission-aware, and multi-provider.
 
 ![DeepCode demo](docs/assets/demo.gif)

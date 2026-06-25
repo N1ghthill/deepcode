@@ -1,5 +1,9 @@
 # deepcode
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/N1ghthill/deepcode/main/docs/assets/logo_deepcode.png" alt="DeepCode logo" width="520">
+</p>
+
 `deepcode` is the publishable CLI package for the DeepCode project.
 
 - Repository: <https://github.com/N1ghthill/deepcode>

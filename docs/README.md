@@ -38,6 +38,7 @@ Auto-generated or living references about the running agent:
 
 - [Agent Context](./reference/AGENT_CONTEXT.md) — runtime, providers, tools, prompts, TUI
 - [Approval System](./reference/APPROVAL_SYSTEM.md) — permission gateway and approval flow
+- [Brand Assets](./assets/README.md) — public logos, icon, and demo media
 
 ## Archive
 
